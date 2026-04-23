@@ -800,6 +800,8 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.rangeArgs.filterByTSArgs.hasValue = false;
     mrangeArgs.rangeArgs.alignment = DefaultAlignment;
     mrangeArgs.rangeArgs.timestampAlignment = 0;
+    // Include all the labels because the aggregated result might be grouped by a label (in
+    // mrange_done)
     mrangeArgs.withLabels = true;
     mrangeArgs.numLimitLabels = 0;
     mrangeArgs.queryPredicates = queryArg->predicates;
@@ -811,15 +813,6 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
 
-    if (CheckDictSeriesPermissions(
-            ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
-        GetSeriesResult_PermissionError) {
-        RTS_ReplyKeyPermissionsError(ctx);
-        RedisModule_FreeDict(ctx, qi);
-        ReleaseCtxUser(ctx);
-        return;
-    }
-
     RedisModule_ReplyWithArray(ctx, 2);
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
     RedisModule_FreeDict(ctx, qi);
@@ -829,7 +822,6 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     ReleaseCtxUser(ctx);
 }
 
-// Returns NULL on permission error (caller falls back to RESP command path).
 static Record *TS_INTERNAL_MRANGE_RecordProducer(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
 
@@ -837,14 +829,6 @@ static Record *TS_INTERNAL_MRANGE_RecordProducer(RedisModuleCtx *ctx, void *args
 
     RedisModuleDict *qi = QueryIndex(
         ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
-
-    if (CheckDictSeriesPermissions(
-            ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
-        GetSeriesResult_PermissionError) {
-        RedisModule_FreeDict(ctx, qi);
-        ReleaseCtxUser(ctx);
-        return NULL;
-    }
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
     char *currentKey;
@@ -1070,13 +1054,14 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        // ACL permissions were already validated by CheckDictSeriesPermissions above.
         const GetSeriesResult status = GetSeries(
             ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
         RedisModule_FreeString(ctx, keyName);
         if (status != GetSeriesResult_Success)
             continue;
 
-        RedisModule_ReplyWithArray(ctx, 3);
+        RedisModule_ReplyWithArray(ctx, 3); // name, labels, sample
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
         if (mgetArgs.withLabels) {
             ReplyWithSeriesLabels(ctx, series);
@@ -1088,6 +1073,7 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
         }
+        // LATEST is ignored for a series that is not a compaction.
         bool should_finalize_last_bucket = should_finalize_last_bucket_get(mgetArgs.latest, series);
         if (should_finalize_last_bucket) {
             Sample sample;
