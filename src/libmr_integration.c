@@ -16,6 +16,9 @@
 #include "rmutil/alloc.h"
 
 #include "LibMR/deps/hiredis/hiredis.h"
+#include "LibMR/src/utils/buffer.h"
+#include "enriched_chunk.h"
+#include "series_iterator.h"
 
 #define SeriesRecordName "SeriesRecord"
 
@@ -764,6 +767,149 @@ static Record *SlotRangesReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES,
                                                         .replyParser = SlotRangesReplyParser };
 
+// Binary serialization helpers for internal command responses.
+// These replace the RESP encoding/decoding with direct binary blob transfer.
+
+static void BufWriteSeriesLabels(mr_BufferWriter *bw, const Series *series) {
+    mr_BufferWriterWriteLongLong(bw, series->labelsCount);
+    for (size_t i = 0; i < series->labelsCount; i++) {
+        size_t klen;
+        const char *k = RedisModule_StringPtrLen(series->labels[i].key, &klen);
+        mr_BufferWriterWriteBuff(bw, k, klen);
+        int hasValue = (series->labels[i].value != NULL);
+        mr_BufferWriterWriteLongLong(bw, hasValue);
+        if (hasValue) {
+            size_t vlen;
+            const char *v = RedisModule_StringPtrLen(series->labels[i].value, &vlen);
+            mr_BufferWriterWriteBuff(bw, v, vlen);
+        }
+    }
+}
+
+static void BufWriteSeriesLabelsWithLimit(mr_BufferWriter *bw, const Series *series,
+                                          const char **limitLabels, uint16_t numLimitLabels) {
+    mr_BufferWriterWriteLongLong(bw, numLimitLabels);
+    for (int i = 0; i < numLimitLabels; i++) {
+        bool found = false;
+        for (int j = 0; j < (int)series->labelsCount; j++) {
+            size_t klen;
+            const char *key = RedisModule_StringPtrLen(series->labels[j].key, &klen);
+            if (strcasecmp(key, limitLabels[i]) == 0) {
+                mr_BufferWriterWriteBuff(bw, key, klen);
+                int hasValue = (series->labels[j].value != NULL);
+                mr_BufferWriterWriteLongLong(bw, hasValue);
+                if (hasValue) {
+                    size_t vlen;
+                    const char *v = RedisModule_StringPtrLen(series->labels[j].value, &vlen);
+                    mr_BufferWriterWriteBuff(bw, v, vlen);
+                }
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            size_t llen = strlen(limitLabels[i]);
+            mr_BufferWriterWriteBuff(bw, limitLabels[i], llen);
+            mr_BufferWriterWriteLongLong(bw, 0);
+        }
+    }
+}
+
+static void BufWriteSeriesRange(mr_BufferWriter *bw, Series *series,
+                                const RangeArgs *args, bool reverse) {
+    mr_Buffer *samplesBuf = mr_BufferNew(256);
+    mr_BufferWriter sw;
+    mr_BufferWriterInit(&sw, samplesBuf);
+    long long sampleCount = 0;
+    long long maxCount = (args->count != -1) ? args->count : LLONG_MAX;
+
+    AbstractIterator *iter = SeriesQuery(series, args, reverse, true);
+    EnrichedChunk *enrichedChunk;
+    while ((sampleCount < maxCount) && (enrichedChunk = iter->GetNext(iter))) {
+        long long n = min(maxCount - sampleCount, (long long)enrichedChunk->samples.num_samples);
+        for (long long i = 0; i < n; i++) {
+            mr_BufferWriterWriteLongLong(&sw, enrichedChunk->samples.timestamps[i]);
+            double val = Samples_value_at(&enrichedChunk->samples, i, 0);
+            mr_BufferWriterWriteBuff(&sw, (const char *)&val, sizeof(double));
+        }
+        sampleCount += n;
+    }
+    iter->Close(iter);
+
+    mr_BufferWriterWriteLongLong(bw, sampleCount);
+    if (samplesBuf->size > 0)
+        mr_BufferAdd(bw->buff, samplesBuf->buff, samplesBuf->size);
+    mr_BufferFree(samplesBuf);
+}
+
+static void BufWriteMGetSample(mr_BufferWriter *bw, Series *series, bool latest) {
+    bool should_finalize = should_finalize_last_bucket_get(latest, series);
+    if (should_finalize) {
+        Sample sample;
+        Sample *sample_ptr = &sample;
+        calculate_latest_sample(&sample_ptr, series);
+        if (sample_ptr) {
+            mr_BufferWriterWriteLongLong(bw, 1);
+            mr_BufferWriterWriteLongLong(bw, sample.timestamp);
+            mr_BufferWriterWriteBuff(bw, (const char *)&sample.value, sizeof(double));
+            return;
+        }
+    }
+    if (SeriesGetNumSamples(series) > 0) {
+        mr_BufferWriterWriteLongLong(bw, 1);
+        mr_BufferWriterWriteLongLong(bw, series->lastTimestamp);
+        mr_BufferWriterWriteBuff(bw, (const char *)&series->lastValue, sizeof(double));
+    } else {
+        mr_BufferWriterWriteLongLong(bw, 0);
+    }
+}
+
+static Series *DeserializeSeries(mr_BufferReader *br) {
+    int err = 0;
+
+    size_t nameLen;
+    const char *nameData = mr_BufferReaderReadBuff(br, &nameLen, &err);
+    RedisModuleString *name = RedisModule_CreateString(rts_staticCtx, nameData, nameLen);
+
+    long long labelsCount = mr_BufferReaderReadLongLong(br, &err);
+
+    CreateCtx cCtx = { 0 };
+    cCtx.chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
+    cCtx.options = SERIES_OPT_COMPRESSED_GORILLA;
+    cCtx.duplicatePolicy = DP_NONE;
+    cCtx.labelsCount = labelsCount;
+    cCtx.labels = labelsCount > 0 ? calloc(labelsCount, sizeof(Label)) : NULL;
+
+    for (long long i = 0; i < labelsCount; i++) {
+        size_t klen;
+        const char *k = mr_BufferReaderReadBuff(br, &klen, &err);
+        cCtx.labels[i].key = RedisModule_CreateString(rts_staticCtx, k, klen);
+
+        long long hasValue = mr_BufferReaderReadLongLong(br, &err);
+        if (hasValue) {
+            size_t vlen;
+            const char *v = mr_BufferReaderReadBuff(br, &vlen, &err);
+            cCtx.labels[i].value = RedisModule_CreateString(rts_staticCtx, v, vlen);
+        } else {
+            cCtx.labels[i].value = NULL;
+        }
+    }
+
+    Series *result = NewSeries(name, &cCtx);
+
+    long long sampleCount = mr_BufferReaderReadLongLong(br, &err);
+    for (long long i = 0; i < sampleCount; i++) {
+        long long timestamp = mr_BufferReaderReadLongLong(br, &err);
+        size_t dlen;
+        const char *dptr = mr_BufferReaderReadBuff(br, &dlen, &err);
+        double value;
+        memcpy(&value, dptr, sizeof(double));
+        SeriesAddSample(result, timestamp, value);
+    }
+
+    return result;
+}
+
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
 
@@ -794,98 +940,73 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
 
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
-    replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+
+    if (CheckDictSeriesPermissions(
+            ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
+        RedisModule_FreeDict(ctx, qi);
+        ReleaseCtxUser(ctx);
+        return;
+    }
+
+    mr_Buffer *buf = mr_BufferNew(1024);
+    mr_BufferWriter bw;
+    mr_BufferWriterInit(&bw, buf);
+
+    size_t countOffset = buf->size;
+    mr_BufferWriterWriteLongLong(&bw, 0);
+    long long seriesCount = 0;
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+    RedisModuleString *currentKey;
+    Series *series;
+
+    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
+        RedisModuleKey *key;
+        const GetSeriesResult status = GetSeries(
+            ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        if (status != GetSeriesResult_Success) {
+            RedisModule_DictIteratorStop(iter);
+            iter = RedisModule_DictIteratorStart(qi, ">", currentKey);
+            RedisModule_FreeString(ctx, currentKey);
+            continue;
+        }
+
+        size_t nameLen;
+        const char *name = RedisModule_StringPtrLen(series->keyName, &nameLen);
+        mr_BufferWriterWriteBuff(&bw, name, nameLen);
+        BufWriteSeriesLabels(&bw, series);
+        BufWriteSeriesRange(&bw, series, &mrangeArgs.rangeArgs, mrangeArgs.reverse);
+
+        seriesCount++;
+        RedisModule_CloseKey(key);
+        RedisModule_FreeString(ctx, currentKey);
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    long countPatch = (long)seriesCount;
+    memcpy(buf->buff + countOffset, &countPatch, sizeof(long));
+
+    RedisModule_ReplyWithStringBuffer(ctx, buf->buff, buf->size);
+    mr_BufferFree(buf);
     RedisModule_FreeDict(ctx, qi);
     ReleaseCtxUser(ctx);
 }
 
-static Series *ParseSeries(const redisReply *reply) {
-    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
-    RedisModule_Assert(reply->elements == 3); // name, labels, samples
-
-    const redisReply *nameElement = reply->element[0];
-    RedisModule_Assert(nameElement->type == REDIS_REPLY_STRING);
-    RedisModuleString *name =
-        RedisModule_CreateString(rts_staticCtx, nameElement->str, nameElement->len);
-
-    CreateCtx cCtx = { 0 };
-    cCtx.chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
-    cCtx.options = SERIES_OPT_COMPRESSED_GORILLA;
-    cCtx.duplicatePolicy = DP_NONE;
-    cCtx.labelsCount = 0;
-    cCtx.labels = NULL;
-
-    const redisReply *labelsElement = reply->element[1];
-    RedisModule_Assert(labelsElement->type == REDIS_REPLY_ARRAY);
-    if (labelsElement->elements > 0) {
-        static RedisModuleString *LABELS = NULL; // Use as the LABELS keyword for the parsing
-        if (LABELS == NULL)
-            LABELS = RedisModule_CreateString(rts_staticCtx, "LABELS", 6);
-        // We already have a parser for the labels from argv/argc, so let's use it
-        size_t argc = 1 + 2 * labelsElement->elements;
-        RedisModuleString *argv[argc];
-        argv[0] = LABELS;
-        for (size_t i = 0; i < labelsElement->elements; i++) {
-            const redisReply *labelElement = labelsElement->element[i];
-            RedisModule_Assert(labelElement->type == REDIS_REPLY_ARRAY);
-            RedisModule_Assert(labelElement->elements == 2); // name and value (which can be null)
-            RedisModule_Assert(labelElement->element[0]->type == REDIS_REPLY_STRING &&
-                               (labelElement->element[1]->type == REDIS_REPLY_STRING ||
-                                labelElement->element[1]->type == REDIS_REPLY_NIL));
-            RedisModuleString *name = RedisModule_CreateString(
-                rts_staticCtx, labelElement->element[0]->str, labelElement->element[0]->len);
-            RedisModuleString *value = NULL;
-            if (labelElement->element[1]->type == REDIS_REPLY_STRING)
-                value = RedisModule_CreateString(
-                    rts_staticCtx, labelElement->element[1]->str, labelElement->element[1]->len);
-            argv[1 + 2 * i] = name;
-            argv[2 + 2 * i] = value;
-        }
-        int r = parseLabelsFromArgs(argv, argc, &cCtx.labelsCount, &cCtx.labels, true);
-        RedisModule_Assert(r == REDISMODULE_OK);
-        for (size_t i = 1 /* Don't free the LABELS "keyword" */; i < argc; i++)
-            if (argv[i] != NULL)
-                RedisModule_FreeString(rts_staticCtx, argv[i]);
-    }
-
-    Series *result = NewSeries(name, &cCtx);
-
-    const redisReply *samplesElement = reply->element[2];
-    RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
-    api_timestamp_t timestamp;
-    double value;
-    if (samplesElement->elements == 2) {
-        // This could be the compact way for a single sample, in which case we simply extract it
-        if (samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
-            timestamp = samplesElement->element[0]->integer;
-            parse_double_cstr(
-                samplesElement->element[1]->str, samplesElement->element[1]->len, &value);
-            SeriesAddSample(result, timestamp, value);
-            return result;
-        }
-    }
-
-    for (size_t i = 0; i < samplesElement->elements; i++) {
-        const redisReply *sampleElement = samplesElement->element[i];
-        RedisModule_Assert(sampleElement->type == REDIS_REPLY_ARRAY);
-        RedisModule_Assert(sampleElement->elements == 2);
-        RedisModule_Assert(sampleElement->element[0]->type == REDIS_REPLY_INTEGER);
-        // Unfortunately we cannot assume that the second element's type is a (simple) string
-        // because it could start with a '+' or a '-' which confuses the type detection.
-        timestamp = sampleElement->element[0]->integer;
-        parse_double_cstr(sampleElement->element[1]->str, sampleElement->element[1]->len, &value);
-        SeriesAddSample(result, timestamp, value);
-    }
-
-    return result;
-}
-
 static Record *SeriesListReplyParser(const redisReply *reply) {
-    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
-    ARR(Series *) seriesList = array_new(Series *, reply->elements);
-    for (size_t i = 0; i < reply->elements; i++) {
-        Series *series = ParseSeries(reply->element[i]);
-        seriesList = array_append(seriesList, series);
+    RedisModule_Assert(reply->type == REDIS_REPLY_STRING);
+
+    mr_Buffer buf = { .cap = reply->len, .size = reply->len, .buff = reply->str };
+    mr_BufferReader br;
+    mr_BufferReaderInit(&br, &buf);
+    int err = 0;
+
+    long long numSeries = mr_BufferReaderReadLongLong(&br, &err);
+    ARR(Series *) seriesList = array_new(Series *, numSeries);
+    for (long long i = 0; i < numSeries; i++) {
+        Series *s = DeserializeSeries(&br);
+        seriesList = array_append(seriesList, s);
     }
 
     return SeriesListRecord_Create(seriesList);
@@ -912,12 +1033,20 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
             ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
         GetSeriesResult_PermissionError) {
         RTS_ReplyKeyPermissionsError(ctx);
-        goto _cleanup;
+        RedisModule_FreeDict(ctx, qi);
+        ReleaseCtxUser(ctx);
+        return;
     }
 
+    mr_Buffer *buf = mr_BufferNew(1024);
+    mr_BufferWriter bw;
+    mr_BufferWriterInit(&bw, buf);
+
+    size_t countOffset = buf->size;
+    mr_BufferWriterWriteLongLong(&bw, 0);
+    long long seriesCount = 0;
+
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    long long replylen = 0;
     char *currentKey;
     size_t currentKeyLen;
     Series *series;
@@ -925,47 +1054,37 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
         RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
-        // ACL permissions were already validated by CheckDictSeriesPermissions above.
         const GetSeriesResult status = GetSeries(
             ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
         RedisModule_FreeString(ctx, keyName);
         if (status != GetSeriesResult_Success)
             continue;
 
-        RedisModule_ReplyWithArray(ctx, 3); // name, labels, sample
-        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        mr_BufferWriterWriteBuff(&bw, currentKey, currentKeyLen);
+
         if (mgetArgs.withLabels) {
-            ReplyWithSeriesLabels(ctx, series);
+            BufWriteSeriesLabels(&bw, series);
         } else if (mgetArgs.numLimitLabels > 0) {
             const char *limitLabelsStr[mgetArgs.numLimitLabels];
             for (int i = 0; i < mgetArgs.numLimitLabels; i++)
                 limitLabelsStr[i] = RedisModule_StringPtrLen(mgetArgs.limitLabels[i], NULL);
-            ReplyWithSeriesLabelsWithLimitC(ctx, series, limitLabelsStr, mgetArgs.numLimitLabels);
+            BufWriteSeriesLabelsWithLimit(&bw, series, limitLabelsStr, mgetArgs.numLimitLabels);
         } else {
-            RedisModule_ReplyWithArray(ctx, 0);
+            mr_BufferWriterWriteLongLong(&bw, 0);
         }
-        // LATEST is ignored for a series that is not a compaction.
-        bool should_finalize_last_bucket = should_finalize_last_bucket_get(mgetArgs.latest, series);
-        if (should_finalize_last_bucket) {
-            Sample sample;
-            Sample *sample_ptr = &sample;
-            calculate_latest_sample(&sample_ptr, series);
-            if (sample_ptr) {
-                ReplyWithSample(ctx, sample.timestamp, sample.value);
-            } else {
-                ReplyWithSeriesLastDatapoint(ctx, series);
-            }
-        } else {
-            ReplyWithSeriesLastDatapoint(ctx, series);
-        }
-        replylen++;
+
+        BufWriteMGetSample(&bw, series, mgetArgs.latest);
+
+        seriesCount++;
         RedisModule_CloseKey(key);
     }
-
-    RedisModule_ReplySetArrayLength(ctx, replylen);
     RedisModule_DictIteratorStop(iter);
 
-_cleanup:
+    long countPatch = (long)seriesCount;
+    memcpy(buf->buff + countOffset, &countPatch, sizeof(long));
+
+    RedisModule_ReplyWithStringBuffer(ctx, buf->buff, buf->size);
+    mr_BufferFree(buf);
     RedisModule_FreeDict(ctx, qi);
     ReleaseCtxUser(ctx);
 }
@@ -980,16 +1099,26 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
         QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
 
+    mr_Buffer *buf = mr_BufferNew(256);
+    mr_BufferWriter bw;
+    mr_BufferWriterInit(&bw, buf);
+
+    size_t countOffset = buf->size;
+    mr_BufferWriterWriteLongLong(&bw, 0);
+    long long count = 0;
+
     const char *keyName;
     size_t keyNameLen;
-    long long replylen = 0;
-
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     while ((keyName = RedisModule_DictNextC(iter, &keyNameLen, NULL)) != NULL) {
-        RedisModule_ReplyWithStringBuffer(ctx, keyName, keyNameLen);
-        replylen++;
+        mr_BufferWriterWriteBuff(&bw, keyName, keyNameLen);
+        count++;
     }
-    RedisModule_ReplySetArrayLength(ctx, replylen);
+
+    long countPatch = (long)count;
+    memcpy(buf->buff + countOffset, &countPatch, sizeof(long));
+
+    RedisModule_ReplyWithStringBuffer(ctx, buf->buff, buf->size);
+    mr_BufferFree(buf);
 
     RedisModule_DictIteratorStop(iter);
     RedisModule_FreeDict(ctx, qi);
@@ -997,13 +1126,20 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
 }
 
 static Record *StringListReplyParser(const redisReply *reply) {
-    RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
-    ARR(RedisModuleString *) stringList = array_new(RedisModuleString *, reply->elements);
-    for (size_t i = 0; i < reply->elements; i++) {
-        redisReply *element = reply->element[i];
-        RedisModule_Assert(element->type == REDIS_REPLY_STRING);
-        RedisModuleString *s = RedisModule_CreateString(rts_staticCtx, element->str, element->len);
-        stringList = array_append(stringList, s);
+    RedisModule_Assert(reply->type == REDIS_REPLY_STRING);
+
+    mr_Buffer buf = { .cap = reply->len, .size = reply->len, .buff = reply->str };
+    mr_BufferReader br;
+    mr_BufferReaderInit(&br, &buf);
+    int err = 0;
+
+    long long numStrings = mr_BufferReaderReadLongLong(&br, &err);
+    ARR(RedisModuleString *) stringList = array_new(RedisModuleString *, numStrings);
+    for (long long i = 0; i < numStrings; i++) {
+        size_t len;
+        const char *s = mr_BufferReaderReadBuff(&br, &len, &err);
+        RedisModuleString *rms = RedisModule_CreateString(rts_staticCtx, s, len);
+        stringList = array_append(stringList, rms);
     }
 
     return StringListRecord_Create(stringList);
