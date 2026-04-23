@@ -532,6 +532,14 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
 
     size_t len;
     compchunk->data = (uint64_t *)LoadStringBuffer_IOError(io, &len, err, TSDB_ERROR);
+    if (len == 0) {
+        err = true;
+        return TSDB_ERROR; /* Buffer size must be non-zero */
+    }
+    if (compchunk->idx > len * 8) {
+        err = true;
+        return TSDB_ERROR; /* Bit index can't exceed buffer size in bits */
+    }
     *chunk = (Chunk_t *)compchunk;
 
     return TSDB_OK;
