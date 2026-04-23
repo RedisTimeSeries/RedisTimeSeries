@@ -799,6 +799,56 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     ReleaseCtxUser(ctx);
 }
 
+// Returns NULL on permission error (caller falls back to RESP command path).
+static Record *TS_INTERNAL_MRANGE_RecordProducer(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+
+    ApplyCtxUser(ctx, queryArg->userName);
+
+    RedisModuleDict *qi = QueryIndex(
+        ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
+
+    if (CheckDictSeriesPermissions(
+            ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        RedisModule_FreeDict(ctx, qi);
+        ReleaseCtxUser(ctx);
+        return NULL;
+    }
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    Series *series;
+
+    Record *seriesList = ListRecord_Create(0);
+
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleKey *key;
+        RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        const GetSeriesResult status =
+            GetSeries(ctx, keyName, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        RedisModule_FreeString(ctx, keyName);
+
+        if (status != GetSeriesResult_Success) {
+            continue;
+        }
+
+        ListRecord_Add(
+            seriesList,
+            SeriesRecord_New(
+                series, queryArg->startTimestamp, queryArg->endTimestamp, queryArg));
+
+        RedisModule_CloseKey(key);
+    }
+
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(ctx, qi);
+    ReleaseCtxUser(ctx);
+
+    return seriesList;
+}
+
 static Series *ParseSeries(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
     RedisModule_Assert(reply->elements == 3); // name, labels, samples
@@ -891,8 +941,22 @@ static Record *SeriesListReplyParser(const redisReply *reply) {
     return SeriesListRecord_Create(seriesList);
 }
 
-static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
-                                                    .replyParser = SeriesListReplyParser };
+static Record *SeriesListRecordTransformer(Record *record) {
+    size_t listLen = ListRecord_GetLen((ListRecord *)record);
+    ARR(Series *) seriesList = array_new(Series *, listLen);
+    for (size_t i = 0; i < listLen; i++) {
+        Record *elem = ListRecord_GetRecord((ListRecord *)record, i);
+        seriesList = array_append(seriesList, SeriesRecord_IntoSeries((SeriesRecord *)elem));
+    }
+    return SeriesListRecord_Create(seriesList);
+}
+
+static InternalCommandCallbacks MrangeCallbacks = {
+    .command = TS_INTERNAL_MRANGE,
+    .replyParser = SeriesListReplyParser,
+    .recordProducer = TS_INTERNAL_MRANGE_RecordProducer,
+    .recordTransformer = SeriesListRecordTransformer,
+};
 
 static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
