@@ -808,10 +808,19 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
 
-    RedisModule_ReplyWithArray(ctx, 2);
-
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+
+    if (CheckDictSeriesPermissions(
+            ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
+        RedisModule_FreeDict(ctx, qi);
+        ReleaseCtxUser(ctx);
+        return;
+    }
+
+    RedisModule_ReplyWithArray(ctx, 2);
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
     RedisModule_FreeDict(ctx, qi);
 
@@ -1042,15 +1051,14 @@ static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     RedisModuleDict *qi =
         QueryIndex(ctx, mgetArgs.queryPredicates->list, mgetArgs.queryPredicates->count, NULL);
 
-    RedisModule_ReplyWithArray(ctx, 2);
-
     if (CheckDictSeriesPermissions(
             ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
         GetSeriesResult_PermissionError) {
-        RedisModule_ReplyWithArray(ctx, 0);
-        reply_with_slot_ranges(ctx);
+        RTS_ReplyKeyPermissionsError(ctx);
         goto _cleanup;
     }
+
+    RedisModule_ReplyWithArray(ctx, 2);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);

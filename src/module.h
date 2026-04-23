@@ -65,8 +65,18 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
                                            RedisModuleString *keyName,
                                            const int permissionFlags) {
     if (ctx != NULL) {
-        RedisModuleUser *user = GetCurrentUser(ctx);
+        // Prefer the explicitly-set context user (set via SetContextUser in internal commands)
+        // over the connection's authenticated user. On INNERCOMMUNICATION contexts the
+        // authenticated user is "default" which has full permissions, while the real restricted
+        // user is propagated via SetContextUser.
+        const RedisModuleUser *contextUser = RedisModule_GetContextUser(ctx);
+        if (contextUser) {
+            return RedisModule_ACLCheckKeyPermissions((RedisModuleUser *)contextUser,
+                                                      keyName,
+                                                      permissionFlags) == REDISMODULE_OK;
+        }
 
+        RedisModuleUser *user = GetCurrentUser(ctx);
         if (!user) {
             const RedisModuleUser *contextUser =
                 RedisModule_GetContextUser ? RedisModule_GetContextUser(ctx) : NULL;
