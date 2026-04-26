@@ -386,8 +386,10 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
     return GetSeriesResult_Success;
 }
 
-long long ForEachDictSeries(RedisModuleCtx *ctx, RedisModuleDict *dict,
-                            DictSeriesFn fn, void *userData) {
+long long ForEachDictSeries(RedisModuleCtx *ctx,
+                            RedisModuleDict *dict,
+                            DictSeriesFn fn,
+                            void *userData) {
     long long count = 0;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
     RedisModuleString *currentKey;
@@ -435,8 +437,7 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
     }
 
     ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
-    long long replylen =
-        ForEachDictSeries(ctx, result, ungroupedReplyCb, (void *)args);
+    long long replylen = ForEachDictSeries(ctx, result, ungroupedReplyCb, (void *)args);
     ReplySetMapOrArrayLength(ctx, replylen, false);
     return REDISMODULE_OK;
 }

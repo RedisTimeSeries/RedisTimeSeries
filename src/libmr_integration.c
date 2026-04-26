@@ -20,11 +20,12 @@
 #include "enriched_chunk.h"
 #include "series_iterator.h"
 
-
 // Initial capacities for the binary buffers used in internal-command responses.
 // These are only starting hints — the buffer auto-grows via realloc as we write.
-#define INTERNAL_REPLY_BUF_INITIAL_CAP        1024  // mrange/mget top-level reply
-#define INTERNAL_REPLY_BUF_SMALL_INITIAL_CAP   256  // queryindex reply / per-series sample staging// Binary serialization helpers for internal command responses.
+#define INTERNAL_REPLY_BUF_INITIAL_CAP 1024 // mrange/mget top-level reply
+#define INTERNAL_REPLY_BUF_SMALL_INITIAL_CAP                                                       \
+    256 // queryindex reply / per-series sample staging// Binary serialization helpers for internal
+        // command responses.
 // These replace the RESP encoding/decoding with direct binary blob transfers
 #define SeriesRecordName "SeriesRecord"
 
@@ -33,6 +34,23 @@
 #define API_USER_CONTEXT_SUPPORTED                                                                 \
     (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                   \
      RedisModule_GetModuleUserFromUserName && RedisModule_GetUserUsername)
+
+// Per-series visitor state for TS_INTERNAL_MGET: writes name + (optional) labels +
+// last/finalized sample to the binary buffer being built for the coordinator.
+typedef struct
+{
+    mr_BufferWriter *bw;
+    const MGetArgs *args;
+} MgetBufCtx;
+
+// Per-series visitor state for TS_INTERNAL_MRANGE: writes name + labels + range
+// samples to the binary buffer being built for the coordinator.
+typedef struct
+{
+    mr_BufferWriter *bw;
+    const RangeArgs *rangeArgs;
+    bool reverse;
+} MrangeBufCtx;
 
 static Record NullRecord;
 static MRRecordType *NullRecordType = NULL;
@@ -773,12 +791,26 @@ static Record *SlotRangesReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES,
                                                         .replyParser = SlotRangesReplyParser };
 
+/**
+ * @brief Serialize one (timestamp, value) sample into the shard's reply buffer.
+ *
+ * Used by ::BufWriteSeriesRange (TS_INTERNAL_MRANGE) and ::BufWriteMGetSample
+ * (TS_INTERNAL_MGET). Format must match ::BufReadSample on the coordinator.
+ */
 static inline void BufWriteSample(mr_BufferWriter *bw, long long timestamp, double value) {
     mr_BufferWriterWriteLongLong(bw, timestamp);
     mr_BufferWriterWriteBuff(bw, (const char *)&value, sizeof(double));
 }
 
-static inline void BufReadSample(mr_BufferReader *br, long long *timestamp, double *value,
+/**
+ * @brief Deserialize one (timestamp, value) sample from a shard's reply buffer.
+ *
+ * Used by ::DeserializeSeries on the coordinator. Format must match
+ * ::BufWriteSample emitted by the shard.
+ */
+static inline void BufReadSample(mr_BufferReader *br,
+                                 long long *timestamp,
+                                 double *value,
                                  int *err) {
     *timestamp = mr_BufferReaderReadLongLong(br, err);
     size_t dlen;
@@ -787,14 +819,32 @@ static inline void BufReadSample(mr_BufferReader *br, long long *timestamp, doub
         memcpy(value, dptr, sizeof(double));
 }
 
-static inline void BufWriteLabel(mr_BufferWriter *bw, const char *key, size_t klen,
-                                 const char *value, size_t vlen, bool hasValue) {
+/**
+ * @brief Serialize one label (key + optional value) into the shard's reply buffer.
+ *
+ * Used by ::BufWriteSeriesLabel and ::BufWriteSeriesLabelsWithLimit. Writes the
+ * key, a hasValue flag, and the value when present; matched on the coordinator
+ * by the label-reading loop in ::DeserializeSeries.
+ */
+static inline void BufWriteLabel(mr_BufferWriter *bw,
+                                 const char *key,
+                                 size_t klen,
+                                 const char *value,
+                                 size_t vlen,
+                                 bool hasValue) {
     mr_BufferWriterWriteBuff(bw, key, klen);
     mr_BufferWriterWriteLongLong(bw, hasValue ? 1 : 0);
     if (hasValue)
         mr_BufferWriterWriteBuff(bw, value, vlen);
 }
 
+/**
+ * @brief Serialize a series ::Label into the shard's reply buffer.
+ *
+ * Thin wrapper that extracts the key/value strings and forwards to ::BufWriteLabel.
+ * Used by ::BufWriteSeriesLabels (WITHLABELS) and ::BufWriteSeriesLabelsWithLimit
+ * (SELECTED_LABELS, when the requested label exists on the series).
+ */
 static inline void BufWriteSeriesLabel(mr_BufferWriter *bw, const Label *label) {
     size_t klen, vlen = 0;
     const char *k = RedisModule_StringPtrLen(label->key, &klen);
@@ -803,8 +853,13 @@ static inline void BufWriteSeriesLabel(mr_BufferWriter *bw, const Label *label) 
     BufWriteLabel(bw, k, klen, v, vlen, hasValue);
 }
 
-// --- Counted reply helpers (placeholder count, patched at the end) ---
-
+/**
+ * @brief Begin a shard reply whose first field is the total entry count.
+ *
+ * Allocates a buffer, writes a zero placeholder for the count, and stores its
+ * offset in @p countOffset so ::CountedReplyFinish can patch it once the loop
+ * has counted all entries. Used by TS_INTERNAL_MRANGE / MGET / QUERYINDEX.
+ */
 static mr_Buffer *CountedReplyBegin(mr_BufferWriter *bw, size_t initialCap, size_t *countOffset) {
     mr_Buffer *buf = mr_BufferNew(initialCap);
     mr_BufferWriterInit(bw, buf);
@@ -813,7 +868,15 @@ static mr_Buffer *CountedReplyBegin(mr_BufferWriter *bw, size_t initialCap, size
     return buf;
 }
 
-static void CountedReplyFinish(RedisModuleCtx *ctx, mr_Buffer *buf, size_t countOffset,
+/**
+ * @brief Finalize a counted reply: patch the entry count, send, and free.
+ *
+ * Overwrites the placeholder reserved by ::CountedReplyBegin at @p countOffset
+ * with @p count, ships the buffer as one RESP bulk-string, and releases it.
+ */
+static void CountedReplyFinish(RedisModuleCtx *ctx,
+                               mr_Buffer *buf,
+                               size_t countOffset,
                                long long count) {
     long countPatch = (long)count;
     memcpy(buf->buff + countOffset, &countPatch, sizeof(long));
@@ -821,7 +884,16 @@ static void CountedReplyFinish(RedisModuleCtx *ctx, mr_Buffer *buf, size_t count
     mr_BufferFree(buf);
 }
 
-static inline void BufReaderInitFromReply(mr_BufferReader *br, mr_Buffer *buf,
+/**
+ * @brief Wrap a hiredis bulk-string reply as an ::mr_BufferReader (zero-copy).
+ *
+ * Used by the coordinator-side reply parsers (::SeriesListReplyParser,
+ * ::StringListReplyParser) to read the binary buffer the shard built. The
+ * reader only borrows @p reply->str, so the returned reader is valid for the
+ * lifetime of the hiredis reply.
+ */
+static inline void BufReaderInitFromReply(mr_BufferReader *br,
+                                          mr_Buffer *buf,
                                           const redisReply *reply) {
     buf->cap = reply->len;
     buf->size = reply->len;
@@ -829,16 +901,34 @@ static inline void BufReaderInitFromReply(mr_BufferReader *br, mr_Buffer *buf,
     mr_BufferReaderInit(br, buf);
 }
 
-// --- Higher-level series writers ---
-
+/**
+ * @brief Serialize all of a series' labels into the shard's reply buffer.
+ *
+ * Writes a length-prefixed sequence: the label count followed by each label
+ * via ::BufWriteSeriesLabel. Used for the WITHLABELS path of TS_INTERNAL_MGET
+ * and unconditionally on the TS_INTERNAL_MRANGE path (labels are always sent
+ * so the coordinator can group by them in mrange_done).
+ */
 static void BufWriteSeriesLabels(mr_BufferWriter *bw, const Series *series) {
     mr_BufferWriterWriteLongLong(bw, series->labelsCount);
     for (size_t i = 0; i < series->labelsCount; i++)
         BufWriteSeriesLabel(bw, &series->labels[i]);
 }
 
-static void BufWriteSeriesLabelsWithLimit(mr_BufferWriter *bw, const Series *series,
-                                          const char **limitLabels, uint16_t numLimitLabels) {
+/**
+ * @brief Serialize the SELECTED_LABELS subset for a series into the reply buffer.
+ *
+ * Writes exactly @p numLimitLabels entries in the order requested by the client,
+ * looking each name up case-insensitively in the series. If the series has the
+ * label, it's emitted with its value; otherwise the name is emitted with
+ * hasValue=false so the coordinator can report `(name, nil)` to the client.
+ *
+ * Used by TS_INTERNAL_MGET when the client passed SELECTED_LABELS.
+ */
+static void BufWriteSeriesLabelsWithLimit(mr_BufferWriter *bw,
+                                          const Series *series,
+                                          const char **limitLabels,
+                                          uint16_t numLimitLabels) {
     mr_BufferWriterWriteLongLong(bw, numLimitLabels);
     for (int i = 0; i < numLimitLabels; i++) {
         const Label *match = NULL;
@@ -857,8 +947,20 @@ static void BufWriteSeriesLabelsWithLimit(mr_BufferWriter *bw, const Series *ser
     }
 }
 
-static void BufWriteSeriesRange(mr_BufferWriter *bw, Series *series,
-                                const RangeArgs *args, bool reverse) {
+/**
+ * @brief Serialize all samples a range query yields for a series into the reply buffer.
+ *
+ * Writes a length-prefixed sample list: the sample count (known only after the
+ * iterator is drained), followed by each sample via ::BufWriteSample. Samples
+ * are staged in a side buffer first so the count can be written before the body
+ * — this avoids the placeholder/patch dance used at the top level.
+ *
+ * Used by TS_INTERNAL_MRANGE per series in the dict.
+ */
+static void BufWriteSeriesRange(mr_BufferWriter *bw,
+                                Series *series,
+                                const RangeArgs *args,
+                                bool reverse) {
     mr_Buffer *samplesBuf = mr_BufferNew(INTERNAL_REPLY_BUF_SMALL_INITIAL_CAP);
     mr_BufferWriter sw;
     mr_BufferWriterInit(&sw, samplesBuf);
@@ -884,6 +986,15 @@ static void BufWriteSeriesRange(mr_BufferWriter *bw, Series *series,
     mr_BufferFree(samplesBuf);
 }
 
+/**
+ * @brief Serialize the single sample TS.MGET should return for a series.
+ *
+ * Picks the finalized last-bucket sample when LATEST is set on a compaction,
+ * otherwise the series' last datapoint; writes nothing if the series is empty.
+ * Format: a hasSample flag (0/1), followed by one ::BufWriteSample if present.
+ *
+ * Used by TS_INTERNAL_MGET per series.
+ */
 static void BufWriteMGetSample(mr_BufferWriter *bw, Series *series, bool latest) {
     long long ts;
     double val;
@@ -910,6 +1021,18 @@ static void BufWriteMGetSample(mr_BufferWriter *bw, Series *series, bool latest)
         BufWriteSample(bw, ts, val);
 }
 
+/**
+ * @brief Reconstruct one ::Series from a shard's binary reply on the coordinator.
+ *
+ * Reads the series in the order written by the shard: name, labels (count +
+ * key/hasValue/value triples — see ::BufWriteLabel), then samples (count +
+ * timestamp/value pairs — see ::BufWriteSample). Allocates fresh
+ * ::RedisModuleString and chunk storage so the returned Series is independent
+ * of the hiredis reply buffer (which is freed when the parser returns).
+ *
+ * Used by ::SeriesListReplyParser, the per-shard parser registered for
+ * TS_INTERNAL_MRANGE / TS_INTERNAL_MGET.
+ */
 static Series *DeserializeSeries(mr_BufferReader *br) {
     int err = 0;
 
@@ -953,14 +1076,6 @@ static Series *DeserializeSeries(mr_BufferReader *br) {
 
     return result;
 }
-
-// Per-series visitor state for TS_INTERNAL_MRANGE: writes name + labels + range
-// samples to the binary buffer being built for the coordinator.
-typedef struct {
-    mr_BufferWriter *bw;
-    const RangeArgs *rangeArgs;
-    bool reverse;
-} MrangeBufCtx;
 
 static void mrangeBufCb(RedisModuleCtx *ctx, Series *series, void *userData) {
     (void)ctx;
@@ -1047,13 +1162,13 @@ static Record *SeriesListReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
                                                     .replyParser = SeriesListReplyParser };
 
-// Per-series visitor state for TS_INTERNAL_MGET: writes name + (optional) labels +
-// last/finalized sample to the binary buffer being built for the coordinator.
-typedef struct {
-    mr_BufferWriter *bw;
-    const MGetArgs *args;
-} MgetBufCtx;
-
+/**
+ * @brief Per-series visitor invoked by ::ForEachDictSeries inside TS_INTERNAL_MGET.
+ *
+ * Emits one entry into the shard's reply buffer: the series key name, the
+ * labels block (full / SELECTED_LABELS / empty depending on @p args), and the
+ * single MGET sample via ::BufWriteMGetSample.
+ */
 static void mgetBufCb(RedisModuleCtx *ctx, Series *series, void *userData) {
     (void)ctx;
     MgetBufCtx *bc = userData;
