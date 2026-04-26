@@ -62,7 +62,6 @@ jobs:
           ref: ${{ needs.validate-and-check.outputs.release_branch }}
           path: release-branch
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check if tag already exists
         working-directory: release-branch
@@ -74,12 +73,6 @@ jobs:
             exit 1
           fi
           echo "Tag v$VERSION does not exist, proceeding..."
-
-      - name: Configure Git
-        working-directory: release-branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Set version
         shell: python
