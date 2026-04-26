@@ -202,3 +202,4 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           github-ref: ${{ github.ref }}
           beta-version: ${{ inputs.beta-version }}
+          osnick: ${{ matrix.platform.os }}
