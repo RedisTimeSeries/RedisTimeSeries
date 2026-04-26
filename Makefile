@@ -547,3 +547,22 @@ gen-compile-commands:
 endif
 
 .PHONY: pack upload-release upload-artifacts
+
+#----------------------------------------------------------------------------------------------
+# `make setup` — install build & test prereqs for RedisTimeSeries.
+#
+# Standalone-friendly. Steps:
+#   1. `sbin/setup`  -> getpy3 + system-setup.py + readies (autoconf,
+#      libtool, m4, automake, openssl, gnu-utils on macOS, cmake, RAMP,
+#      RLTest, etc.).
+#   2. `gevent`     -> imported by tests/flow/test_short_read.py but
+#      commented out in tests/flow/requirements.txt, so install it here.
+#----------------------------------------------------------------------------------------------
+
+setup:
+	$(SHOW)./sbin/setup
+	$(SHOW)pip3 install --user gevent 2>/dev/null \
+		|| pip3 install --user --break-system-packages gevent 2>/dev/null \
+		|| pip3 install --break-system-packages gevent
+
+.PHONY: setup
