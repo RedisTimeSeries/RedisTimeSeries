@@ -190,6 +190,19 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
                                            RedisModuleDict *dict,
                                            const GetSeriesFlags flags);
 
+// Per-series visitor callback used by ForEachDictSeries. The series and key are
+// owned by the visitor; the callback must not call CloseKey or FreeString.
+typedef void (*DictSeriesFn)(RedisModuleCtx *ctx, Series *series, void *userData);
+
+// Iterate a (key -> Series) dict in lexicographic order, opening each series for
+// reading, invoking `fn` for every series successfully resolved, and skipping
+// (with iterator restart) any key that fails to resolve. Returns the number of
+// times the callback was invoked.
+long long ForEachDictSeries(RedisModuleCtx *ctx,
+                            RedisModuleDict *dict,
+                            DictSeriesFn fn,
+                            void *userData);
+
 int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args);
 
 extern int persistence_in_progress;
