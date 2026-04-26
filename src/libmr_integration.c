@@ -20,6 +20,12 @@
 #include "enriched_chunk.h"
 #include "series_iterator.h"
 
+
+// Initial capacities for the binary buffers used in internal-command responses.
+// These are only starting hints — the buffer auto-grows via realloc as we write.
+#define INTERNAL_REPLY_BUF_INITIAL_CAP        1024  // mrange/mget top-level reply
+#define INTERNAL_REPLY_BUF_SMALL_INITIAL_CAP   256  // queryindex reply / per-series sample staging// Binary serialization helpers for internal command responses.
+// These replace the RESP encoding/decoding with direct binary blob transfers
 #define SeriesRecordName "SeriesRecord"
 
 /* All four must be present: Apply sets user from name; Release reads and clears via the same API
@@ -766,16 +772,6 @@ static Record *SlotRangesReplyParser(const redisReply *reply) {
 
 static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES,
                                                         .replyParser = SlotRangesReplyParser };
-
-// Binary serialization helpers for internal command responses.
-// These replace the RESP encoding/decoding with direct binary blob transfer.
-
-// Initial capacities for the binary buffers used in internal-command responses.
-// These are only starting hints — the buffer auto-grows via realloc as we write.
-#define INTERNAL_REPLY_BUF_INITIAL_CAP        1024  // mrange/mget top-level reply
-#define INTERNAL_REPLY_BUF_SMALL_INITIAL_CAP   256  // queryindex reply / per-series sample staging
-
-// --- Low-level primitives ---
 
 static inline void BufWriteSample(mr_BufferWriter *bw, long long timestamp, double value) {
     mr_BufferWriterWriteLongLong(bw, timestamp);
