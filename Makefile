@@ -560,9 +560,8 @@ endif
 #----------------------------------------------------------------------------------------------
 
 setup:
-	$(SHOW)./sbin/setup
-	$(SHOW)pip3 install --user gevent 2>/dev/null \
-		|| pip3 install --user --break-system-packages gevent 2>/dev/null \
-		|| pip3 install --break-system-packages gevent
+	$(SHOW)cd .install && ./install_script.sh
+	$(SHOW)test -d venv || python3 -m venv venv
+	$(SHOW). ./venv/bin/activate && ./.install/common_installations.sh && pip install gevent
 
 .PHONY: setup
