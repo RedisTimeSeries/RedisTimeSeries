@@ -14,8 +14,9 @@ class testModuleLoadTimeArguments(object):
                                 ]
 
     def test(self):
-        Env().skipOnCluster()
         skip_on_rlec()
+        env = Env()
+        env.skipOnCluster()
         for variation in self.test_variations:
             should_ok = variation[0]
             if should_ok:
@@ -29,9 +30,9 @@ class testModuleLoadTimeArguments(object):
 
 
 def test_ignore():
-    Env().skipOnCluster()
     skip_on_rlec()
     env = Env(moduleArgs='IGNORE_MAX_TIME_DIFF 10; IGNORE_MAX_VAL_DIFF 20')
+    env.skipOnCluster()
     with env.getConnection() as r:
         # Verify module args work as the default config
         r.execute_command('TS.ADD', 'key1', '1000', '100', 'DUPLICATE_POLICY', 'LAST')
@@ -59,9 +60,9 @@ def test_ignore_invalid_module_args(env):
 
 
 def test_encoding_uncompressed():
-    Env().skipOnCluster()
     skip_on_rlec()
     env = Env(moduleArgs='ENCODING UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
+    env.skipOnCluster()
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
@@ -69,18 +70,18 @@ def test_encoding_uncompressed():
 
 
 def test_encoding_compressed():
-    Env().skipOnCluster()
     skip_on_rlec()
     env = Env(moduleArgs='ENCODING compressed; COMPACTION_POLICY max:1s:1m')
+    env.skipOnCluster()
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'compressed'
 
 def test_uncompressed():
-    Env().skipOnCluster()
     skip_on_rlec()
     env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED; COMPACTION_POLICY max:1s:1m')
+    env.skipOnCluster()
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
@@ -88,18 +89,17 @@ def test_uncompressed():
 
 
 def test_compressed():
-    Env().skipOnCluster()
     skip_on_rlec()
     env = Env(moduleArgs='CHUNK_TYPE compressed; COMPACTION_POLICY max:1s:1m')
+    env.skipOnCluster()
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000')).chunk_type == b'compressed'
 
 def test_compressed_debug():
-    Env().skipOnCluster()
-
     env = Env(moduleArgs='CHUNK_TYPE compressed COMPACTION_POLICY max:1s:1m')
+    env.skipOnCluster()
     skip_on_rlec()
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
@@ -110,9 +110,9 @@ def test_compressed_debug():
         assert TSInfo(r.execute_command('TS.INFO', 't1_MAX_1000', 'DEBUG')).chunks == [[b'startTimestamp', 0, b'endTimestamp', 3000, b'samples', 2, b'size', 4096, b'bytesPerSample', b'2048']]
 
 def test_timestamp_alignment():
-    Env().skipOnCluster()
     skip_on_rlec()
     env = Env(moduleArgs='CHUNK_TYPE UNCOMPRESSED; COMPACTION_POLICY max:1s:0:500m')
+    env.skipOnCluster()
     with env.getConnection() as r:
         r.execute_command('FLUSHALL')
         r.execute_command('TS.ADD', 't1', '1', 1.0)
@@ -134,9 +134,9 @@ def test_timestamp_alignment():
 class testGlobalConfigTests():
 
     def __init__(self):
-        Env().skipOnCluster()
         skip_on_rlec()
         self.env = Env(moduleArgs='COMPACTION_POLICY max:1m:1d\\;min:10s:1h\\;avg:2h:10d\\;avg:3d:100d')
+        self.env.skipOnCluster()
 
     def test_autocreate(self):
         with self.env.getConnection() as r:
@@ -196,7 +196,8 @@ class testGlobalConfigTests():
 
 
 def test_negative_configuration():
-    Env().skipOnCluster()
+    check_env = Env()
+    check_env.skipOnCluster()
     skip_on_rlec()
     with pytest.raises(Exception) as excinfo:
         env = Env(moduleArgs='CHUNK_SIZE_BYTES 80; DUPLICATE_POLICY abc')
