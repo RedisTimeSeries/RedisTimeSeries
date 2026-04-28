@@ -457,7 +457,7 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     // Check if the requested user is already set on the context
     const RedisModuleUser *currentUser = RedisModule_GetContextUser(ctx);
     if (currentUser) {
-        RedisModuleString *currentName = RedisModule_GetUserUsername(currentUser);
+        RedisModuleString *currentName = RedisModule_GetUserUsername(ctx, currentUser);
         if (currentName) {
             int cmp = RedisModule_StringCompare(currentName, userName);
             RedisModule_FreeString(ctx, currentName);
