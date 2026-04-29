@@ -144,6 +144,8 @@ jobs:
         working-directory: release-branch
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          INSTALLATION_ID: ${{ steps.app-token.outputs.installation-id }}
           EXPECTED_BYPASS_APP_SLUG: redis-release-automation-app
         run: |
           echo "Commit metadata (HEAD = commit just created):"
@@ -156,31 +158,37 @@ jobs:
             echo "No persisted checkout auth header found in .git/config."
           fi
 
-          echo "Resolving the identity bound to the push token..."
-          if INSTALLATION_JSON=$(gh api /repos/${{ github.repository }}/installation 2>/dev/null); then
-            APP_SLUG=$(jq -r '.app_slug' <<<"$INSTALLATION_JSON")
-            ACCOUNT_LOGIN=$(jq -r '.account.login' <<<"$INSTALLATION_JSON")
-            TARGET_TYPE=$(jq -r '.target_type' <<<"$INSTALLATION_JSON")
-            CONTENTS_PERMISSION=$(jq -r '.permissions.contents // "unknown"' <<<"$INSTALLATION_JSON")
-            echo "  App slug:            $APP_SLUG"
-            echo "  Installation login:  $ACCOUNT_LOGIN"
-            echo "  Target type:         $TARGET_TYPE"
-            echo "  Contents permission: $CONTENTS_PERMISSION"
-            if [[ "$APP_SLUG" == "$EXPECTED_BYPASS_APP_SLUG" ]]; then
-              echo "Branch-protection bypass match: yes ($APP_SLUG)"
-            else
-              echo "::warning::Branch-protection bypass match: no (expected $EXPECTED_BYPASS_APP_SLUG, got $APP_SLUG)"
-            fi
+          echo "Push token identity (from create-github-app-token outputs):"
+          echo "  App slug:        $APP_SLUG"
+          echo "  Installation ID: $INSTALLATION_ID"
+
+          BOT_LOGIN="${APP_SLUG}[bot]"
+          BOT_USER_ID=$(gh api "/users/${BOT_LOGIN}" --jq '.id' 2>/dev/null || true)
+          if [[ -n "$BOT_USER_ID" ]]; then
+            echo "  Bot user:        ${BOT_LOGIN} (id ${BOT_USER_ID})"
+            echo "  Push will appear to GitHub as: ${BOT_LOGIN}"
           else
-            echo "::warning::Could not resolve /repos/${{ github.repository }}/installation with the push token."
+            echo "::warning::Could not resolve bot user for ${BOT_LOGIN} via /users."
           fi
 
-          API_LOGIN=$(gh api /user --jq '.login' 2>/dev/null || true)
-          if [[ -n "$API_LOGIN" ]]; then
-            echo "  /user login for push token: $API_LOGIN"
+          echo "Verifying the installation token actually works for this repo:"
+          if REPO_LIST_JSON=$(gh api /installation/repositories --paginate 2>/dev/null); then
+            REPO_COUNT=$(jq '.repositories | length' <<<"$REPO_LIST_JSON" 2>/dev/null || echo "?")
+            HAS_THIS_REPO=$(jq --arg full "${{ github.repository }}" \
+              '[.repositories[].full_name] | index($full) != null' <<<"$REPO_LIST_JSON" 2>/dev/null || echo "false")
+            echo "  Installation has access to $REPO_COUNT repo(s)."
+            echo "  Includes ${{ github.repository }}: $HAS_THIS_REPO"
+          else
+            echo "::warning::Could not list installation repositories with the push token."
           fi
 
-          echo "GitHub branch protection evaluates the authenticated push actor (the token/app), not the git commit author or committer shown above."
+          if [[ "$APP_SLUG" == "$EXPECTED_BYPASS_APP_SLUG" ]]; then
+            echo "Branch-protection bypass match: yes ($APP_SLUG == $EXPECTED_BYPASS_APP_SLUG)"
+          else
+            echo "::warning::Branch-protection bypass match: no (expected $EXPECTED_BYPASS_APP_SLUG, got $APP_SLUG)"
+          fi
+
+          echo "Note: branch protection evaluates the authenticated push actor (this app), not the git commit author or committer shown above."
 
       - name: Push changes
         if: ${{ !inputs.dry_run }}
