@@ -55,6 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -83,11 +84,30 @@ jobs:
           fi
           echo "Tag v$VERSION does not exist, proceeding..."
 
+      - name: Check if bump branch already exists
+        working-directory: release-branch
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          BRANCH="bump-version-v$VERSION"
+          if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1; then
+            echo "::error::Branch $BRANCH already exists on remote"
+            exit 1
+          fi
+          echo "Branch $BRANCH does not exist, proceeding..."
+
       - name: Configure Git
         working-directory: release-branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create bump branch
+        working-directory: release-branch
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git checkout -b "bump-version-v$VERSION"
 
       - name: Set version
         shell: python
@@ -134,78 +154,42 @@ jobs:
           git add src/version.h
           git commit -m "bump version v$VERSION"
 
-      - name: Create annotated tag
-        working-directory: release-branch
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          git tag -a "v$VERSION" -m "Automated bump to v$VERSION"
-
-      - name: Debug branch-protection push actor
+      - name: Push bump branch and open auto-merge PR
+        if: ${{ !inputs.dry_run }}
+        id: open-pr
         working-directory: release-branch
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          INSTALLATION_ID: ${{ steps.app-token.outputs.installation-id }}
-          EXPECTED_BYPASS_APP_SLUG: redis-release-automation-app
-        run: |
-          echo "Commit metadata (HEAD = commit just created):"
-          git log -1 --format='  Author:    %an <%ae>%n  Committer: %cn <%ce>%n  Message:   %B'
-
-          echo "Push token identity (from create-github-app-token outputs):"
-          echo "  App slug:        $APP_SLUG"
-          echo "  Installation ID: $INSTALLATION_ID"
-
-          BOT_LOGIN="${APP_SLUG}[bot]"
-          BOT_USER_ID=$(gh api "/users/${BOT_LOGIN}" --jq '.id' 2>/dev/null || true)
-          if [[ -n "$BOT_USER_ID" ]]; then
-            echo "  Bot user:        ${BOT_LOGIN} (id ${BOT_USER_ID})"
-            echo "  Push will appear to GitHub as: ${BOT_LOGIN}"
-          else
-            echo "::warning::Could not resolve bot user for ${BOT_LOGIN} via /users."
-          fi
-
-          if [[ "$APP_SLUG" == "$EXPECTED_BYPASS_APP_SLUG" ]]; then
-            echo "Branch-protection bypass match: yes ($APP_SLUG == $EXPECTED_BYPASS_APP_SLUG)"
-          else
-            echo "::warning::Branch-protection bypass match: no (expected $EXPECTED_BYPASS_APP_SLUG, got $APP_SLUG)"
-          fi
-
-          echo "Note: branch protection evaluates the authenticated push actor (this app), not the git commit author or committer shown above."
-
-      - name: Push changes
-        if: ${{ !inputs.dry_run }}
-        working-directory: release-branch
-        env:
           VERSION: ${{ inputs.version }}
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
         run: |
-          git push origin "$RELEASE_BRANCH"
-          git push origin "v$VERSION"
+          BRANCH="bump-version-v$VERSION"
+          git push origin "$BRANCH"
 
-      - name: Verify push
-        if: ${{ !inputs.dry_run }}
-        working-directory: release-branch
-        env:
-          VERSION: ${{ inputs.version }}
-          RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
-        run: |
-          git ls-remote --exit-code origin "refs/tags/v$VERSION"
-          git ls-remote --exit-code origin "refs/heads/$RELEASE_BRANCH"
-          echo "Verified: tag and branch exist on remote"
+          PR_URL=$(gh pr create \
+            --base "$RELEASE_BRANCH" \
+            --head "$BRANCH" \
+            --title "bump version v$VERSION" \
+            --body "Automated version bump to v$VERSION on \`$RELEASE_BRANCH\`.")
+          echo "Opened PR: $PR_URL"
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+
+          gh pr merge "$PR_URL" --auto --squash
+          echo "Auto-merge enabled (squash); PR will merge once all required checks pass."
 
       - name: Dry run summary
         if: ${{ inputs.dry_run }}
         working-directory: release-branch
         env:
           VERSION: ${{ inputs.version }}
+          RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
         run: |
-          echo "::notice::DRY RUN - Changes were not pushed"
-          echo "Would have pushed:"
-          echo "  - Commit: bump version v$VERSION"
-          echo "  - Tag: v$VERSION"
+          echo "::notice::DRY RUN - Branch was not pushed and no PR was opened"
+          echo "Would have:"
+          echo "  - Pushed branch: bump-version-v$VERSION"
+          echo "  - Opened PR into: $RELEASE_BRANCH"
+          echo "  - Enabled auto-merge (squash) on the PR"
           git log -1 --oneline
-          git tag -l "v$VERSION"
 
       - name: Summary
         env:
@@ -213,10 +197,16 @@ jobs:
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
           REF_NAME: ${{ github.ref_name }}
           DRY_RUN: ${{ inputs.dry_run }}
+          PR_URL: ${{ steps.open-pr.outputs.pr_url }}
         run: |
-          echo "## Set Version Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Bump Version Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: v$VERSION" >> $GITHUB_STEP_SUMMARY
           echo "- **Release Branch**: $RELEASE_BRANCH" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bump Branch**: bump-version-v$VERSION" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered From**: $REF_NAME" >> $GITHUB_STEP_SUMMARY
           echo "- **Dry Run**: $DRY_RUN" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "$PR_URL" ]]; then
+            echo "- **Pull Request**: $PR_URL" >> $GITHUB_STEP_SUMMARY
+            echo "- **Auto-merge**: enabled (squash)" >> $GITHUB_STEP_SUMMARY
+          fi
