@@ -177,6 +177,7 @@ jobs:
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          git config --unset-all http.https://github.com/.extraheader || true
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
           git push origin "$RELEASE_BRANCH"
           git push origin "v$VERSION"
