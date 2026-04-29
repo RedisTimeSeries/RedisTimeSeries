@@ -89,7 +89,13 @@ MRRecordType *GetStringListRecordType() {
 static void QueryPredicates_ObjectFree(void *arg) {
     QueryPredicates_Arg *predicate_list = arg;
 
-    if (__atomic_sub_fetch(&predicate_list->refCount, 1, __ATOMIC_RELAXED) > 0) {
+    int newRef = __atomic_sub_fetch(&predicate_list->refCount, 1, __ATOMIC_RELAXED);
+    RedisModule_Log(rts_staticCtx, "warning",
+                    "[LEAK-DIAG] QueryPredicates_ObjectFree arg=%p limitLabelsSize=%d "
+                    "refCountAfterDec=%d willFree=%s",
+                    arg, predicate_list->limitLabelsSize, newRef,
+                    newRef > 0 ? "no" : "yes");
+    if (newRef > 0) {
         return;
     }
 
@@ -101,7 +107,10 @@ static void QueryPredicates_ObjectFree(void *arg) {
 
 static void *QueryPredicates_Duplicate(void *arg) {
     QueryPredicates_Arg *queryArg = (QueryPredicates_Arg *)arg;
-    __atomic_add_fetch(&queryArg->refCount, 1, __ATOMIC_RELAXED);
+    int newRef = __atomic_add_fetch(&queryArg->refCount, 1, __ATOMIC_RELAXED);
+    RedisModule_Log(rts_staticCtx, "warning",
+                    "[LEAK-DIAG] QueryPredicates_Duplicate arg=%p refCountAfterInc=%d",
+                    arg, newRef);
     return arg;
 }
 
@@ -222,6 +231,10 @@ static RedisModuleString *SerializationCtxReadRedisString(ReaderSerializationCtx
 }
 
 static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *predicates) {
+    RedisModule_Log(rts_staticCtx, "warning",
+                    "[LEAK-DIAG] QueryPredicates_CleanupFailedDeserialization arg=%p "
+                    "limitLabelsSize=%d (deserialize err path)",
+                    (void *)predicates, predicates->limitLabelsSize);
     QueryPredicates_FreeUserName(predicates);
     if (predicates->predicates->list) {
         for (int i = 0; i < predicates->predicates->count; i++) {
@@ -250,6 +263,10 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
     QueryPredicates_Arg *predicates = calloc(1, sizeof *predicates);
     predicates->shouldReturnNull = false;
     predicates->refCount = 1;
+    RedisModule_Log(rts_staticCtx, "warning",
+                    "[LEAK-DIAG] QueryPredicates_ArgDeserialize_impl allocated arg=%p "
+                    "(shard-side, expect_resp=%d)",
+                    (void *)predicates, expect_resp);
     /* Username from wire as stored; empty vs NULL is interpreted only in ApplyCtxUser(). */
     predicates->userName = SerializationCtxReadRedisString(sctx, error);
     predicates->predicates = calloc(1, sizeof *predicates->predicates);

@@ -539,6 +539,10 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     queryArg->resp3 = _ReplyMap(ctx);
     queryArg->userName = CopyCurrentUserName(ctx);
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_mget_MR allocated queryArg=%p limitLabelsSize=%d "
+                    "(retained %d argv strings)",
+                    (void *)queryArg, queryArg->limitLabelsSize, queryArg->limitLabelsSize);
 
     MRError *err = NULL;
 
@@ -556,16 +560,28 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             break;
         }
         default: {
+            RedisModule_Log(ctx, "warning",
+                            "[LEAK-DIAG] TSDB_mget_MR default-case bail (queryArg=%p NOT freed)",
+                            (void *)queryArg);
             RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
             return REDISMODULE_OK;
         }
     }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
+        RedisModule_Log(ctx, "warning",
+                        "[LEAK-DIAG] TSDB_mget_MR MR_CreateExecution failed (queryArg=%p, "
+                        "freeing via builder=%p)",
+                        (void *)queryArg, (void *)builder);
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
+
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_mget_MR happy path: queryArg=%p builder=%p exec=%p — "
+                    "ownership now with LibMR",
+                    (void *)queryArg, (void *)builder, (void *)exec);
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
@@ -573,6 +589,10 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_mget_MR after MR_FreeExecution+MR_FreeExecutionBuilder "
+                    "(queryArg=%p)",
+                    (void *)queryArg);
     return REDISMODULE_OK;
 }
 
@@ -601,6 +621,10 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     for (int i = 0; i < queryArg->limitLabelsSize; i++) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_mrange_MR allocated queryArg=%p limitLabelsSize=%d "
+                    "(retained %d argv strings)",
+                    (void *)queryArg, queryArg->limitLabelsSize, queryArg->limitLabelsSize);
 
     queryArg->userName = CopyCurrentUserName(ctx);
 
@@ -620,16 +644,28 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
             break;
         }
         default: {
+            RedisModule_Log(ctx, "warning",
+                            "[LEAK-DIAG] TSDB_mrange_MR default-case bail (queryArg=%p NOT freed)",
+                            (void *)queryArg);
             RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
             return REDISMODULE_OK;
         }
     }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
+        RedisModule_Log(ctx, "warning",
+                        "[LEAK-DIAG] TSDB_mrange_MR MR_CreateExecution failed (queryArg=%p, "
+                        "freeing via builder=%p)",
+                        (void *)queryArg, (void *)builder);
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
+
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_mrange_MR happy path: queryArg=%p builder=%p exec=%p — "
+                    "ownership now with LibMR",
+                    (void *)queryArg, (void *)builder, (void *)exec);
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MRangeData *data = malloc(sizeof(struct MRangeData)); // freed by mrange_done
@@ -640,6 +676,10 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_mrange_MR after MR_FreeExecution+MR_FreeExecutionBuilder "
+                    "(queryArg=%p) — if no ObjectFree fired above, queryArg leaked",
+                    (void *)queryArg);
     return REDISMODULE_OK;
 }
 
@@ -658,6 +698,9 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->resp3 = _ReplySet(ctx);
 
     queryArg->userName = CopyCurrentUserName(ctx);
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_queryindex_MR allocated queryArg=%p",
+                    (void *)queryArg);
 
     MRError *err = NULL;
 
@@ -675,16 +718,26 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
             break;
         }
         default: {
+            RedisModule_Log(ctx, "warning",
+                            "[LEAK-DIAG] TSDB_queryindex_MR default-case bail (queryArg=%p NOT freed)",
+                            (void *)queryArg);
             RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
             return REDISMODULE_OK;
         }
     }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
+        RedisModule_Log(ctx, "warning",
+                        "[LEAK-DIAG] TSDB_queryindex_MR MR_CreateExecution failed (queryArg=%p)",
+                        (void *)queryArg);
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
+
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_queryindex_MR happy path: queryArg=%p",
+                    (void *)queryArg);
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
@@ -692,5 +745,9 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
+    RedisModule_Log(ctx, "warning",
+                    "[LEAK-DIAG] TSDB_queryindex_MR after MR_FreeExecution+MR_FreeExecutionBuilder "
+                    "(queryArg=%p)",
+                    (void *)queryArg);
     return REDISMODULE_OK;
 }
