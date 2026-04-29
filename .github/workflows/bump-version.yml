@@ -149,6 +149,26 @@ jobs:
           git log -1 --format='  Author:    %an <%ae>%n  Committer: %cn <%ce>%n  Message:   %B'
           echo "Push will be authenticated as: $(gh api /user --jq '.login')"
 
+      - name: Debug git auth (TEMPORARY)
+        if: ${{ !inputs.dry_run }}
+        working-directory: release-branch
+        env:
+          GIT_TRACE: 1
+          GIT_CURL_VERBOSE: 1
+          RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "--- remotes ---"
+          git remote -v
+          echo "--- extraheader entries in .git/config ---"
+          git config --get-all http.https://github.com/.extraheader || true
+          echo "--- ls-remote with persisted credentials ---"
+          git ls-remote origin "refs/heads/${RELEASE_BRANCH}" || true
+          echo "--- ls-remote with App token via URL only (extraheader suppressed) ---"
+          git -c http.extraheader= ls-remote \
+            "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" \
+            "refs/heads/${RELEASE_BRANCH}" || true
+
       - name: Push changes
         if: ${{ !inputs.dry_run }}
         working-directory: release-branch
