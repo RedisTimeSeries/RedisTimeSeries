@@ -140,34 +140,47 @@ jobs:
         run: |
           git tag -a "v$VERSION" -m "Automated bump to v$VERSION"
 
-      - name: Show commit author and push actor
+      - name: Debug branch-protection push actor
         working-directory: release-branch
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EXPECTED_BYPASS_APP_SLUG: redis-release-automation-app
         run: |
           echo "Commit metadata (HEAD = commit just created):"
           git log -1 --format='  Author:    %an <%ae>%n  Committer: %cn <%ce>%n  Message:   %B'
-          echo "Push will be authenticated as: $(gh api /user --jq '.login')"
 
-      - name: Debug git auth (TEMPORARY)
-        if: ${{ !inputs.dry_run }}
-        working-directory: release-branch
-        env:
-          GIT_TRACE: 1
-          GIT_CURL_VERBOSE: 1
-          RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
-          TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          echo "--- remotes ---"
-          git remote -v
-          echo "--- extraheader entries in .git/config ---"
-          git config --get-all http.https://github.com/.extraheader || true
-          echo "--- ls-remote with persisted credentials ---"
-          git ls-remote origin "refs/heads/${RELEASE_BRANCH}" || true
-          echo "--- ls-remote with App token via URL only (extraheader suppressed) ---"
-          git -c http.extraheader= ls-remote \
-            "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" \
-            "refs/heads/${RELEASE_BRANCH}" || true
+          if git config --local --get-all http.https://github.com/.extraheader >/dev/null; then
+            echo "Checkout left a persisted GitHub auth header in .git/config."
+            echo "The push step will suppress that header per-command so branch protection sees the app token instead."
+          else
+            echo "No persisted checkout auth header found in .git/config."
+          fi
+
+          echo "Resolving the identity bound to the push token..."
+          if INSTALLATION_JSON=$(gh api /repos/${{ github.repository }}/installation 2>/dev/null); then
+            APP_SLUG=$(jq -r '.app_slug' <<<"$INSTALLATION_JSON")
+            ACCOUNT_LOGIN=$(jq -r '.account.login' <<<"$INSTALLATION_JSON")
+            TARGET_TYPE=$(jq -r '.target_type' <<<"$INSTALLATION_JSON")
+            CONTENTS_PERMISSION=$(jq -r '.permissions.contents // "unknown"' <<<"$INSTALLATION_JSON")
+            echo "  App slug:            $APP_SLUG"
+            echo "  Installation login:  $ACCOUNT_LOGIN"
+            echo "  Target type:         $TARGET_TYPE"
+            echo "  Contents permission: $CONTENTS_PERMISSION"
+            if [[ "$APP_SLUG" == "$EXPECTED_BYPASS_APP_SLUG" ]]; then
+              echo "Branch-protection bypass match: yes ($APP_SLUG)"
+            else
+              echo "::warning::Branch-protection bypass match: no (expected $EXPECTED_BYPASS_APP_SLUG, got $APP_SLUG)"
+            fi
+          else
+            echo "::warning::Could not resolve /repos/${{ github.repository }}/installation with the push token."
+          fi
+
+          API_LOGIN=$(gh api /user --jq '.login' 2>/dev/null || true)
+          if [[ -n "$API_LOGIN" ]]; then
+            echo "  /user login for push token: $API_LOGIN"
+          fi
+
+          echo "GitHub branch protection evaluates the authenticated push actor (the token/app), not the git commit author or committer shown above."
 
       - name: Push changes
         if: ${{ !inputs.dry_run }}
@@ -177,10 +190,9 @@ jobs:
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git config --unset-all http.https://github.com/.extraheader || true
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          git push origin "$RELEASE_BRANCH"
-          git push origin "v$VERSION"
+          git -c "http.https://github.com/.extraheader=" -c "http.extraheader=" push origin "$RELEASE_BRANCH"
+          git -c "http.https://github.com/.extraheader=" -c "http.extraheader=" push origin "v$VERSION"
 
       - name: Verify push
         if: ${{ !inputs.dry_run }}
