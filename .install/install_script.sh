@@ -269,46 +269,78 @@ resolve_abstract() {
     ' "$3"
 }
 
-# Bootstrap: ensure awk and a package-manager refresh are ready.
+# Snapshot of every package the host's package database currently considers
+# installed, one name per line. Built once up-front so per-package lookups
+# are local grep calls rather than ~17 forks of `brew list` / `dpkg-query`
+# / `rpm -q` (~10s saved on macOS, ~3s on apt). Empty for tdnf because we
+# can't trust the metadata cheaply on minimal Mariner/AzureLinux images;
+# tdnf already handles "already installed" gracefully on its own.
+INSTALLED_PKGS_FILE="$(mktemp)"
+trap 'rm -f "$INSTALLED_PKGS_FILE"' EXIT
 case "$PM" in
-    apt)
-        export DEBIAN_FRONTEND=noninteractive
-        $MODE apt-get update -qq
-        ;;
-    dnf|yum|tdnf)
-        $MODE $PM -y makecache 2>/dev/null || true
-        ;;
-    apk)
-        $MODE apk update -q
-        ;;
+    apt)         dpkg-query -W -f='${Package}\n'      2>/dev/null > "$INSTALLED_PKGS_FILE" || true ;;
+    dnf|yum)     rpm -qa --queryformat '%{NAME}\n'    2>/dev/null > "$INSTALLED_PKGS_FILE" || true ;;
+    apk)         apk info                             2>/dev/null > "$INSTALLED_PKGS_FILE" || true ;;
+    brew)        brew list --formula -1               2>/dev/null > "$INSTALLED_PKGS_FILE" || true ;;
 esac
 
-# Resolve every abstract dep -> concatenate -> single install call.
+# is_pkg_installed <pkg>  -> 0 if already present, non-zero otherwise.
+is_pkg_installed() {
+    grep -Fxq "$1" "$INSTALLED_PKGS_FILE"
+}
+
+# Resolve every abstract dep -> concrete list -> drop already-installed.
 all_pkgs=""
+missing_pkgs=""
 while IFS= read -r abs; do
     [ -z "$abs" ] && continue
     pkgs=$(resolve_abstract "$abs" "$PM" "$DEPS_YAML")
     [ -z "$pkgs" ] && continue
-    all_pkgs="$all_pkgs $pkgs"
+    for p in $pkgs; do
+        all_pkgs="$all_pkgs $p"
+        # tdnf path skips probing — it short-circuits already-installed
+        # packages itself (and Mariner's rpm db sometimes isn't populated
+        # until after tdnf makecache).
+        if [ "$PM" = "tdnf" ] || ! is_pkg_installed "$p"; then
+            missing_pkgs="$missing_pkgs $p"
+        fi
+    done
 done <<EOF_DEPS
 $(extract_flat_list system "$DEPS_YAML")
 EOF_DEPS
 
-if [ -n "${all_pkgs# }" ]; then
-    echo "install_script.sh: installing: $all_pkgs"
+if [ -z "${missing_pkgs# }" ]; then
+    echo "install_script.sh: all $(echo $all_pkgs | wc -w | tr -d ' ') deps already installed; nothing to do"
+else
+    echo "install_script.sh: installing missing:$missing_pkgs"
+
+    # Refresh package-manager metadata only now that we know we'll install.
     case "$PM" in
-        apt)  $MODE apt-get install -yqq --no-install-recommends $all_pkgs ;;
-        dnf)  $MODE dnf -y install --allowerasing $all_pkgs ;;
-        yum)  $MODE yum -y install $all_pkgs ;;
-        apk)  $MODE apk add --no-cache $all_pkgs ;;
-        brew) $MODE brew install $all_pkgs ;;
+        apt)
+            export DEBIAN_FRONTEND=noninteractive
+            $MODE apt-get update -qq
+            ;;
+        dnf|yum|tdnf)
+            $MODE $PM -y makecache 2>/dev/null || true
+            ;;
+        apk)
+            $MODE apk update -q
+            ;;
+    esac
+
+    case "$PM" in
+        apt)  $MODE apt-get install -yqq --no-install-recommends $missing_pkgs ;;
+        dnf)  $MODE dnf -y install --allowerasing $missing_pkgs ;;
+        yum)  $MODE yum -y install $missing_pkgs ;;
+        apk)  $MODE apk add --no-cache $missing_pkgs ;;
+        brew) $MODE brew install $missing_pkgs ;;
         tdnf)
             # tdnf has no --skip-broken and aborts the whole transaction if
             # any one package is missing from the repos (CBL-Mariner /
             # AzureLinux ship a small subset compared to apt/dnf). Install
             # one at a time so an individual missing package is just a
             # warning, not a build failure.
-            for pkg in $all_pkgs; do
+            for pkg in $missing_pkgs; do
                 if ! $MODE tdnf -y install "$pkg" >/dev/null 2>&1; then
                     echo "  (tdnf: skipped unavailable package '$pkg')"
                 fi

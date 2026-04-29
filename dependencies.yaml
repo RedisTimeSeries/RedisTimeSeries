@@ -224,12 +224,18 @@ package_map:
 
   # ---- Python ------------------------------------------------------------
   python3:
+    # macOS: deliberately skip. GH Actions runners (and most dev Macs) ship a
+    # Python.framework whose `/usr/local/bin/python3.11` symlink collides
+    # with brew's `python@3.11`, making `brew install python@3.11` fail at
+    # the link step. We rely on whatever python3 is already on PATH; the
+    # legacy `.install/macos.sh` did the same for years. If a user has no
+    # python3, `make setup`'s `python3 -m venv` will give a clear error.
     apt:  [python3, python3-pip, python3-venv, python3-dev]
     dnf:  [python3, python3-pip, python3-devel]
     yum:  [python3, python3-pip, python3-devel]
     tdnf: [python3, python3-pip, python3-devel]
     apk:  [python3, python3-dev, py3-pip, py-virtualenv]
-    brew: [python@3.11]
+    brew: skip
 
   # ---- networking / misc tools ------------------------------------------
   git:

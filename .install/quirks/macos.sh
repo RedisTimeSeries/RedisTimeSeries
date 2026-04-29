@@ -22,6 +22,21 @@ if ! command -v brew >/dev/null 2>&1; then
     exit 1
 fi
 
+# Conditional python install: only when python3 is genuinely absent.
+#
+# We deliberately don't list `python@3.11` in dependencies.yaml's brew
+# mapping because most macOS hosts already provide a python3 (Apple's
+# /usr/bin/python3, Xcode Command Line Tools, GitHub Actions runners' bundled
+# Python.framework, etc.) and `brew install python@3.11` would fail at
+# linking time when those framework symlinks already own /usr/local/bin/
+# python3.11. So only fall back to a brew install here on hosts where there
+# is genuinely no python3 (in which case nothing owns those symlinks and
+# the install is conflict-free).
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "quirks/macos.sh: python3 not on PATH; installing brew python@3.11"
+    brew install python@3.11
+fi
+
 LLVM_VERSION="18"
 BREW_PREFIX="$(brew --prefix)"
 GNUBIN="$BREW_PREFIX/opt/make/libexec/gnubin"
