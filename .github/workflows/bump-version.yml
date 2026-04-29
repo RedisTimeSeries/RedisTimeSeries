@@ -56,6 +56,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: 🔑 Generate GitHub App Token
+        id: generate-app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.GH_PR_APP_ID }}
+          private-key: ${{ secrets.GH_PR_APP_PRIVATE_KEY }}
+          owner: RedisTimeSeries
+
       - name: Checkout release branch
         uses: actions/checkout@v4
         with:
@@ -73,6 +81,12 @@ jobs:
             exit 1
           fi
           echo "Tag v$VERSION does not exist, proceeding..."
+
+      - name: Configure Git
+        working-directory: release-branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Set version
         shell: python
@@ -132,7 +146,9 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
+          TOKEN: ${{ steps.generate-app-token.outputs.token }}
         run: |
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
           git push origin "$RELEASE_BRANCH"
           git push origin "v$VERSION"
 
