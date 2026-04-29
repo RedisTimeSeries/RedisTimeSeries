@@ -44,6 +44,7 @@ system:
   - lcov
   - blocksruntime_dev
   - readline_dev
+  - coreutils
 
 # Python requirement files to install via pip after system deps are present.
 # Paths are relative to the module src root.
@@ -79,6 +80,9 @@ migrated_osnicks:
   # Microsoft
   - mariner2     # CBL-Mariner 2  (tdnf)
   - azurelinux3  # Azure Linux 3  (tdnf)
+  # macOS (homebrew). Needs quirks/macos.sh for the PATH/profile updates the
+  # abstract installer can't express.
+  - macos
 
 # ----------------------------------------------------------------------------
 # Map of abstract dependency names to concrete packages per package manager.
@@ -88,20 +92,26 @@ migrated_osnicks:
 package_map:
   # ---- compilers / build essentials --------------------------------------
   gcc:
+    # macOS already ships Apple clang (/usr/bin/cc); installing GNU gcc via
+    # brew shadows nothing useful and breaks builds that hard-code cc.
     apt:  [build-essential]
     dnf:  [gcc, gcc-c++, make]
     yum:  [gcc, gcc-c++, make]
     tdnf: [build-essential, make]
     apk:  [build-base, g++]
-    brew: [gcc]
+    brew: skip
   clang:
+    # Pin to llvm@18 so PATH munging in quirks/macos.sh keeps finding
+    # $(brew --prefix)/opt/llvm@18/bin (matches the legacy macos.sh).
     apt:  [clang]
     dnf:  [clang]
     yum:  [clang]
     tdnf: [clang]
     apk:  [clang18, clang18-libclang]
-    brew: [llvm]
+    brew: [llvm@18]
   make:
+    # On macOS replaces BSD make with GNU make at
+    # $(brew --prefix)/opt/make/libexec/gnubin/make.
     apt:  [make]
     dnf:  [make]
     yum:  [make]
@@ -174,19 +184,25 @@ package_map:
     apk:  [libffi-dev]
     brew: [libffi]
   libclang_dev:
+    # llvm@18 (resolved by `clang` above) already ships libclang on macOS;
+    # don't install plain `llvm` too or brew installs two side-by-side LLVMs.
     apt:  [libclang-dev]
     dnf:  [clang-devel]
     yum:  [clang-devel]
     tdnf: [clang-devel]
     apk:  [clang18-libclang]
-    brew: [llvm]
+    brew: skip
   blocksruntime_dev:
+    # macOS: Apple clang ships BlocksRuntime + Block.h inside the Xcode SDK,
+    # so no brew formula is needed (and `libblocksruntime` doesn't exist in
+    # homebrew core anyway). The legacy .install/macos.sh tried to install it
+    # and silently failed.
     apt:  [libblocksruntime-dev]
     dnf:  []   # not packaged on RHEL-likes; clang -fblocks works without it
     yum:  []
     tdnf: []
     apk:  []
-    brew: []
+    brew: skip
   readline_dev:
     # Only Azure Linux 3's Python build setup currently asks for it; cheap
     # extra elsewhere if it's available.
@@ -196,6 +212,15 @@ package_map:
     tdnf: [readline-devel]
     apk:  []
     brew: skip
+  coreutils:
+    # macOS-only: GNU coreutils replacement so build scripts that expect
+    # gnu-flavoured ls/sed/etc. work. Linux ships these by default.
+    apt:  []
+    dnf:  []
+    yum:  []
+    tdnf: []
+    apk:  []
+    brew: [coreutils]
 
   # ---- Python ------------------------------------------------------------
   python3:
