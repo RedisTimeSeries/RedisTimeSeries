@@ -37,7 +37,9 @@ $MODE yum -y install --nogpgcheck --skip-broken \
     devtoolset-11-gcc-c++ \
     devtoolset-11-make || true
 
-# Make `cmake` point at cmake3 for callers that don't know about cmake3.
-if ! command -v cmake >/dev/null 2>&1; then
-    $MODE ln -sf "$(command -v cmake3)" /usr/bin/cmake
-fi
+# Force `cmake` -> cmake3. AL2's base repo also ships an ancient `cmake`
+# (2.8.12) which `yum install cmake` (from the abstract path) pulls in;
+# leaving that on PATH breaks anything needing cmake>=3 (e.g. cpu_features).
+# This symlink is unconditional on purpose to override the 2.8 binary —
+# the legacy Dockerfile.amazonlinux2 did exactly the same thing.
+$MODE ln -sf "$(command -v cmake3)" /usr/bin/cmake
