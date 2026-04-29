@@ -70,6 +70,7 @@ jobs:
           ref: ${{ needs.validate-and-check.outputs.release_branch }}
           path: release-branch
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Check if tag already exists
         working-directory: release-branch
@@ -151,13 +152,6 @@ jobs:
           echo "Commit metadata (HEAD = commit just created):"
           git log -1 --format='  Author:    %an <%ae>%n  Committer: %cn <%ce>%n  Message:   %B'
 
-          if git config --local --get-all http.https://github.com/.extraheader >/dev/null; then
-            echo "Checkout left a persisted GitHub auth header in .git/config."
-            echo "The push step will suppress that header per-command so branch protection sees the app token instead."
-          else
-            echo "No persisted checkout auth header found in .git/config."
-          fi
-
           echo "Push token identity (from create-github-app-token outputs):"
           echo "  App slug:        $APP_SLUG"
           echo "  Installation ID: $INSTALLATION_ID"
@@ -169,17 +163,6 @@ jobs:
             echo "  Push will appear to GitHub as: ${BOT_LOGIN}"
           else
             echo "::warning::Could not resolve bot user for ${BOT_LOGIN} via /users."
-          fi
-
-          echo "Verifying the installation token actually works for this repo:"
-          if REPO_LIST_JSON=$(gh api /installation/repositories --paginate 2>/dev/null); then
-            REPO_COUNT=$(jq '.repositories | length' <<<"$REPO_LIST_JSON" 2>/dev/null || echo "?")
-            HAS_THIS_REPO=$(jq --arg full "${{ github.repository }}" \
-              '[.repositories[].full_name] | index($full) != null' <<<"$REPO_LIST_JSON" 2>/dev/null || echo "false")
-            echo "  Installation has access to $REPO_COUNT repo(s)."
-            echo "  Includes ${{ github.repository }}: $HAS_THIS_REPO"
-          else
-            echo "::warning::Could not list installation repositories with the push token."
           fi
 
           if [[ "$APP_SLUG" == "$EXPECTED_BYPASS_APP_SLUG" ]]; then
@@ -196,11 +179,9 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
-          TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          git -c "http.https://github.com/.extraheader=" -c "http.extraheader=" push origin "$RELEASE_BRANCH"
-          git -c "http.https://github.com/.extraheader=" -c "http.extraheader=" push origin "v$VERSION"
+          git push origin "$RELEASE_BRANCH"
+          git push origin "v$VERSION"
 
       - name: Verify push
         if: ${{ !inputs.dry_run }}
