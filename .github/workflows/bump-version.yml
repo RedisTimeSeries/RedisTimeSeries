@@ -177,6 +177,35 @@ jobs:
           gh pr merge "$PR_URL" --auto --squash
           echo "Auto-merge enabled (squash); PR will merge once all required checks pass."
 
+      - name: Wait for PR to merge
+        if: ${{ !inputs.dry_run }}
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_URL: ${{ steps.open-pr.outputs.pr_url }}
+        run: |
+          while true; do
+            STATE=$(gh pr view "$PR_URL" --json state --jq '.state')
+            echo "PR state: $STATE"
+            case "$STATE" in
+              MERGED)
+                echo "PR merged successfully"
+                exit 0
+                ;;
+              CLOSED)
+                echo "::error::PR was closed without merging"
+                exit 1
+                ;;
+              OPEN)
+                sleep 30
+                ;;
+              *)
+                echo "::error::Unexpected PR state: $STATE"
+                exit 1
+                ;;
+            esac
+          done
+
       - name: Dry run summary
         if: ${{ inputs.dry_run }}
         working-directory: release-branch
