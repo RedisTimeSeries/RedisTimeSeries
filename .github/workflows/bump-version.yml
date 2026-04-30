@@ -179,7 +179,7 @@ jobs:
 
       - name: Wait for PR to merge
         if: ${{ !inputs.dry_run }}
-        timeout-minutes: 30
+        timeout-minutes: 120
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_URL: ${{ steps.open-pr.outputs.pr_url }}
