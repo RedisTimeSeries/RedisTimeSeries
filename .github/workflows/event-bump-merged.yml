@@ -1,0 +1,138 @@
+name: Tag Bumped Version
+
+
+on:
+  push:
+    branches:
+      - '[0-9]*.[0-9]*'
+    paths:
+      - 'src/version.h'
+
+concurrency:
+  group: tag-bumped-version-${{ github.ref }}
+  cancel-in-progress: false
+
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Parse commit message
+        id: parse
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          FIRST_LINE=$(echo "$COMMIT_MSG" | head -1)
+          echo "First line: $FIRST_LINE"
+          if [[ "$FIRST_LINE" =~ ^bump\ version\ v([0-9]+\.[0-9]+\.[0-9]+)(\ \(#[0-9]+\))?$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "Detected bump commit for v$VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "should_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "Not a bump commit, skipping"
+            echo "should_tag=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate GitHub App token
+        if: steps.parse.outputs.should_tag == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: RedisTimeSeries
+
+      - name: Checkout
+        if: steps.parse.outputs.should_tag == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Verify version.h matches commit message
+        if: steps.parse.outputs.should_tag == 'true'
+        shell: python
+        env:
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          version = os.environ['VERSION']
+          major, minor, patch = map(int, version.split('.'))
+          version_file = Path('src/version.h')
+
+          if not version_file.exists():
+              print(f"::error::Version file not found: {version_file}")
+              sys.exit(1)
+
+          content = version_file.read_text()
+
+          cur_major = re.search(r'#define REDISTIMESERIES_VERSION_MAJOR (\d+)', content)
+          cur_minor = re.search(r'#define REDISTIMESERIES_VERSION_MINOR (\d+)', content)
+          cur_patch = re.search(r'#define REDISTIMESERIES_VERSION_PATCH (\d+)', content)
+
+          if not all([cur_major, cur_minor, cur_patch]):
+              print("::error::Could not parse current version from version.h")
+              sys.exit(1)
+
+          actual = (int(cur_major.group(1)), int(cur_minor.group(1)), int(cur_patch.group(1)))
+          expected = (major, minor, patch)
+          if actual != expected:
+              print(f"::error::version.h says {actual[0]}.{actual[1]}.{actual[2]} but commit message claims v{version}")
+              sys.exit(1)
+          print(f"Verified: version.h matches v{version}")
+
+      - name: Skip if tag already exists
+        if: steps.parse.outputs.should_tag == 'true'
+        id: tag-check
+        env:
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          if git ls-remote --exit-code origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "::notice::Tag v$VERSION already exists on remote, nothing to do"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push annotated tag
+        if: steps.parse.outputs.should_tag == 'true' && steps.tag-check.outputs.exists == 'false'
+        env:
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Automated tag for v$VERSION"
+          git push origin "v$VERSION"
+          echo "Created and pushed tag v$VERSION at $GITHUB_SHA"
+
+      - name: Summary
+        if: always()
+
+        env:
+          SHOULD_TAG: ${{ steps.parse.outputs.should_tag }}
+          VERSION: ${{ steps.parse.outputs.version }}
+          TAG_EXISTED: ${{ steps.tag-check.outputs.exists }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          echo "## Tag Bumped Version Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: $BRANCH" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: $SHA" >> $GITHUB_STEP_SUMMARY
+          if [[ "$SHOULD_TAG" == "true" ]]; then
+            if [[ "$TAG_EXISTED" == "true" ]]; then
+              echo "- **Result**: tag v$VERSION already existed, nothing to do" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- **Result**: created and pushed tag v$VERSION" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "- **Result**: skipped (commit is not a bump commit)" >> $GITHUB_STEP_SUMMARY
+          fi
+
