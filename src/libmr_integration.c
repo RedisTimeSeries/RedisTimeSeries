@@ -459,8 +459,11 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     if (currentUser) {
         RedisModuleString *currentName = RedisModule_GetUserUsername(ctx, currentUser);
         if (currentName) {
-            if (RedisModule_StringCompare(currentName, userName) == 0)
+            const int cmp = RedisModule_StringCompare(currentName, userName);
+            RedisModule_FreeString(ctx, currentName);
+            if (cmp == 0) {
                 return; // Same user already set, nothing to do
+            }
         }
         RedisModule_FreeModuleUser((RedisModuleUser *)currentUser);
         RedisModule_SetContextUser(ctx, NULL);
