@@ -15,6 +15,20 @@
 #include <math.h> /* ceil */
 #include <string.h>
 
+static void agg_iter_seed_last_empty_before_query(AggregationIterator *self, Sample *sample);
+static EnrichedChunk *agg_iter_non_twa_empty_full_range(AggregationIterator *self,
+                                                        uint64_t aggregationTimeDelta,
+                                                        bool is_reversed,
+                                                        size_t *agg_n_samples,
+                                                        int64_t *si);
+static int agg_iter_apply_non_twa_empty_prefix(AggregationIterator *self,
+                                               EnrichedChunk *enrichedChunk,
+                                               uint64_t aggregationTimeDelta,
+                                               bool is_reversed,
+                                               bool multiAgg,
+                                               size_t *agg_n_samples,
+                                               int64_t *si);
+
 static inline bool check_sample_value(double value, FilterByValueArgs *byValueArgs) {
     if (value >= byValueArgs->min && value <= byValueArgs->max) {
         return true;
@@ -273,6 +287,9 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     }
     iter->handled_twa_empty_prefix = false;
     iter->handled_twa_empty_suffix = false;
+    iter->handled_non_twa_empty_full_range = false;
+    iter->handled_non_twa_empty_prefix = false;
+    iter->last_locf_seed_ok = true;
     iter->prev_ts = DC;
     iter->validSamplesInBucket = false;
     memset(iter->validPerAgg, 0, sizeof(iter->validPerAgg));
@@ -636,6 +653,27 @@ static void twa_fillEmptyBuckets(size_t *write_index,
     }
 }
 
+#ifndef PREFIX_SUFFIX_IMPL
+/* PM "canceled" cases 6/7: skip the entire gap when the first bucket has no sample on one side.
+ * Shared by fillEmptyBuckets (TWA) and agg_iter_finalize suffix (LAST+EMPTY to match TWA row count). */
+static bool empty_gap_skipped_by_pm_edge_rule(const AggregationIterator *self,
+                                              timestamp_t first_bucket_of_gap,
+                                              uint64_t aggregationTimeDelta) {
+    Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
+    timestamp_t ta = twa_calc_ta(
+        false,
+        first_bucket_of_gap,
+        first_bucket_of_gap + aggregationTimeDelta,
+        self->startTimestamp,
+        self->endTimestamp);
+    size_t n_samples_before =
+        twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
+    size_t n_samples_after =
+        twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter);
+    return n_samples_before == 0 || n_samples_after == 0;
+}
+#endif // PREFIX_SUFFIX_IMPL
+
 static int fillEmptyBuckets(Samples *samples,
                             size_t *write_index,
                             timestamp_t first_bucket_ts,
@@ -652,36 +690,32 @@ static int fillEmptyBuckets(Samples *samples,
 
     // Check timestamp ordering
     if (end_bucket_ts < first_bucket_ts) {
-        return -1;
+        return 0; /* skip gap; -1 would abort the entire TS.RANGE */
     }
 
     // Check alignment with aggregation time delta
-    if ((end_bucket_ts - first_bucket_ts) % agg_time_delta != 0) {
-        return -1;
+    if (agg_time_delta == 0) {
+        return 0;
+    }
+    {
+        uint64_t span = end_bucket_ts - first_bucket_ts;
+        if (span % (uint64_t)agg_time_delta != 0) {
+            return 0; /* skip gap; -1 would abort the entire TS.RANGE */
+        }
     }
 
     size_t n_empty_buckets = ((end_bucket_ts - first_bucket_ts) / agg_time_delta) + 1;
     if (n_empty_buckets == 0) {
-        return -1;
+        return 0;
     }
 
     timestamp_t cur_ts = (reversed) ? end_bucket_ts : first_bucket_ts;
 
 #ifndef PREFIX_SUFFIX_IMPL // The PM decided to disable it, as it might cause OOM and complicates
                            // users
-    if (self->hasTwa) {
-        Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
-        timestamp_t ta;
-        int64_t agg_time_delta = self->aggregationTimeDelta;
-        ta = twa_calc_ta(
-            false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
-        size_t n_samples_before =
-            twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
-        size_t n_samples_after =
-            twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter);
-        if (n_samples_before == 0 || n_samples_after == 0) { // the PM canceled cases 6 and 7
-            return 0;
-        }
+    if (self->hasTwa &&
+        empty_gap_skipped_by_pm_edge_rule(self, cur_ts, self->aggregationTimeDelta)) {
+        return 0;
     }
 #endif // PREFIX_SUFFIX_IMPL
 
@@ -823,6 +857,11 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
         }
         return NULL;
     }
+    if (self->empty && !self->initialized && !self->handled_non_twa_empty_full_range &&
+        !TWA_EMPTY_RANGE(self)) {
+        return agg_iter_non_twa_empty_full_range(
+            self, aggregationTimeDelta, is_reversed, agg_n_samples, si);
+    }
     return NULL;
 }
 
@@ -884,6 +923,161 @@ static int agg_iter_apply_twa_empty_prefix(AggregationIterator *self,
         (*si)++;
     }
     return 0;
+}
+
+/* EMPTY without TWA (e.g. LAST): emit buckets from query start through the bucket before the first
+ * raw sample — same geometry as agg_iter_apply_twa_empty_prefix; requires LOCF seed first. */
+static int agg_iter_apply_non_twa_empty_prefix(AggregationIterator *self,
+                                               EnrichedChunk *enrichedChunk,
+                                               uint64_t aggregationTimeDelta,
+                                               bool is_reversed,
+                                               bool multiAgg,
+                                               size_t *agg_n_samples,
+                                               int64_t *si) {
+    if (!self->empty || self->handled_non_twa_empty_prefix || TWA_EMPTY_RANGE(self)) {
+        return 0;
+    }
+    self->handled_non_twa_empty_prefix = true;
+    timestamp_t first_bucket =
+        CalcBucketStart(is_reversed ? self->endTimestamp : self->startTimestamp,
+                        aggregationTimeDelta,
+                        self->timestampAlignment);
+    timestamp_t first_sample_ts = enrichedChunk->samples.timestamps[0];
+    timestamp_t last_bucket =
+        CalcBucketStart(first_sample_ts, aggregationTimeDelta, self->timestampAlignment);
+    bool has_empty_buckets = true;
+    if (!is_reversed) {
+        if (first_bucket >= last_bucket) {
+            has_empty_buckets = false;
+        }
+        last_bucket = max(0, (int64_t)((int64_t)last_bucket - (int64_t)aggregationTimeDelta));
+    } else {
+        last_bucket += aggregationTimeDelta;
+        if (first_bucket < last_bucket) {
+            has_empty_buckets = false;
+        }
+    }
+    if (!has_empty_buckets) {
+        return 0;
+    }
+    /* Mirror TWA empty-bucket neighbor rule (fillEmptyBuckets PREFIX block): do not emit prefix
+     * buckets for LAST+EMPTY when there is no sample strictly before the query start to LOCF from. */
+    if (!is_reversed && self->startTimestamp > 0 && !self->last_locf_seed_ok) {
+        return 0;
+    }
+    if (multiAgg) {
+        Samples *prefixSamples = ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 256);
+        prefixSamples->num_samples = *agg_n_samples;
+        int64_t read_idx = -1;
+        int err = fillEmptyBuckets(
+            prefixSamples, agg_n_samples, first_bucket, last_bucket, self, is_reversed, &read_idx);
+        if (err != 0) {
+            return -1;
+        }
+    } else {
+        *si = -1;
+        int err = fillEmptyBuckets(&enrichedChunk->samples,
+                                   agg_n_samples,
+                                   first_bucket,
+                                   last_bucket,
+                                   self,
+                                   is_reversed,
+                                   si);
+        if (err != 0) {
+            return -1;
+        }
+        (*si)++;
+    }
+    return 0;
+}
+
+/* TS.RANGE … AGGREGATION LAST … EMPTY: empty buckets use finalize_empty_last_value (context value).
+ * Seed LAST context from the latest raw sample strictly before the query start (LOCF), mirroring
+ * how TWA pulls a neighbor sample (reverse scan of [0, startTimestamp - 1]). */
+static void agg_iter_seed_last_empty_before_query(AggregationIterator *self, Sample *sample) {
+    if (!self->empty || self->reverse || self->startTimestamp == 0) {
+        return;
+    }
+    bool any_last = false;
+    for (size_t a = 0; a < self->numAggregations; a++) {
+        if (self->aggregations[a].type == TS_AGG_LAST) {
+            any_last = true;
+            break;
+        }
+    }
+    if (!any_last) {
+        return;
+    }
+    self->last_locf_seed_ok = false;
+    RangeArgs args = {
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+        .filterByTSArgs = { 0 },
+        .startTimestamp = 0,
+        .endTimestamp = self->startTimestamp - 1,
+        .latest = false,
+    };
+    AbstractSampleIterator *sample_iterator =
+        SeriesCreateSampleIterator(self->series, &args, true, true);
+    while (sample_iterator->GetNext(sample_iterator, sample) == CR_OK) {
+        bool seeded = false;
+        for (size_t a = 0; a < self->numAggregations; a++) {
+            if (self->aggregations[a].type != TS_AGG_LAST) {
+                continue;
+            }
+            if (self->aggregations[a].isValueValid(sample->value)) {
+                self->aggregations[a].appendValue(
+                    self->aggregationContexts[a], sample->value, sample->timestamp);
+                seeded = true;
+            }
+        }
+        if (seeded) {
+            self->last_locf_seed_ok = true;
+            break;
+        }
+    }
+    sample_iterator->Close(sample_iterator);
+}
+
+/* EMPTY without TWA (e.g. LAST): upstream never produced samples — fill [start,end] with finalizeEmpty.
+ * Caller must ensure empty, !initialized, !handled_non_twa_empty_full_range, and !TWA_EMPTY_RANGE. */
+static EnrichedChunk *agg_iter_non_twa_empty_full_range(AggregationIterator *self,
+                                                        uint64_t aggregationTimeDelta,
+                                                        bool is_reversed,
+                                                        size_t *agg_n_samples,
+                                                        int64_t *si) {
+    self->handled_non_twa_empty_full_range = true;
+    timestamp_t first_bucket =
+        CalcBucketStart(self->startTimestamp, aggregationTimeDelta, self->timestampAlignment);
+    timestamp_t last_bucket =
+        CalcBucketStart(self->endTimestamp, aggregationTimeDelta, self->timestampAlignment);
+    if (is_reversed) {
+        __SWAP(first_bucket, last_bucket);
+    }
+    *si = -1;
+    *agg_n_samples = 0;
+    self->aux_chunk->samples.num_samples = 0;
+    Sample locf;
+    agg_iter_seed_last_empty_before_query(self, &locf);
+    if (!is_reversed && self->startTimestamp > 0 && !self->last_locf_seed_ok) {
+        return NULL;
+    }
+    int err = fillEmptyBuckets(&self->aux_chunk->samples,
+                               agg_n_samples,
+                               first_bucket,
+                               last_bucket,
+                               self,
+                               is_reversed,
+                               si);
+    if (err != 0) {
+        return NULL;
+    }
+    if (*agg_n_samples == 0) {
+        return NULL;
+    }
+    (*si)++;
+    self->aux_chunk->samples.num_samples = *agg_n_samples;
+    return self->aux_chunk;
 }
 
 // First chunk only: bucket start from first sample, TWA params, optional prior sample for TWA.
@@ -980,6 +1174,18 @@ static bool agg_iter_empty_gap_after_finalize(uint64_t contextScope,
         }
         *out_last_bucket =
             max(0, (int64_t)((int64_t)aggregationLastTimestamp - (int64_t)aggregationTimeDelta));
+        /* fillEmptyBuckets rejects end < first or (end-first) % delta != 0 with -1, which aborts
+         * the whole range query. Skip synthetic gaps that would fail those checks. */
+        if (has_empty_buckets) {
+            if (*out_last_bucket < *out_first_bucket) {
+                has_empty_buckets = false;
+            } else if (aggregationTimeDelta != 0) {
+                uint64_t span = *out_last_bucket - *out_first_bucket;
+                if (span % aggregationTimeDelta != 0) {
+                    has_empty_buckets = false;
+                }
+            }
+        }
     }
     return has_empty_buckets;
 }
@@ -1362,7 +1568,10 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
     self->aux_chunk->samples.timestamps[0] =
         calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
     size_t n_samples = 1;
-    if (TWA_EMPTY_RANGE(self) && !self->handled_twa_empty_suffix) {
+    /* Emit trailing empty buckets from the last output bucket through endTimestamp. TWA fillEmptyBuckets
+     * may insert nothing for a gap (PM edge rule); LAST+EMPTY uses the same rule for the suffix so
+     * bucket counts match TWA+EMPTY. */
+    if (self->empty && !self->handled_twa_empty_suffix) {
         self->handled_twa_empty_suffix = true;
         timestamp_t last_bucket =
             CalcBucketStart(is_reversed ? self->startTimestamp : self->endTimestamp,
@@ -1385,16 +1594,34 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
         int64_t read_index = 0;
         if (has_empty_buckets) {
             self->aux_chunk->samples.num_samples = 1;
-            int err = fillEmptyBuckets(&self->aux_chunk->samples,
-                                       &n_samples,
-                                       first_bucket,
-                                       last_bucket,
-                                       self,
-                                       is_reversed,
-                                       &read_index);
-            if (err != 0) {
-                return NULL;
+#ifndef PREFIX_SUFFIX_IMPL
+            bool skip_trailing_empty_fill = false;
+            if (!self->hasTwa) {
+                timestamp_t fb = first_bucket;
+                timestamp_t lb = last_bucket;
+                if (is_reversed) {
+                    __SWAP(fb, lb);
+                }
+                timestamp_t gap_cur_ts = is_reversed ? lb : fb;
+                if (empty_gap_skipped_by_pm_edge_rule(self, gap_cur_ts, aggregationTimeDelta)) {
+                    skip_trailing_empty_fill = true;
+                }
             }
+            if (!skip_trailing_empty_fill) {
+#endif // PREFIX_SUFFIX_IMPL
+                int err = fillEmptyBuckets(&self->aux_chunk->samples,
+                                           &n_samples,
+                                           first_bucket,
+                                           last_bucket,
+                                           self,
+                                           is_reversed,
+                                           &read_index);
+                if (err != 0) {
+                    return NULL;
+                }
+#ifndef PREFIX_SUFFIX_IMPL
+            }
+#endif // PREFIX_SUFFIX_IMPL
         }
     }
     self->aux_chunk->samples.num_samples = n_samples;
@@ -1425,6 +1652,10 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
         return r;
     }
 
+    if (self->empty && !self->initialized) {
+        agg_iter_seed_last_empty_before_query(self, &sample);
+    }
+
     if (agg_iter_apply_twa_empty_prefix(self,
                                         enrichedChunk,
                                         aggregationTimeDelta,
@@ -1432,6 +1663,15 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
                                         multiAgg,
                                         &agg_n_samples,
                                         &si) != 0) {
+        return NULL;
+    }
+    if (agg_iter_apply_non_twa_empty_prefix(self,
+                                            enrichedChunk,
+                                            aggregationTimeDelta,
+                                            is_reversed,
+                                            multiAgg,
+                                            &agg_n_samples,
+                                            &si) != 0) {
         return NULL;
     }
     self->hasUnFinalizedContext = true;

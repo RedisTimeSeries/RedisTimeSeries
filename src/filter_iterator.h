@@ -61,6 +61,10 @@ typedef struct AggregationIterator
     bool hasTwa; // precomputed: any aggregation is TWA
     bool handled_twa_empty_prefix;
     bool handled_twa_empty_suffix;
+    bool handled_non_twa_empty_full_range; // EMPTY without TWA: synthetic range when no raw chunk
+    bool handled_non_twa_empty_prefix; // EMPTY without TWA: buckets before first in-range sample
+    /* LAST+EMPTY: true if prior sample before range was applied (LOCF) or LOCF is not required. */
+    bool last_locf_seed_ok;
     timestamp_t prev_ts;
     bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
     bool validPerAgg[TS_AGG_TYPES_MAX]; // per-aggregation validity tracking for current bucket
