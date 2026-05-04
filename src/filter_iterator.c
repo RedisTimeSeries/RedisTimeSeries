@@ -649,9 +649,8 @@ static void twa_fillEmptyBuckets(size_t *write_index,
 }
 
 #ifndef PREFIX_SUFFIX_IMPL
-/* Same edge decision as fillEmptyBuckets for TWA (cases 6/7): skip the whole gap when the first
- * bucket has no sample on one side. Used so LAST+EMPTY finalize suffix inserts the same buckets as
- * TWA+EMPTY (which returns early and emits nothing for that gap). */
+/* PM "canceled" cases 6/7: skip the entire gap when the first bucket has no sample on one side.
+ * Shared by fillEmptyBuckets (TWA) and agg_iter_finalize suffix (LAST+EMPTY to match TWA row count). */
 static bool empty_gap_skipped_by_pm_edge_rule(const AggregationIterator *self,
                                               timestamp_t first_bucket_of_gap,
                                               uint64_t aggregationTimeDelta) {
@@ -709,19 +708,9 @@ static int fillEmptyBuckets(Samples *samples,
 
 #ifndef PREFIX_SUFFIX_IMPL // The PM decided to disable it, as it might cause OOM and complicates
                            // users
-    if (self->hasTwa) {
-        Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
-        timestamp_t ta;
-        int64_t agg_time_delta = self->aggregationTimeDelta;
-        ta = twa_calc_ta(
-            false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
-        size_t n_samples_before =
-            twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
-        size_t n_samples_after =
-            twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter);
-        if (n_samples_before == 0 || n_samples_after == 0) { // the PM canceled cases 6 and 7
-            return 0;
-        }
+    if (self->hasTwa &&
+        empty_gap_skipped_by_pm_edge_rule(self, cur_ts, self->aggregationTimeDelta)) {
+        return 0;
     }
 #endif // PREFIX_SUFFIX_IMPL
 
