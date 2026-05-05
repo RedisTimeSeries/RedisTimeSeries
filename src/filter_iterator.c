@@ -684,18 +684,18 @@ static void twa_fillEmptyBuckets(size_t *write_index,
 #ifndef PREFIX_SUFFIX_IMPL
 
 /**
- * @brief TWA / PM edge rule: whether to skip filling a run of empty buckets (cases 6/7).
+ * @brief TWA: true if a run of empty buckets should be skipped (spec 6/7).
  *
- * At @p first_bucket_of_gap, uses @c twa_calc_ta and @c twa_get_samples_from_left/right. If there
- * is no neighbor sample on one side of the TWA window, empty interpolation is undefined — return
- * true so the caller omits the whole gap.
+ * At @p first_bucket_of_gap, uses @c twa_calc_ta and @c twa_get_samples_from_left/right. If a raw
+ * sample is missing on either side of the TWA window, interpolation is undefined — return true so
+ * the caller omits the whole gap.
  *
  * @param[in] self aggregation iterator.
  * @param[in] first_bucket_of_gap first empty bucket timestamp in the gap.
  * @param[in] aggregationTimeDelta bucket duration.
  * @return true to skip the gap (missing left or right neighbor); false if both neighbors exist.
  */
-static bool twa_empty_gap_skipped_by_pm_edge_rule(const AggregationIterator *self,
+static bool twa_should_skip_empty_gap(const AggregationIterator *self,
                                                   timestamp_t first_bucket_of_gap,
                                                   uint64_t aggregationTimeDelta) {
     Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
@@ -728,19 +728,13 @@ static int fillEmptyBuckets(Samples *samples,
     }
 
     // Check timestamp ordering
-    if (end_bucket_ts < first_bucket_ts) {
+    if (end_bucket_ts < first_bucket_ts || agg_time_delta == 0) {
         return 0; /* skip gap; -1 would abort the entire TS.RANGE */
     }
 
     // Check alignment with aggregation time delta
-    if (agg_time_delta == 0) {
+    if ((uint64_t)(end_bucket_ts - first_bucket_ts) % (uint64_t)agg_time_delta != 0) {
         return 0;
-    }
-    {
-        uint64_t span = end_bucket_ts - first_bucket_ts;
-        if (span % (uint64_t)agg_time_delta != 0) {
-            return 0; /* skip gap; -1 would abort the entire TS.RANGE */
-        }
     }
 
     size_t n_empty_buckets = ((end_bucket_ts - first_bucket_ts) / agg_time_delta) + 1;
@@ -753,7 +747,7 @@ static int fillEmptyBuckets(Samples *samples,
 #ifndef PREFIX_SUFFIX_IMPL // The PM decided to disable it, as it might cause OOM and complicates
                            // users
     if (self->hasTwa &&
-        twa_empty_gap_skipped_by_pm_edge_rule(self, cur_ts, self->aggregationTimeDelta)) {
+        twa_should_skip_empty_gap(self, cur_ts, self->aggregationTimeDelta)) {
         return 0;
     }
 #endif // PREFIX_SUFFIX_IMPL
@@ -818,8 +812,21 @@ static inline Samples *ensureOutputSamples(AggregationIterator *self,
     return &enrichedChunk->samples;
 }
 
-/* Prefix span: query start through bucket before first_sample_ts (shared by TWA / non-TWA EMPTY). */
-static void agg_iter_empty_prefix_span_bounds(const AggregationIterator *self,
+/**
+ * @brief Computes bucket bounds for `EMPTY` **prefix**: query edge through bucket before @p first_sample_ts.
+ *
+ * Forward: first bucket aligns to range start, last bucket is the one immediately before the bucket
+ * containing @p first_sample_ts. Reversed: uses range end and adjusts bounds symmetrically.
+ *
+ * @param[in] self iterator (range, alignment).
+ * @param[in] aggregationTimeDelta bucket width.
+ * @param[in] is_reversed forward vs reverse aggregation direction.
+ * @param[in] first_sample_ts timestamp of the first in-range raw sample (chunk start).
+ * @param[out] out_first_bucket first empty-prefix bucket start.
+ * @param[out] out_last_bucket last empty-prefix bucket start.
+ * @param[out] out_has_span false if there is no non-empty span to fill (degenerate / no gap).
+ */
+static void agg_iter_compute_empty_prefix_bounds(const AggregationIterator *self,
                                               uint64_t aggregationTimeDelta,
                                               bool is_reversed,
                                               timestamp_t first_sample_ts,
@@ -847,6 +854,23 @@ static void agg_iter_empty_prefix_span_bounds(const AggregationIterator *self,
     }
 }
 
+/**
+ * @brief Emits `EMPTY` buckets for aligned span [@p first_bucket, @p last_bucket] into the output chunk.
+ *
+ * Delegates to `fillEmptyBuckets`. Single-aggregation path appends into @p enrichedChunk and advances
+ * @p si past the filled span on success. Multi-aggregation path appends after existing prefix samples
+ * in `aux_chunk` (via `ensureOutputSamples`) and returns `fillEmptyBuckets`'s status unchanged.
+ *
+ * @param[in,out] self aggregation iterator (contexts, `EMPTY` policy).
+ * @param[in,out] enrichedChunk chunk being built; single-agg writes `samples`, multi-agg uses aux buffer.
+ * @param[in] first_bucket first bucket start in the span (inclusive).
+ * @param[in] last_bucket last bucket start in the span (inclusive).
+ * @param[in] is_reversed forward vs reverse bucket order for `fillEmptyBuckets`.
+ * @param[in] multiAgg if true, write into scratch samples; if false, write into @p enrichedChunk.
+ * @param[in,out] agg_n_samples sample count: prefix length for multi-agg; updated by `fillEmptyBuckets`.
+ * @param[in,out] si read index for `fillEmptyBuckets` on single-agg path; reset to `-1`, then incremented on success.
+ * @return `0` on success (single-agg), or `-1` on failure; multi-agg returns `fillEmptyBuckets`'s return code.
+ */
 static int agg_iter_fill_empty_span_in_chunk(AggregationIterator *self,
                                              EnrichedChunk *enrichedChunk,
                                              timestamp_t first_bucket,
@@ -994,7 +1018,7 @@ static int agg_iter_apply_empty_prefix(AggregationIterator *self,
     }
     timestamp_t first_bucket, last_bucket;
     bool has_span;
-    agg_iter_empty_prefix_span_bounds(self,
+    agg_iter_compute_empty_prefix_bounds(self,
                                       aggregationTimeDelta,
                                       is_reversed,
                                       enrichedChunk->samples.timestamps[0],
@@ -1640,7 +1664,7 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
                     __SWAP(fb, lb);
                 }
                 timestamp_t gap_cur_ts = is_reversed ? lb : fb;
-                if (twa_empty_gap_skipped_by_pm_edge_rule(self, gap_cur_ts, aggregationTimeDelta)) {
+                if (twa_should_skip_empty_gap(self, gap_cur_ts, aggregationTimeDelta)) {
                     skip_trailing_empty_fill = true;
                 }
             }
