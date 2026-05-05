@@ -162,4 +162,4 @@ def test_mget_NaN():
         r.execute_command('TS.ADD', 'key2', 2, 'NaN')
         r.execute_command('TS.ADD', 'key2', 3, '3')
         res = r1.execute_command('TS.mget','FILTER', 'test=test')
-        assert res ==[[b'key1', [], [3, b'NaN']], [b'key2', [], [3, b'3']]] or res ==[[b'key2', [], [3, b'3']], [b'key1', [], [3, b'NaN']]], print(res)
+        assert res ==[[b'key1', [], [3, b'NaN']], [b'key2', [], [3, b'3']]] or res ==[[b'key2', [], [3, b'3']], [b'key1', [], [3, b'NaN']]], res

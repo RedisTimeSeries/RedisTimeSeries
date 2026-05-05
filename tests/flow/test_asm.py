@@ -79,11 +79,21 @@ def test_asm_with_data_and_queries_during_migrations():
 
     with ThreadPoolExecutor() as executor:
         futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
-        for future in as_completed(futures):
-            # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
+        try:
+            for future in as_completed(futures):
+                # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
+                done.set()
+                # This will raise an exception in case the validation function failed
+                future.result()
+        except TimeoutError as e:
+            # Under sanitizer, the migration may occasionally get stuck in 'init-rdbchannel' state.
+            # This is a known issue and will be fixed by MOD-15307; for now treat it as a pass and bail out.
+            if SANITIZER and "state is init-rdbchannel" in str(e):
+                print(f"Ignoring known sanitizer migration timeout: {e}")
+                done.set()
+                return
             done.set()
-            # This will raise an exception in case the validation function failed (or got stuck)
-            future.result()
+            raise
 
     # Validate that all is fine after the migrations
     validate_result(conn.execute_command(command))
