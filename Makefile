@@ -9,6 +9,13 @@ MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
+# readies `platform.cfg` skips exporting ARCH when __NO_PYTHON=1 (e.g. `make setup`
+# before python3 is installed). Uname keeps setup/build usable in that state.
+ifeq ($(ARCH),)
+ARCH:=$(shell uname -m | tr '[:upper:]' '[:lower:]' | sed -e 's/^x86_64$$/x64/' -e 's/^amd64$$/x64/' -e 's/^aarch64$$/arm64v8/' -e 's/^arm64$$/arm64v8/')
+export ARCH
+endif
+
 # RedisTimeSeries only supports 64-bit architectures
 ifneq ($(ARCH),x64)
 ifneq ($(ARCH),arm64v8)
@@ -557,10 +564,16 @@ endif
 #      RLTest, etc.).
 #   2. `gevent`     -> imported by tests/flow/test_short_read.py but
 #      commented out in tests/flow/requirements.txt, so install it here.
+#
+# install_script.sh MODE: on Linux, default `sudo` so apt works for non-root
+# users; on macOS, empty (brew must not run under sudo). Override with
+# `make setup INSTALL_SCRIPT_MODE=` when already root (e.g. some containers).
 #----------------------------------------------------------------------------------------------
 
+INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
+
 setup:
-	$(SHOW)cd .install && ./install_script.sh
+	$(SHOW)cd .install && ./install_script.sh $(INSTALL_SCRIPT_MODE)
 	$(SHOW)test -d venv || python3 -m venv venv
 	$(SHOW). ./venv/bin/activate && ./.install/common_installations.sh && pip install gevent
 
