@@ -24,30 +24,31 @@ ChunkResult MultiSeriesAggDupSampleIterator_GetNext(
         return CR_END;
     }
 
-    bool is_nan = isnan(iter->next_sample.value);
-    if (!is_nan) {
+    bool is_valid = iter->aggregation->isValueValid(iter->next_sample.value);
+    if (is_valid) {
         iter->aggregation->appendValue(
             aggContext, iter->next_sample.value, iter->next_sample.timestamp);
     }
 
+    bool any_valid = is_valid;
     Sample _sample;
     ChunkResult ret;
     while ((ret = iter->base.input->GetNext(iter->base.input, &_sample)) == CR_OK &&
            _sample.timestamp == iter->next_sample.timestamp) {
-        bool _is_nan = isnan(_sample.value);
-        if (!_is_nan) {
+        bool _is_valid = iter->aggregation->isValueValid(_sample.value);
+        if (_is_valid) {
             iter->aggregation->appendValue(aggContext, _sample.value, _sample.timestamp);
         }
-        is_nan = is_nan && _is_nan;
+        any_valid = any_valid || _is_valid;
     }
 
     sample->timestamp = iter->next_sample.timestamp;
-    if (likely(!is_nan)) {
+    if (likely(any_valid)) {
         iter->aggregation->finalize(aggContext, &sample->value);
-        iter->aggregation->resetContext(aggContext);
     } else {
-        sample->value = NAN;
+        iter->aggregation->finalizeEmpty(aggContext, &sample->value);
     }
+    iter->aggregation->resetContext(aggContext);
     iter->next_sample = _sample;
     if (ret == CR_END) {
         iter->has_next_sample = false;

@@ -308,3 +308,62 @@ def test_bucket_timestamp():
         expected_data = [['metric_name=user', [], exp_samples]]
         assert expected_data == \
         decode_if_needed(r1.execute_command('TS.MREVRANGE', "0", "73", "AGGREGATION", "max", agg_size, 'BUCKETTIMESTAMP', '+', "filter", "metric_family=cpu", "groupby", "metric_name", "reduce", "sum"))
+
+
+def test_groupby_reduce_count_with_nan():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'stock:A', 'LABELS', 'type', 'stock', 'name', 'A')
+        r.execute_command('TS.CREATE', 'stock:B', 'LABELS', 'type', 'stock', 'name', 'B')
+        r.execute_command('TS.MADD',
+                          'stock:A', 1000, 100,
+                          'stock:A', 1010, 110,
+                          'stock:A', 1020, 120,
+                          'stock:A', 1030, 'NaN')
+        r.execute_command('TS.MADD',
+                          'stock:B', 1000, 120,
+                          'stock:B', 1010, 110,
+                          'stock:B', 1020, 'NaN',
+                          'stock:B', 1030, 'NaN')
+
+        # REDUCE count: counts non-NaN values per timestamp.
+        # At ts=1020: stock:B is NaN, stock:A is 120  -> count=1
+        # At ts=1030: both are NaN                    -> count=0 (not NaN)
+        result = decode_if_needed(r1.execute_command(
+            'TS.MRANGE', '-', '+', 'WITHLABELS',
+            'FILTER', 'type=stock',
+            'GROUPBY', 'type', 'REDUCE', 'count'))
+        samples = result[0][2]
+        sample_map = {ts: val for ts, val in samples}
+        assert sample_map[1000] == '2', f"count at ts=1000 expected 2, got {sample_map[1000]}"
+        assert sample_map[1010] == '2', f"count at ts=1010 expected 2, got {sample_map[1010]}"
+        assert sample_map[1020] == '1', f"count at ts=1020 expected 1, got {sample_map[1020]}"
+        assert sample_map[1030] == '0', f"count at ts=1030 expected 0, got {sample_map[1030]}"
+
+        # REDUCE countnan: counts NaN values per timestamp.
+        # At ts=1020: stock:B is NaN, stock:A is 120  -> countnan=1
+        # At ts=1030: both are NaN                    -> countnan=2
+        result = decode_if_needed(r1.execute_command(
+            'TS.MRANGE', '-', '+', 'WITHLABELS',
+            'FILTER', 'type=stock',
+            'GROUPBY', 'type', 'REDUCE', 'countnan'))
+        samples = result[0][2]
+        sample_map = {ts: val for ts, val in samples}
+        assert sample_map[1000] == '0', f"countnan at ts=1000 expected 0, got {sample_map[1000]}"
+        assert sample_map[1010] == '0', f"countnan at ts=1010 expected 0, got {sample_map[1010]}"
+        assert sample_map[1020] == '1', f"countnan at ts=1020 expected 1, got {sample_map[1020]}"
+        assert sample_map[1030] == '2', f"countnan at ts=1030 expected 2, got {sample_map[1030]}"
+
+        # REDUCE countall: counts all values (NaN or not) per timestamp.
+        # At ts=1020: one NaN + one non-NaN           -> countall=2
+        # At ts=1030: both are NaN                    -> countall=2
+        result = decode_if_needed(r1.execute_command(
+            'TS.MRANGE', '-', '+', 'WITHLABELS',
+            'FILTER', 'type=stock',
+            'GROUPBY', 'type', 'REDUCE', 'countall'))
+        samples = result[0][2]
+        sample_map = {ts: val for ts, val in samples}
+        assert sample_map[1000] == '2', f"countall at ts=1000 expected 2, got {sample_map[1000]}"
+        assert sample_map[1010] == '2', f"countall at ts=1010 expected 2, got {sample_map[1010]}"
+        assert sample_map[1020] == '2', f"countall at ts=1020 expected 2, got {sample_map[1020]}"
+        assert sample_map[1030] == '2', f"countall at ts=1030 expected 2, got {sample_map[1030]}"
