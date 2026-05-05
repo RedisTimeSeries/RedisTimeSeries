@@ -403,8 +403,8 @@ STATFILE=${STATFILE:-$ROOT/bin/artifacts/tests/status}
 
 PARALLEL=${PARALLEL:-1}
 
-# due to Python "Can't pickle local object" problem in RLTest
-[[ $OS == macos ]] && PARALLEL=0
+# RLTest uses set_start_method('fork'), not spawn, so pickling is not involved
+# and parallel execution works correctly on macOS.
 
 [[ $EXT == 1 || $EXT == run || $BB == 1 || $GDB == 1 ]] && PARALLEL=0
 

@@ -31,12 +31,20 @@ SANITIZER = os.getenv('SANITIZER', '')
 VALGRIND = (os.getenv('VALGRIND', '0') == '1') or (os.getenv('VG', '0') == '1')
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
-# Use generous terminate patience for all configurations. RLTest polls and
-# returns as soon as the process exits, so a high retry count costs nothing
-# when shutdown is fast, but prevents force-kills under Valgrind/sanitizer
-# where shutdown is much slower.
-Defaults.terminate_retries = 20
-Defaults.terminate_retries_secs = 1
+# RLTest's terminateRetries path: sends SIGTERM, sleeps terminate_retry_secs,
+# checks, repeats up to terminateRetries times, then force-kills (SIGKILL).
+# The terminateRetries=None path polls every 100ms but NEVER force-kills —
+# it can hang indefinitely if Redis doesn't exit (calls communicate() at 30s
+# which itself blocks forever). We always use the retry path to keep the
+# force-kill safety valve, but use a short sleep so we don't waste time.
+#   Normal: 30 retries x 0.1s = force-kill after ~3s if Redis hangs
+#   VG/SAN: 120 retries x 1s = force-kill after ~2min (Redis is much slower)
+if VALGRIND or SANITIZER:
+    Defaults.terminate_retries = 20
+    Defaults.terminate_retry_secs = 1
+else:
+    Defaults.terminate_retries = 30
+    Defaults.terminate_retry_secs = 0.1
 
 
 class ShardConnectionTimeoutException(Exception):
@@ -101,8 +109,9 @@ def Env(*args, **kwargs):
 
     env = rltestEnv(*args,
                     terminateRetries=Defaults.terminate_retries,
-                    terminateRetrySecs=Defaults.terminate_retries_secs,
+                    terminateRetrySecs=Defaults.terminate_retry_secs,
                     **kwargs)
+
     Defaults.no_log = temp_no_log
     Defaults.no_capture_output = no_capture_output
 

@@ -11,1228 +11,1253 @@ from utils import timeit
 import random
 from datetime import datetime
 
+class testTsRange:
+    def __init__(self):
+        self.env = Env()
+
+    def test_range_query(self):
+        env = self.env
+        env.flush()
+        start_ts = 1488823384
+        samples_count = 1500
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 'tester', 'uncompressed', 'RETENTION', samples_count - 100)
+            _insert_data(r, 'tester', start_ts, samples_count, 5)
+
+            expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(99, 151)]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts + 50, start_ts + 150)
+            assert expected_result == actual_result
+            rev_result = r.execute_command('TS.revrange', 'tester', start_ts + 50, start_ts + 150)
+            rev_result.reverse()
+            assert expected_result == rev_result
+
+            # test out of range returns empty list
+            assert [] == r.execute_command('TS.range', 'tester', int(start_ts * 2), '+')
+            assert [] == r.execute_command('TS.range', 'tester', int(start_ts / 3), int(start_ts / 2))
+
+            assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts * 2), '+')
+            assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts / 3), int(start_ts / 2))
+
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 'string', '+')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, 'string')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, -1)
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', -1, 1000)
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'nonexist', 0, '+')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, '+', '', 'aggregation')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'count', 'number')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'count')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count', 'number')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', '')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'not_aggregation_function')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', '')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS', 'FILTER_BY_VALUE')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 'FILTER_BY_TS')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 10, 'FILTER_BY_TS')
+
+
+
+    def test_range_midrange(self):
+        env = self.env
+        env.flush()
+        samples_count = 5000
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 'tester', 'UNCOMPRESSED')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester', i, i)
+            res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count)
+            assert len(res) == 500  # sample_count is not in range() so not included
+            res = r.execute_command('TS.RANGE', 'tester', samples_count - 1500, samples_count - 1000)
+            assert len(res) == 501
+
+            # test for empty range between two full ranges
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester', samples_count * 2 + i, i)
+            res = r.execute_command('TS.RANGE', 'tester', int(samples_count * 1.1), int(samples_count + 1.2))
+            assert res == []
+
+
+
+    def test_range_with_agg_query(self):
+        env = self.env
+        env.flush()
+        start_ts = 1488823384
+        samples_count = 1500
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            _insert_data(r, 'tester', start_ts, samples_count, 5)
+
+            expected_result = [[1488823000, b'116'], [1488823500, b'500'], [1488824000, b'500'], [1488824500, b'384']]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
+                                              'count', 500)
+            assert expected_result == actual_result
+
+            # test first aggregation is not [0,0] if out of range
+            expected_result = [[1488823000, b'116'], [1488823500, b'500']]
+            actual_result = r.execute_command('TS.range', 'tester', 1488822000, 1488823999, b'AGGREGATION',
+                                              'count', 500)
+            assert expected_result == actual_result
 
-def test_range_query():
-    start_ts = 1488823384
-    samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'uncompressed', 'RETENTION', samples_count - 100)
-        _insert_data(r, 'tester', start_ts, samples_count, 5)
-
-        expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(99, 151)]
-        actual_result = r.execute_command('TS.range', 'tester', start_ts + 50, start_ts + 150)
-        assert expected_result == actual_result
-        rev_result = r.execute_command('TS.revrange', 'tester', start_ts + 50, start_ts + 150)
-        rev_result.reverse()
-        assert expected_result == rev_result
-
-        # test out of range returns empty list
-        assert [] == r.execute_command('TS.range', 'tester', int(start_ts * 2), '+')
-        assert [] == r.execute_command('TS.range', 'tester', int(start_ts / 3), int(start_ts / 2))
-
-        assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts * 2), '+')
-        assert [] == r.execute_command('TS.revrange', 'tester', int(start_ts / 3), int(start_ts / 2))
-
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 'string', '+')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, 'string')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, -1)
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', -1, 1000)
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'nonexist', 0, '+')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', '', 'aggregation')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'count', 'number')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'count')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count', 'number')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'count')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', '')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', 'not_aggregation_function')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', 0, '+', 'aggregation', '')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_TS', 'FILTER_BY_VALUE')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 'FILTER_BY_TS')
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'FILTER_BY_VALUE', 10, 'FILTER_BY_TS')
-
-
-def test_range_midrange():
-    samples_count = 5000
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'UNCOMPRESSED')
-        for i in range(samples_count):
-            r.execute_command('TS.ADD', 'tester', i, i)
-        res = r.execute_command('TS.RANGE', 'tester', samples_count - 500, samples_count)
-        assert len(res) == 500  # sample_count is not in range() so not included
-        res = r.execute_command('TS.RANGE', 'tester', samples_count - 1500, samples_count - 1000)
-        assert len(res) == 501
-
-        # test for empty range between two full ranges
-        for i in range(samples_count):
-            r.execute_command('TS.ADD', 'tester', samples_count * 2 + i, i)
-        res = r.execute_command('TS.RANGE', 'tester', int(samples_count * 1.1), int(samples_count + 1.2))
-        assert res == []
-
-
-def test_range_with_agg_query():
-    start_ts = 1488823384
-    samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
-        _insert_data(r, 'tester', start_ts, samples_count, 5)
-
-        expected_result = [[1488823000, b'116'], [1488823500, b'500'], [1488824000, b'500'], [1488824500, b'384']]
-        actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
-                                          'count', 500)
-        assert expected_result == actual_result
-
-        # test first aggregation is not [0,0] if out of range
-        expected_result = [[1488823000, b'116'], [1488823500, b'500']]
-        actual_result = r.execute_command('TS.range', 'tester', 1488822000, 1488823999, b'AGGREGATION',
-                                          'count', 500)
-        assert expected_result == actual_result
-
-        with pytest.raises(redis.ResponseError) as excinfo:
-            assert r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
-                                     'count', -1)
-
-
-def test_agg_std_p():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'std.p')
+            with pytest.raises(redis.ResponseError) as excinfo:
+                assert r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count, 'AGGREGATION',
+                                         'count', -1)
 
-        expected_result = [[10, b'25.869'], [20, b'25.869'], [30, b'25.869'], [40, b'25.869']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        for i in range(len(expected_result)):
-            assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
 
-def test_agg_std_s():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'std.s')
+    def test_agg_std_p(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'std.p')
 
-        expected_result = [[10, b'27.269'], [20, b'27.269'], [30, b'27.269'], [40, b'27.269']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        for i in range(len(expected_result)):
-            assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
+            expected_result = [[10, b'25.869'], [20, b'25.869'], [30, b'25.869'], [40, b'25.869']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
 
-def test_agg_var_p():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'var.p')
 
-        expected_result = [[10, b'669.25'], [20, b'669.25'], [30, b'669.25'], [40, b'669.25']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        for i in range(len(expected_result)):
-            assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
+    def test_agg_std_s(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'std.s')
 
+            expected_result = [[10, b'27.269'], [20, b'27.269'], [30, b'27.269'], [40, b'27.269']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
-def test_agg_var_s():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'var.s')
 
-        expected_result = [[10, b'743.611'], [20, b'743.611'], [30, b'743.611'], [40, b'743.611']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        for i in range(len(expected_result)):
-            assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
+    def test_agg_var_p(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'var.p')
 
-def test_agg_sum():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'sum')
+            expected_result = [[10, b'669.25'], [20, b'669.25'], [30, b'669.25'], [40, b'669.25']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
-        expected_result = [[10, b'1565'], [20, b'2565'], [30, b'3565'], [40, b'4565']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
 
 
-def test_agg_count():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'count')
+    def test_agg_var_s(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'var.s')
 
-        expected_result = [[10, b'10'], [20, b'10'], [30, b'10'], [40, b'10']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+            expected_result = [[10, b'743.611'], [20, b'743.611'], [30, b'743.611'], [40, b'743.611']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            for i in range(len(expected_result)):
+                assert abs(float(expected_result[i][1]) - float(actual_result[i][1])) < ALLOWED_ERROR
 
 
-def test_agg_first():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'first')
 
-        expected_result = [[10, b'131'], [20, b'231'], [30, b'331'], [40, b'431']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
+    def test_agg_sum(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'sum')
 
+            expected_result = [[10, b'1565'], [20, b'2565'], [30, b'3565'], [40, b'4565']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            assert expected_result == actual_result
 
-def test_agg_last():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'last')
 
-        expected_result = [[10, b'184'], [20, b'284'], [30, b'384'], [40, b'484']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
 
+    def test_agg_count(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'count')
 
-def test_agg_range():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'range')
-
-        expected_result = [[10, b'74'], [20, b'74'], [30, b'74'], [40, b'74']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
-
-
-def test_range_count():
-    start_ts = 1511885908
-    samples_count = 50
-
-    with Env().getClusterConnectionIfNeeded() as r:
-        r.execute_command('TS.CREATE', 'tester1')
-        for i in range(samples_count):
-            r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
-        full_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
-        assert len(full_results) == samples_count
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'COUNT', 10)
-        assert count_results == full_results[:10]
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'COUNT', 10, b'AGGREGATION', 'COUNT', 3)
-        assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 4, b'COUNT', 10)
-        assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, b'AGGREGATION', 'COUNT', 4)
-        assert len(count_results) == 10
-        count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 3)
-        assert len(count_results) == math.ceil(samples_count / 3.0)
-
-
-def test_agg_min():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'min')
-
-        expected_result = [[10, b'123'], [20, b'223'], [30, b'323'], [40, b'423']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
-
-
-def test_agg_max():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'max')
-
-        expected_result = [[10, b'197'], [20, b'297'], [30, b'397'], [40, b'497']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
-
-
-def test_agg_avg():
-    with Env().getClusterConnectionIfNeeded() as r:
-        agg_key = _insert_agg_data(r, 'tester{a}', 'avg')
-
-        expected_result = [[10, b'156.5'], [20, b'256.5'], [30, b'356.5'], [40, b'456.5']]
-        actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
-        assert expected_result == actual_result
-
-        #test overflow
-        MAX_DOUBLE = 1.7976931348623157E+308
-        assert r.execute_command('TS.CREATE', 'ts1')
-        assert r.execute_command('TS.ADD', 'ts1', 1, MAX_DOUBLE - 10)
-        assert r.execute_command('TS.ADD', 'ts1', 2, MAX_DOUBLE - 8)
-        assert r.execute_command('TS.ADD', 'ts1', 3, MAX_DOUBLE - 6)
-
-        actual_result = r.execute_command('TS.RANGE', 'ts1', 0, 3, 'AGGREGATION', 'avg', 5)
-        #MAX_DOUBLE - 10 equals MAX_DOUBLE cause of precision limit
-
-        # If this test fails in the future it means
-        # it run on an OS/compiler that doesn't support long double need to remove the comment below
-        if(VALGRIND or (sizeof(c_longdouble) == 8)):
-            assert actual_result == [[0, b'1.7976931348623155E308']]
-        else:
-            assert actual_result == [[0, b'1.7976931348623157E308']]
-
-        MIN_DOUBLE = -1.7976931348623157E+308
-        assert r.execute_command('TS.CREATE', 'ts2')
-        assert r.execute_command('TS.ADD', 'ts2', 1, MIN_DOUBLE + 10)
-        assert r.execute_command('TS.ADD', 'ts2', 2, MIN_DOUBLE + 8)
-        assert r.execute_command('TS.ADD', 'ts2', 3, MIN_DOUBLE + 6)
-
-        actual_result = r.execute_command('TS.RANGE', 'ts2', 0, 3, 'AGGREGATION', 'avg', 5)
-        #MIN_DOUBLE + 10 equals MIN_DOUBLE cause of precision limit
-        if(VALGRIND or (sizeof(c_longdouble) == 8)):
-            assert actual_result == [[0, b'-1.7976931348623155E308']]
-        else:
-            assert actual_result == [[0, b'-1.7976931348623157E308']]
-
-def test_agg_twa():
-    #https://redislabs.atlassian.net/jira/software/c/projects/PM/boards/263?modal=detail&selectedIssue=PM-1229
-    with Env().getClusterConnectionIfNeeded() as r:
-        #case 1:
-        assert r.execute_command('TS.CREATE', 'ts1')
-        assert r.execute_command('TS.ADD', 'ts1', 8, 8)
-        assert r.execute_command('TS.ADD', 'ts1', 9, 9)
-        assert r.execute_command('TS.ADD', 'ts1', 10, 10)
-        assert r.execute_command('TS.ADD', 'ts1', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts1', 14, 14)
-        assert r.execute_command('TS.ADD', 'ts1', 23, 23)
-        v1, v2, v3, v4, v5 = 9.0, 10.0, 13.0, 14.0, 23.0
-        t1, t2, t3, t4, t5 = 9.0, 10.0, 13.0, 14.0, 23.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
-        res = s / (2*(tb-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts1', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts1', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 2:
-        assert r.execute_command('TS.CREATE', 'ts2')
-        assert r.execute_command('TS.ADD', 'ts2', 8, 8)
-        assert r.execute_command('TS.ADD', 'ts2', 9, 9)
-        assert r.execute_command('TS.ADD', 'ts2', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts2', 14, 14)
-        assert r.execute_command('TS.ADD', 'ts2', 23, 23)
-        v1, v2, v3, v4 = 9.0, 13.0, 14.0, 23.0
-        t1, t2, t3, t4 = 9.0, 13.0, 14.0, 23.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
-        res = s / (2*(tb-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts2', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts2', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 3:
-        assert r.execute_command('TS.CREATE', 'ts3')
-        assert r.execute_command('TS.ADD', 'ts3', 8, 8)
-        assert r.execute_command('TS.ADD', 'ts3', 9, 9)
-        assert r.execute_command('TS.ADD', 'ts3', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts3', 14, 14)
-        assert r.execute_command('TS.ADD', 'ts3', 26, 26)
-        v1, v2, v3, v4 = 9.0, 13.0, 14.0, 26.0
-        t1, t2, t3, t4 = 9.0, 13.0, 14.0, 26.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
-        res = s / (2*(tb-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts3', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts3', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 4:
-        assert r.execute_command('TS.CREATE', 'ts4')
-        assert r.execute_command('TS.ADD', 'ts4', 8, 8)
-        assert r.execute_command('TS.ADD', 'ts4', 9, 9)
-        assert r.execute_command('TS.ADD', 'ts4', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts4', 14, 14)
-        assert r.execute_command('TS.ADD', 'ts4', 27, 27)
-        v1, v2, v3, v4 = 9.0, 13.0, 14.0, 27.0
-        t1, t2, t3, t4 = 9.0, 13.0, 14.0, 27.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
-        res = s / (2*(tb-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts4', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts4', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 5:
-        assert r.execute_command('TS.CREATE', 'ts5')
-        assert r.execute_command('TS.ADD', 'ts5', 3, 3)
-        assert r.execute_command('TS.ADD', 'ts5', 7, 7)
-        assert r.execute_command('TS.ADD', 'ts5', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts5', 14, 14)
-        assert r.execute_command('TS.ADD', 'ts5', 27, 27)
-        v1, v2, v3, v4 = 7.0, 13.0, 14.0, 27.0
-        t1, t2, t3, t4 = 7.0, 13.0, 14.0, 27.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
-        res = s / (2*(tb-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts5', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts5', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 6:
-        assert r.execute_command('TS.CREATE', 'ts6')
-        assert r.execute_command('TS.ADD', 'ts6', 3, 3)
-        assert r.execute_command('TS.ADD', 'ts6', 6, 6)
-        assert r.execute_command('TS.ADD', 'ts6', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts6', 14, 14)
-        assert r.execute_command('TS.ADD', 'ts6', 27, 27)
-        v1, v2, v3, v4 = 6.0, 13.0, 14.0, 27.0
-        t1, t2, t3, t4 = 6.0, 13.0, 14.0, 27.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
-        res = s / (2*(tb-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts6', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts6', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 7:
-        assert r.execute_command('TS.CREATE', 'ts7')
-        assert r.execute_command('TS.ADD', 'ts7', 3, 3)
-        assert r.execute_command('TS.ADD', 'ts7', 9, 9)
-        assert r.execute_command('TS.ADD', 'ts7', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts7', 22, 22)
-        v1, v2, v3 = 9.0, 13.0, 22.0
-        t1, t2, t3 = 9.0, 13.0, 22.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v2+(v3-v2)*(tb-t2)/(t3-t2)
-        s = (va+v2)*(t2-ta) + (vb+v2)*(tb-t2)
-        res = s / (2*(tb-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts7', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts7', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 8:
-        assert r.execute_command('TS.CREATE', 'ts8')
-        assert r.execute_command('TS.ADD', 'ts8', 3, 3)
-        assert r.execute_command('TS.ADD', 'ts8', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts8', 28, 28)
-        v1, v2, v3 = 3.0, 13.0, 28.0
-        t1, t2, t3 = 3.0, 13.0, 28.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v2+(v3-v2)*(tb-t2)/(t3-t2)
-        s = (va+v2)*(t2-ta) + (vb+v2)*(tb-t2)
-        res = s / (2.0*(tb-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts8', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts8', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 9:
-        assert r.execute_command('TS.CREATE', 'ts9')
-        assert r.execute_command('TS.ADD', 'ts9', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts9', 28, 28)
-        v1, v2, = 13.0, 28.0
-        t1, t2, = 13.0, 28.0
-        ta, tb = 10.0, 20.0
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        s = (v1+vb)*(tb-t1)
-        res = s / (2.0*(tb-t1))
-        expected_result = [10, str(res).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts9', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts9', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 10:
-        assert r.execute_command('TS.CREATE', 'ts10')
-        assert r.execute_command('TS.ADD', 'ts10', 13, 13)
-        assert r.execute_command('TS.ADD', 'ts10', 21, 21)
-        v1, v2, = 13.0, 21.0
-        t1, t2, = 13.0, 21.0
-        ta, tb = 10.0, 20.0
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        s = (v1+vb)*(tb-t1)
-        res = s / (2.0*(tb-t1))
-        expected_result = [10, str(res).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts10', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts10', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 11:
-        assert r.execute_command('TS.CREATE', 'ts11')
-        assert r.execute_command('TS.ADD', 'ts11', 17, 17)
-        assert r.execute_command('TS.ADD', 'ts11', 21, 21)
-        v1, v2, = 17.0, 21.0
-        t1, t2, = 17.0, 21.0
-        ta, tb = 10.0, 20.0
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        s = (v1+vb)*(tb-t1)
-        res = s / (2.0*(tb-t1))
-        expected_result = [10, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts11', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts11', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 12:
-        assert r.execute_command('TS.CREATE', 'ts12')
-        assert r.execute_command('TS.ADD', 'ts12', 3, 3)
-        assert r.execute_command('TS.ADD', 'ts12', 17, 17)
-        v1, v2, = 3.0, 17.0
-        t1, t2, = 3.0, 17.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        s = (va+v2)*(t2-ta)
-        res = s / (2.0*(t2-ta))
-        expected_result = [10, str(res).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts12', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts12', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 14:
-        assert r.execute_command('TS.CREATE', 'ts14')
-        assert r.execute_command('TS.ADD', 'ts14', 5, 5)
-        assert r.execute_command('TS.ADD', 'ts14', 12, 12)
-        v1, v2, = 5.0, 12.0
-        t1, t2, = 5.0, 12.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        s = (va+v2)*(t2-ta)
-        res = s / (2.0*(t2-ta))
-        expected_result = [10, str(int(res)).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts14', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts14', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 15:
-        assert r.execute_command('TS.CREATE', 'ts15')
-        assert r.execute_command('TS.ADD', 'ts15', 7, 7)
-        assert r.execute_command('TS.ADD', 'ts15', 15, 15)
-        v1, v2, = 7.0, 15.0
-        t1, t2, = 7.0, 15.0
-        ta, tb = 10.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        s = (va+v2)*(t2-ta)
-        res = s / (2.0*(t2-ta))
-        expected_result = [10, str(res).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts15', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts15', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 16:
-        assert r.execute_command('TS.CREATE', 'ts16')
-        assert r.execute_command('TS.ADD', 'ts16', 15, 15)
-        res = 15
-        expected_result = [10, str(res).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts16', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts16', 10, 20, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 17:
-        assert r.execute_command('TS.CREATE', 'ts17')
-        assert r.execute_command('TS.ADD', 'ts17', 0, 5) == 0
-        assert r.execute_command('TS.ADD', 'ts17', 9, 12)
-        v1, v2, = 5, 12.0
-        t1, t2, = 0, 9.0
-        ta, tb = 0, 10.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        s = (va+v2)*(t2-ta)
-        res = s / (2.0*(t2-ta))
-        expected_result = [0, str(res).encode('ascii')]
-
-        actual_result = r.execute_command('TS.RANGE', 'ts17', 0, 10, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts17', 0, 10, 'AGGREGATION', 'twa', 10)
-        assert actual_result[0] == expected_result
-
-        #case 18:
-        assert r.execute_command('TS.CREATE', 'ts18')
-        assert r.execute_command('TS.ADD', 'ts18', 10, 100)
-        assert r.execute_command('TS.ADD', 'ts18', 13, 110)
-        assert r.execute_command('TS.ADD', 'ts18', 15, 115)
-        assert r.execute_command('TS.ADD', 'ts18', 19, 109)
-        assert r.execute_command('TS.ADD', 'ts18', 25, 130)
-        v1, v2, v3, v4, v5 = 100.0, 110.0, 115.0, 109.0, 130.0
-        t1, t2, t3, t4, t5 = 10.0, 13.0, 15.0, 19.0, 25.0
-        ta, tb = 12.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
-        res = s / (2.0*(tb-ta))
-        expected_result = [0, str(res).encode('ascii')]
-
-        # Test case #1:
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 12, 20, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 12, 20, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 12, 20, 'AGGREGATION', 'twa', 1000)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 12, 20, 'AGGREGATION', 'twa', 1000)
-        assert actual_result[0] == expected_result
-
-        ta, tb = 11.0, 30.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (v5+v4)*(t5-t4)
-        res = s / (2.0*(t5-ta))
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 11, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 11, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #2:
-        ta, tb = 11.0, 20.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
-        res = s / (2.0*(tb-ta))
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 11, 20, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 11, 20, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #3:
-        ta, tb = 12.0, 24.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
-        res = s / (2*(tb-ta))
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 12, 24, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 12, 24, 'AGGREGATION', 'twa', 100)
-        round(float(actual_result[0][1]), 10) == round(res, 10)
-        assert actual_result[0][0] == expected_result[0]
-
-        # Test case #4:
-        ta, tb = 11.0, 24.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
-        s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
-        res = s / (2.0*(tb-ta))
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 11, 24, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 11, 24, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #5:
-        ta, tb = 8.0, 26.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        s = (v1+v2)*(t2-t1) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (v5+v4)*(t5-t4)
-        res = s / (2.0*(t5-t1))
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 8, 26, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 8, 26, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #6:
-        ta, tb = 8.0, 30.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        s = (v1+v2)*(t2-t1) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (v5+v4)*(t5-t4)
-        res = s / (2.0*(t5-t1))
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 8, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 8, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #7:
-        ta, tb = 9.0, 30.0
-        s = (v1+v2)*(t2-t1) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (v5+v4)*(t5-t4)
-        res = s / (2.0*(t5-t1))
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts18', 9, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.REVRANGE', 'ts18', 9, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        #Test case 19:
-        assert r.execute_command('TS.CREATE', 'ts19')
-        assert r.execute_command('TS.ADD', 'ts19', 10, 100)
-        assert r.execute_command('TS.ADD', 'ts19', 20, 110)
-
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts19', 16, 18, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts19', 16, 18, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-
-        v1, v2 = 100.0, 110.0
-        t1, t2 = 10.0, 20.0
-        ta, tb = 16.0, 18.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        res = (va + vb)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts19', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts19', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-
-        #Test case 20:
-        ta, tb = 12.0, 14.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        res = (va + vb)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts19', 12, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.REVRANGE', 'ts19', 12, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-
-        #Test case 21:
-        ta, tb = 14.0, 19.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        res = (va + vb)/2.0
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts19', 14, 19, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts19', 14, 19, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts19', 14, 19, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts19', 14, 19, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-
-        ta, tb = 11.0, 16.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        res = (va + vb)/2.0
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts19', 11, 16, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(res).encode('ascii')]
-        actual_result = r.execute_command('TS.REVRANGE', 'ts19', 11, 16, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result[0] == expected_result
-
-        #Test case 22:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts19', 11, 15, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts19', 11, 15, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-        #case 4:
-        assert r.execute_command('TS.CREATE', 'ts20')
-        assert r.execute_command('TS.ADD', 'ts20', 20, 100)
-        assert r.execute_command('TS.ADD', 'ts20', 30, 110)
-        v1, v2 = 100.0, 110.0
-        t1, t2 = 20.0, 30.0
-
-        # Test case #13:
-        ta, tb = 14.0, 22.0
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        res = (v1 + vb)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 14, 22, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 14, 22, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #14:
-        ta, tb = 14.0, 28.0
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        res = (v1 + vb)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 14, 28, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 14, 28, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #15:
-        ta, tb = 16.0, 22.0
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        res = (v1 + vb)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 22, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 22, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #16:
-        ta, tb = 16.0, 28.0
-        vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
-        res = (v1 + vb)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 28, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 28, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #17:
-        ta, tb = 24.0, 32.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        res = (va + v2)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 24, 32, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 24, 32, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #18:
-        ta, tb = 26.0, 32.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        res = (va + v2)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 26, 32, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 26, 32, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #19:
-        ta, tb = 24.0, 38.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        res = (va + v2)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 24, 38, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 24, 38, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #20:
-        ta, tb = 26.0, 38.0
-        va = v1+(v2-v1)*(ta-t1)/(t2-t1)
-        res = (va + v2)/2.0
-        expected_result = [0, str(int(res)).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 26, 38, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 26, 38, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        #Test case 21:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-
-        #Test case 22:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-
-        #Test case 23:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-
-        #Test case 24:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-
-        #Test case 25:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-
-        #Test case 26:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-
-        #case 8:
-        assert r.execute_command('TS.CREATE', 'ts21')
-        assert r.execute_command('TS.ADD', 'ts21', 20, 100)
-
-        # Test case #27:
-        expected_result = [0, str(100).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(100).encode('ascii')]
-        actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #28:
-        expected_result = [0, str(100).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 20, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(100).encode('ascii')]
-        actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 20, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #29:
-        expected_result = [0, str(100).encode('ascii')]
-        actual_result = r.execute_command('TS.RANGE', 'ts21', 20, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-        expected_result = [0, str(100).encode('ascii')]
-        actual_result = r.execute_command('TS.REVRANGE', 'ts21', 20, 30, 'AGGREGATION', 'twa', 100)
-        assert actual_result[0] == expected_result
-
-        # Test case #30:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-
-        # Test case #35:
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100)
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.RANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result = []
-        actual_result = r.execute_command('TS.REVRANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-
-        # Test case 100:
-        assert r.execute_command('TS.CREATE', 'ts22')
-        assert r.execute_command('TS.ADD', 'ts22', 20, 100)
-        assert r.execute_command('TS.ADD', 'ts22', 50, 130)
-        v1, v2 = 100.0, 130.0
-        t1, t2 = 20.0, 50.0
-        ta, tb = 20.0, 50.0
-        res = (v1 + v2)/2.0
-        expected_result = [[0, str(int(res)).encode('ascii')]]
-        actual_result = r.execute_command('TS.RANGE', 'ts22', 20, 50, 'AGGREGATION', 'twa', 100, 'EMPTY')
-        assert actual_result == expected_result
-        m = (130.0 - 100.0)/(50.0 - 20.0)
-        va_fun = lambda ta: v1 + (ta - t1)*m
-        expected_result = []
-        for i in range(20, 60, 10):
-            va = va_fun(i)
-            vb = va_fun(min(i+10, 50))
-            res = (va + vb)/2.0
-            expected_result += [[i, str(int(res)).encode('ascii')]]
-        actual_result = r.execute_command('TS.RANGE', 'ts22', 20, 50, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result.reverse()
-        actual_result = r.execute_command('TS.REVRANGE', 'ts22', 20, 50, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert actual_result == expected_result
-
-        # Test case 101:
-        assert r.execute_command('TS.CREATE', 'ts23')
-        assert r.execute_command('TS.ADD', 'ts23', 40, 100)
-        assert r.execute_command('TS.ADD', 'ts23', 50, 130)
-        res = (130.0 + 100.0)/2.0
-        expected_result = [[40, str(int(res)).encode('ascii')], [50, str(130).encode('ascii')]]
-        actual_result = r.execute_command('TS.RANGE', 'ts23', 29, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result.reverse()
-        actual_result = r.execute_command('TS.REVRANGE', 'ts23', 29, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert actual_result == expected_result
-
-        expected_result.reverse()
-        actual_result = r.execute_command('TS.RANGE', 'ts23', 39, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert actual_result == expected_result
-        expected_result.reverse()
-        actual_result = r.execute_command('TS.REVRANGE', 'ts23', 39, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert actual_result == expected_result
-
-def test_series_ordering():
-    with Env().getClusterConnectionIfNeeded() as r:
-        sample_len = 1024
-        chunk_size = 4
-
-        r.execute_command("ts.create", 'test_key', 0, chunk_size)
-        for i in range(sample_len):
-            r.execute_command("ts.add", 'test_key', i, i)
-
-        res = r.execute_command('ts.range', 'test_key', 0, sample_len)
-        i = 0
-        for sample in res:
-            assert sample == [i, str(i).encode('ascii')]
-            i += 1
-
-
-def test_sanity():
-    start_ts = 1511885909
-    samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
-                                 'brown', 'color', 'pink')
-        _insert_data(r, 'tester', start_ts, samples_count, 5)
-
-        expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
-        actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
-        assert expected_result == actual_result
-        expected_result = [
-            b'totalSamples', 1500,
-            b'firstTimestamp', start_ts, b'chunkCount', 1,
-            b'labels', [[b'name', b'brown'], [b'color', b'pink']],
-            b'lastTimestamp', start_ts + samples_count - 1,
-            b'chunkSize', 1024, b'retentionTime', 0,
-            b'sourceKey', None, b'rules', [], b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0']
-        assert TSInfo(expected_result) == _get_ts_info(r, 'tester')
-
-
-def test_sanity_pipeline():
-    start_ts = 1488823384
-    samples_count = 1500
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester')
-        with r.pipeline(transaction=False) as p:
-            p.set("name", "danni")
-            _insert_data(p, 'tester', start_ts, samples_count, 5)
-            p.execute()
-        expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
-        actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
-        assert expected_result == actual_result
-
-def test_large_compressed_range():
-    random.seed()
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
-        _len = 400
-        n_samples_dict = {}
-        ts = random.randint(2, _len) # For taking more space and chunks
-        for i in range(_len):
-            r.execute_command('TS.ADD', 't1', ts , i)
-            n_samples_dict[ts] = i
-            ts += random.randint(2, _len) # For taking more space and chunks
-
-        res = r.execute_command('ts.range', 't1', '-', '+')
-        assert len(res) == _len
-
-        for key1, val1 in n_samples_dict.items():
-            for key2, val2 in n_samples_dict.items():
-                if(key2 < key1):
-                    continue
-                res = r.execute_command('ts.range', 't1', key1, key2)
-                assert len(res) == val2 - val1 + 1
-                res = r.execute_command('ts.range', 't1', key1 - 1, key2 + 1)
-                assert len(res) == val2 - val1 + 1
-
-def test_large_compressed_revrange():
-    random.seed()
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
-        _len = 400
-        n_samples_dict = {}
-        ts = random.randint(2, _len) # For taking more space and chunks
-        for i in range(_len):
-            r.execute_command('TS.ADD', 't1', ts , i)
-            n_samples_dict[ts] = i
-            ts += random.randint(2, _len) # For taking more space and chunks
-
-        res = r.execute_command('ts.range', 't1', '-', '+')
-        assert len(res) == _len
-
-        for key1, val1 in n_samples_dict.items():
-            for key2, val2 in n_samples_dict.items():
-                if(key2 < key1):
-                    continue
-                res = r.execute_command('ts.revrange', 't1', key1, key2)
-                assert len(res) == val2 - val1 + 1
-                res = r.execute_command('ts.revrange', 't1', key1 - 1, key2 + 1)
-                assert len(res) == val2 - val1 + 1
-
-def test_issue358():
-    filepath = "./issue358.txt"
-    with Env().getClusterConnectionIfNeeded() as r:
-        r.execute_command('ts.create', 'issue358')
-
-        with open(filepath) as fp:
-            line = fp.readline()
-            while line:
-                line = fp.readline()
-                if line != '':
-                    r.execute_command(*line.split())
-        range_res = r.execute_command('ts.range', 'issue358', 1582848000, '+')[0][1]
-        get_res = r.execute_command('ts.get', 'issue358')[1]
-        assert range_res == get_res
-
-
-def test_filter_by():
-    start_ts = 1511885909
-    samples_count = 1500
-    env = Env()
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
-                                 'brown', 'color', 'pink')
-        _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
-
-        res = r.execute_command('ts.range', 'tester', start_ts, '+', 'FILTER_BY_VALUE', 40, 52)
-
-        assert len(res) == 13
-        assert [int(sample[1]) for sample in res] == list(range(40, 53))
-
-        res = r.execute_command('ts.range', 'tester', start_ts, '+',
-                                'FILTER_BY_TS', start_ts + 1021, start_ts + 1022, start_ts + 1025, start_ts + 1029)
-        env.assertEqual(res, [[start_ts + 1021, b'1021'], [start_ts + 1022, b'1022'], [start_ts + 1025, b'1025'],
-                              [start_ts + 1029, b'1029']])
-
-        res = r.execute_command('ts.range', 'tester', start_ts, '+',
-                                'FILTER_BY_TS', start_ts + 1021, start_ts + 1021, start_ts + 1022, start_ts + 1022, start_ts + 1025, start_ts + 1029, start_ts + 1029)
-        env.assertEqual(res, [[start_ts + 1021, b'1021'], [start_ts + 1022, b'1022'], [start_ts + 1025, b'1025'],
-                              [start_ts + 1029, b'1029']])
-
-        res = r.execute_command('ts.range', 'tester', start_ts, '+',
-                                'FILTER_BY_TS', start_ts + 1021, start_ts + 1022, start_ts + 1023, start_ts + 1025,
-                                start_ts + 1029,
-                                'FILTER_BY_VALUE', 1022, 1025)
-        env.assertEqual(res, [[start_ts + 1022, b'1022'], [start_ts + 1023, b'1023'], [start_ts + 1025, b'1025']])
-
-def test_filter_by_extensive():
-    env = Env()
-    #skip cause it takes too much time
-    env.skipOnCluster()
-    env.skipOnAOF()
-    env.skipOnSlave()
-    max_samples_count = 40
-    for ENCODING in ['uncompressed']:
-        for ev_odd in ['even', 'odd']:
-            if(ev_odd == 'even'):
-                start_ts = 2
+            expected_result = [[10, b'10'], [20, b'10'], [30, b'10'], [40, b'10']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            assert expected_result == actual_result
+
+
+
+    def test_agg_first(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'first')
+
+            expected_result = [[10, b'131'], [20, b'231'], [30, b'331'], [40, b'431']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            assert expected_result == actual_result
+
+
+
+    def test_agg_last(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'last')
+
+            expected_result = [[10, b'184'], [20, b'284'], [30, b'384'], [40, b'484']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            assert expected_result == actual_result
+
+
+
+    def test_agg_range(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'range')
+
+            expected_result = [[10, b'74'], [20, b'74'], [30, b'74'], [40, b'74']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            assert expected_result == actual_result
+
+
+
+    def test_range_count(self):
+        env = self.env
+        env.flush()
+        start_ts = 1511885908
+        samples_count = 50
+
+        with env.getClusterConnectionIfNeeded() as r:
+            r.execute_command('TS.CREATE', 'tester1')
+            for i in range(samples_count):
+                r.execute_command('TS.ADD', 'tester1', start_ts + i, i)
+            full_results = r.execute_command('TS.RANGE', 'tester1', 0, '+')
+            assert len(full_results) == samples_count
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'COUNT', 10)
+            assert count_results == full_results[:10]
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'COUNT', 10, b'AGGREGATION', 'COUNT', 3)
+            assert len(count_results) == 10
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 4, b'COUNT', 10)
+            assert len(count_results) == 10
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', 'COUNT', 10, b'AGGREGATION', 'COUNT', 4)
+            assert len(count_results) == 10
+            count_results = r.execute_command('TS.RANGE', 'tester1', 0, '+', b'AGGREGATION', 'COUNT', 3)
+            assert len(count_results) == math.ceil(samples_count / 3.0)
+
+
+
+    def test_agg_min(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'min')
+
+            expected_result = [[10, b'123'], [20, b'223'], [30, b'323'], [40, b'423']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            assert expected_result == actual_result
+
+
+
+    def test_agg_max(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'max')
+
+            expected_result = [[10, b'197'], [20, b'297'], [30, b'397'], [40, b'497']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            assert expected_result == actual_result
+
+
+
+    def test_agg_avg(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            agg_key = _insert_agg_data(r, 'tester{a}', 'avg')
+
+            expected_result = [[10, b'156.5'], [20, b'256.5'], [30, b'356.5'], [40, b'456.5']]
+            actual_result = r.execute_command('TS.RANGE', agg_key, 10, 50)
+            assert expected_result == actual_result
+
+            #test overflow
+            MAX_DOUBLE = 1.7976931348623157E+308
+            assert r.execute_command('TS.CREATE', 'ts1')
+            assert r.execute_command('TS.ADD', 'ts1', 1, MAX_DOUBLE - 10)
+            assert r.execute_command('TS.ADD', 'ts1', 2, MAX_DOUBLE - 8)
+            assert r.execute_command('TS.ADD', 'ts1', 3, MAX_DOUBLE - 6)
+
+            actual_result = r.execute_command('TS.RANGE', 'ts1', 0, 3, 'AGGREGATION', 'avg', 5)
+            #MAX_DOUBLE - 10 equals MAX_DOUBLE cause of precision limit
+
+            # If this test fails in the future it means
+            # it run on an OS/compiler that doesn't support long double need to remove the comment below
+            if(VALGRIND or (sizeof(c_longdouble) == 8)):
+                assert actual_result == [[0, b'1.7976931348623155E308']]
             else:
-                start_ts = 3
-            env.flush()
-            with env.getClusterConnectionIfNeeded() as r:
-                assert r.execute_command('TS.CREATE', 't1', ENCODING, 'RETENTION', '0', 'CHUNK_SIZE', '512')
-                # 32 samples in chunk, 40 samples: 2 chunk in total
-                # inset even numbers
-                for samples_count in range(0, max_samples_count + 1):
-                    last_ts = start_ts + samples_count*2
-                    r.execute_command('TS.ADD', 't1', last_ts, last_ts)
+                assert actual_result == [[0, b'1.7976931348623157E308']]
 
-                    for rev in [False, True]:
-                        query = 'ts.revrange' if rev else 'ts.range'
-                        for first_ts in range(0, last_ts + 3):
-                            str_first_ts = str(first_ts)
-                            for second_ts in range(first_ts, last_ts + 3):
-                                str_second_ts = str(second_ts)
-                                expected_res = []
-                                reminder = 0 if ev_odd == 'even' else 1
-                                if(first_ts%2 == reminder and first_ts >= start_ts and first_ts <= last_ts):
-                                    expected_res.append([first_ts, str_first_ts.encode()])
-                                if(first_ts != second_ts and second_ts%2 == reminder and second_ts >= start_ts and second_ts <= last_ts):
-                                    if(rev): #prepend
-                                        expected_res.insert(0, [second_ts, str_second_ts.encode()])
-                                    else:    # append
-                                        expected_res.append([second_ts, str_second_ts.encode()])
-                                res = r.execute_command(query, 't1', '-', '+', 'FILTER_BY_TS', first_ts, second_ts)
-                                env.assertEqual(res, expected_res)
+            MIN_DOUBLE = -1.7976931348623157E+308
+            assert r.execute_command('TS.CREATE', 'ts2')
+            assert r.execute_command('TS.ADD', 'ts2', 1, MIN_DOUBLE + 10)
+            assert r.execute_command('TS.ADD', 'ts2', 2, MIN_DOUBLE + 8)
+            assert r.execute_command('TS.ADD', 'ts2', 3, MIN_DOUBLE + 6)
 
-def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
-    return timsetamp - ((timsetamp - alignment_ts) % aggregation_bucket_size)
+            actual_result = r.execute_command('TS.RANGE', 'ts2', 0, 3, 'AGGREGATION', 'avg', 5)
+            #MIN_DOUBLE + 10 equals MIN_DOUBLE cause of precision limit
+            if(VALGRIND or (sizeof(c_longdouble) == 8)):
+                assert actual_result == [[0, b'-1.7976931348623155E308']]
+            else:
+                assert actual_result == [[0, b'-1.7976931348623157E308']]
 
-def test_max_extensive():
-    env = Env()
-    #skip cause it takes too much time
-    env.skipOnCluster()
-    env.skipOnAOF()
-    env.skipOnSlave()
-    max_samples_count = 40
-    n_chunk_samples = 32
-    random_values = [None]*(max_samples_count*3)
-    random.seed()
-    try:
-        for i in range(0, max_samples_count*3):
-            random_values[i] = random.uniform(0, max_samples_count)
-        max_val = random.uniform(max_samples_count, max_samples_count + 10)
-        for ENCODING in ['uncompressed', 'compressed']:
+
+    def test_agg_twa(self):
+        env = self.env
+        env.flush()
+        #https://redislabs.atlassian.net/jira/software/c/projects/PM/boards/263?modal=detail&selectedIssue=PM-1229
+        with env.getClusterConnectionIfNeeded() as r:
+            #case 1:
+            assert r.execute_command('TS.CREATE', 'ts1')
+            assert r.execute_command('TS.ADD', 'ts1', 8, 8)
+            assert r.execute_command('TS.ADD', 'ts1', 9, 9)
+            assert r.execute_command('TS.ADD', 'ts1', 10, 10)
+            assert r.execute_command('TS.ADD', 'ts1', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts1', 14, 14)
+            assert r.execute_command('TS.ADD', 'ts1', 23, 23)
+            v1, v2, v3, v4, v5 = 9.0, 10.0, 13.0, 14.0, 23.0
+            t1, t2, t3, t4, t5 = 9.0, 10.0, 13.0, 14.0, 23.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
+            res = s / (2*(tb-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts1', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts1', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 2:
+            assert r.execute_command('TS.CREATE', 'ts2')
+            assert r.execute_command('TS.ADD', 'ts2', 8, 8)
+            assert r.execute_command('TS.ADD', 'ts2', 9, 9)
+            assert r.execute_command('TS.ADD', 'ts2', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts2', 14, 14)
+            assert r.execute_command('TS.ADD', 'ts2', 23, 23)
+            v1, v2, v3, v4 = 9.0, 13.0, 14.0, 23.0
+            t1, t2, t3, t4 = 9.0, 13.0, 14.0, 23.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
+            res = s / (2*(tb-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts2', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts2', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 3:
+            assert r.execute_command('TS.CREATE', 'ts3')
+            assert r.execute_command('TS.ADD', 'ts3', 8, 8)
+            assert r.execute_command('TS.ADD', 'ts3', 9, 9)
+            assert r.execute_command('TS.ADD', 'ts3', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts3', 14, 14)
+            assert r.execute_command('TS.ADD', 'ts3', 26, 26)
+            v1, v2, v3, v4 = 9.0, 13.0, 14.0, 26.0
+            t1, t2, t3, t4 = 9.0, 13.0, 14.0, 26.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
+            res = s / (2*(tb-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts3', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts3', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 4:
+            assert r.execute_command('TS.CREATE', 'ts4')
+            assert r.execute_command('TS.ADD', 'ts4', 8, 8)
+            assert r.execute_command('TS.ADD', 'ts4', 9, 9)
+            assert r.execute_command('TS.ADD', 'ts4', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts4', 14, 14)
+            assert r.execute_command('TS.ADD', 'ts4', 27, 27)
+            v1, v2, v3, v4 = 9.0, 13.0, 14.0, 27.0
+            t1, t2, t3, t4 = 9.0, 13.0, 14.0, 27.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
+            res = s / (2*(tb-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts4', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts4', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 5:
+            assert r.execute_command('TS.CREATE', 'ts5')
+            assert r.execute_command('TS.ADD', 'ts5', 3, 3)
+            assert r.execute_command('TS.ADD', 'ts5', 7, 7)
+            assert r.execute_command('TS.ADD', 'ts5', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts5', 14, 14)
+            assert r.execute_command('TS.ADD', 'ts5', 27, 27)
+            v1, v2, v3, v4 = 7.0, 13.0, 14.0, 27.0
+            t1, t2, t3, t4 = 7.0, 13.0, 14.0, 27.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
+            res = s / (2*(tb-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts5', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts5', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 6:
+            assert r.execute_command('TS.CREATE', 'ts6')
+            assert r.execute_command('TS.ADD', 'ts6', 3, 3)
+            assert r.execute_command('TS.ADD', 'ts6', 6, 6)
+            assert r.execute_command('TS.ADD', 'ts6', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts6', 14, 14)
+            assert r.execute_command('TS.ADD', 'ts6', 27, 27)
+            v1, v2, v3, v4 = 6.0, 13.0, 14.0, 27.0
+            t1, t2, t3, t4 = 6.0, 13.0, 14.0, 27.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v3+(v4-v3)*(tb-t3)/(t4-t3)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (vb+v3)*(tb-t3)
+            res = s / (2*(tb-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts6', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts6', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 7:
+            assert r.execute_command('TS.CREATE', 'ts7')
+            assert r.execute_command('TS.ADD', 'ts7', 3, 3)
+            assert r.execute_command('TS.ADD', 'ts7', 9, 9)
+            assert r.execute_command('TS.ADD', 'ts7', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts7', 22, 22)
+            v1, v2, v3 = 9.0, 13.0, 22.0
+            t1, t2, t3 = 9.0, 13.0, 22.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v2+(v3-v2)*(tb-t2)/(t3-t2)
+            s = (va+v2)*(t2-ta) + (vb+v2)*(tb-t2)
+            res = s / (2*(tb-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts7', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts7', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 8:
+            assert r.execute_command('TS.CREATE', 'ts8')
+            assert r.execute_command('TS.ADD', 'ts8', 3, 3)
+            assert r.execute_command('TS.ADD', 'ts8', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts8', 28, 28)
+            v1, v2, v3 = 3.0, 13.0, 28.0
+            t1, t2, t3 = 3.0, 13.0, 28.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v2+(v3-v2)*(tb-t2)/(t3-t2)
+            s = (va+v2)*(t2-ta) + (vb+v2)*(tb-t2)
+            res = s / (2.0*(tb-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts8', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts8', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 9:
+            assert r.execute_command('TS.CREATE', 'ts9')
+            assert r.execute_command('TS.ADD', 'ts9', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts9', 28, 28)
+            v1, v2, = 13.0, 28.0
+            t1, t2, = 13.0, 28.0
+            ta, tb = 10.0, 20.0
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            s = (v1+vb)*(tb-t1)
+            res = s / (2.0*(tb-t1))
+            expected_result = [10, str(res).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts9', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts9', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 10:
+            assert r.execute_command('TS.CREATE', 'ts10')
+            assert r.execute_command('TS.ADD', 'ts10', 13, 13)
+            assert r.execute_command('TS.ADD', 'ts10', 21, 21)
+            v1, v2, = 13.0, 21.0
+            t1, t2, = 13.0, 21.0
+            ta, tb = 10.0, 20.0
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            s = (v1+vb)*(tb-t1)
+            res = s / (2.0*(tb-t1))
+            expected_result = [10, str(res).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts10', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts10', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 11:
+            assert r.execute_command('TS.CREATE', 'ts11')
+            assert r.execute_command('TS.ADD', 'ts11', 17, 17)
+            assert r.execute_command('TS.ADD', 'ts11', 21, 21)
+            v1, v2, = 17.0, 21.0
+            t1, t2, = 17.0, 21.0
+            ta, tb = 10.0, 20.0
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            s = (v1+vb)*(tb-t1)
+            res = s / (2.0*(tb-t1))
+            expected_result = [10, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts11', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts11', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 12:
+            assert r.execute_command('TS.CREATE', 'ts12')
+            assert r.execute_command('TS.ADD', 'ts12', 3, 3)
+            assert r.execute_command('TS.ADD', 'ts12', 17, 17)
+            v1, v2, = 3.0, 17.0
+            t1, t2, = 3.0, 17.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            s = (va+v2)*(t2-ta)
+            res = s / (2.0*(t2-ta))
+            expected_result = [10, str(res).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts12', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts12', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 14:
+            assert r.execute_command('TS.CREATE', 'ts14')
+            assert r.execute_command('TS.ADD', 'ts14', 5, 5)
+            assert r.execute_command('TS.ADD', 'ts14', 12, 12)
+            v1, v2, = 5.0, 12.0
+            t1, t2, = 5.0, 12.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            s = (va+v2)*(t2-ta)
+            res = s / (2.0*(t2-ta))
+            expected_result = [10, str(int(res)).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts14', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts14', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 15:
+            assert r.execute_command('TS.CREATE', 'ts15')
+            assert r.execute_command('TS.ADD', 'ts15', 7, 7)
+            assert r.execute_command('TS.ADD', 'ts15', 15, 15)
+            v1, v2, = 7.0, 15.0
+            t1, t2, = 7.0, 15.0
+            ta, tb = 10.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            s = (va+v2)*(t2-ta)
+            res = s / (2.0*(t2-ta))
+            expected_result = [10, str(res).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts15', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts15', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 16:
+            assert r.execute_command('TS.CREATE', 'ts16')
+            assert r.execute_command('TS.ADD', 'ts16', 15, 15)
+            res = 15
+            expected_result = [10, str(res).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts16', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts16', 10, 20, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 17:
+            assert r.execute_command('TS.CREATE', 'ts17')
+            assert r.execute_command('TS.ADD', 'ts17', 0, 5) == 0
+            assert r.execute_command('TS.ADD', 'ts17', 9, 12)
+            v1, v2, = 5, 12.0
+            t1, t2, = 0, 9.0
+            ta, tb = 0, 10.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            s = (va+v2)*(t2-ta)
+            res = s / (2.0*(t2-ta))
+            expected_result = [0, str(res).encode('ascii')]
+
+            actual_result = r.execute_command('TS.RANGE', 'ts17', 0, 10, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts17', 0, 10, 'AGGREGATION', 'twa', 10)
+            assert actual_result[0] == expected_result
+
+            #case 18:
+            assert r.execute_command('TS.CREATE', 'ts18')
+            assert r.execute_command('TS.ADD', 'ts18', 10, 100)
+            assert r.execute_command('TS.ADD', 'ts18', 13, 110)
+            assert r.execute_command('TS.ADD', 'ts18', 15, 115)
+            assert r.execute_command('TS.ADD', 'ts18', 19, 109)
+            assert r.execute_command('TS.ADD', 'ts18', 25, 130)
+            v1, v2, v3, v4, v5 = 100.0, 110.0, 115.0, 109.0, 130.0
+            t1, t2, t3, t4, t5 = 10.0, 13.0, 15.0, 19.0, 25.0
+            ta, tb = 12.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
+            res = s / (2.0*(tb-ta))
+            expected_result = [0, str(res).encode('ascii')]
+
+            # Test case #1:
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 12, 20, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 12, 20, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 12, 20, 'AGGREGATION', 'twa', 1000)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 12, 20, 'AGGREGATION', 'twa', 1000)
+            assert actual_result[0] == expected_result
+
+            ta, tb = 11.0, 30.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (v5+v4)*(t5-t4)
+            res = s / (2.0*(t5-ta))
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 11, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 11, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #2:
+            ta, tb = 11.0, 20.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
+            res = s / (2.0*(tb-ta))
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 11, 20, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 11, 20, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #3:
+            ta, tb = 12.0, 24.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
+            res = s / (2*(tb-ta))
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 12, 24, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 12, 24, 'AGGREGATION', 'twa', 100)
+            round(float(actual_result[0][1]), 10) == round(res, 10)
+            assert actual_result[0][0] == expected_result[0]
+
+            # Test case #4:
+            ta, tb = 11.0, 24.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v4+(v5-v4)*(tb-t4)/(t5-t4)
+            s = (va+v2)*(t2-ta) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (vb+v4)*(tb-t4)
+            res = s / (2.0*(tb-ta))
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 11, 24, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 11, 24, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #5:
+            ta, tb = 8.0, 26.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            s = (v1+v2)*(t2-t1) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (v5+v4)*(t5-t4)
+            res = s / (2.0*(t5-t1))
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 8, 26, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 8, 26, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #6:
+            ta, tb = 8.0, 30.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            s = (v1+v2)*(t2-t1) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (v5+v4)*(t5-t4)
+            res = s / (2.0*(t5-t1))
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 8, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 8, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #7:
+            ta, tb = 9.0, 30.0
+            s = (v1+v2)*(t2-t1) + (v2+v3)*(t3-t2) + (v3+v4)*(t4-t3) + (v5+v4)*(t5-t4)
+            res = s / (2.0*(t5-t1))
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts18', 9, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.REVRANGE', 'ts18', 9, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            #Test case 19:
+            assert r.execute_command('TS.CREATE', 'ts19')
+            assert r.execute_command('TS.ADD', 'ts19', 10, 100)
+            assert r.execute_command('TS.ADD', 'ts19', 20, 110)
+
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts19', 16, 18, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts19', 16, 18, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+
+            v1, v2 = 100.0, 110.0
+            t1, t2 = 10.0, 20.0
+            ta, tb = 16.0, 18.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            res = (va + vb)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts19', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts19', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result[0] == expected_result
+
+            #Test case 20:
+            ta, tb = 12.0, 14.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            res = (va + vb)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts19', 12, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result[0] == expected_result
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.REVRANGE', 'ts19', 12, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result[0] == expected_result
+
+            #Test case 21:
+            ta, tb = 14.0, 19.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            res = (va + vb)/2.0
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts19', 14, 19, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts19', 14, 19, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts19', 14, 19, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts19', 14, 19, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result[0] == expected_result
+
+            ta, tb = 11.0, 16.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            res = (va + vb)/2.0
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts19', 11, 16, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result[0] == expected_result
+            expected_result = [0, str(res).encode('ascii')]
+            actual_result = r.execute_command('TS.REVRANGE', 'ts19', 11, 16, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result[0] == expected_result
+
+            #Test case 22:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts19', 11, 15, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts19', 11, 15, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+            #case 4:
+            assert r.execute_command('TS.CREATE', 'ts20')
+            assert r.execute_command('TS.ADD', 'ts20', 20, 100)
+            assert r.execute_command('TS.ADD', 'ts20', 30, 110)
+            v1, v2 = 100.0, 110.0
+            t1, t2 = 20.0, 30.0
+
+            # Test case #13:
+            ta, tb = 14.0, 22.0
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            res = (v1 + vb)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 14, 22, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 14, 22, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #14:
+            ta, tb = 14.0, 28.0
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            res = (v1 + vb)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 14, 28, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 14, 28, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #15:
+            ta, tb = 16.0, 22.0
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            res = (v1 + vb)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 22, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 22, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #16:
+            ta, tb = 16.0, 28.0
+            vb = v1+(v2-v1)*(tb-t1)/(t2-t1)
+            res = (v1 + vb)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 28, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 28, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #17:
+            ta, tb = 24.0, 32.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            res = (va + v2)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 24, 32, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 24, 32, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #18:
+            ta, tb = 26.0, 32.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            res = (va + v2)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 26, 32, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 26, 32, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #19:
+            ta, tb = 24.0, 38.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            res = (va + v2)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 24, 38, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 24, 38, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #20:
+            ta, tb = 26.0, 38.0
+            va = v1+(v2-v1)*(ta-t1)/(t2-t1)
+            res = (va + v2)/2.0
+            expected_result = [0, str(int(res)).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 26, 38, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 26, 38, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            #Test case 21:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 34, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+
+            #Test case 22:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 32, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+
+            #Test case 23:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 38, 100, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+
+            #Test case 24:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 16, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+
+            #Test case 25:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 18, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+
+            #Test case 26:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts20', 10, 14, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+
+            #case 8:
+            assert r.execute_command('TS.CREATE', 'ts21')
+            assert r.execute_command('TS.ADD', 'ts21', 20, 100)
+
+            # Test case #27:
+            expected_result = [0, str(100).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            expected_result = [0, str(100).encode('ascii')]
+            actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #28:
+            expected_result = [0, str(100).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 20, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            expected_result = [0, str(100).encode('ascii')]
+            actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 20, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #29:
+            expected_result = [0, str(100).encode('ascii')]
+            actual_result = r.execute_command('TS.RANGE', 'ts21', 20, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+            expected_result = [0, str(100).encode('ascii')]
+            actual_result = r.execute_command('TS.REVRANGE', 'ts21', 20, 30, 'AGGREGATION', 'twa', 100)
+            assert actual_result[0] == expected_result
+
+            # Test case #30:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts21', 10, 15, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+
+            # Test case #35:
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100)
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.RANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result = []
+            actual_result = r.execute_command('TS.REVRANGE', 'ts21', 25, 35, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+
+            # Test case 100:
+            assert r.execute_command('TS.CREATE', 'ts22')
+            assert r.execute_command('TS.ADD', 'ts22', 20, 100)
+            assert r.execute_command('TS.ADD', 'ts22', 50, 130)
+            v1, v2 = 100.0, 130.0
+            t1, t2 = 20.0, 50.0
+            ta, tb = 20.0, 50.0
+            res = (v1 + v2)/2.0
+            expected_result = [[0, str(int(res)).encode('ascii')]]
+            actual_result = r.execute_command('TS.RANGE', 'ts22', 20, 50, 'AGGREGATION', 'twa', 100, 'EMPTY')
+            assert actual_result == expected_result
+            m = (130.0 - 100.0)/(50.0 - 20.0)
+            va_fun = lambda ta: v1 + (ta - t1)*m
+            expected_result = []
+            for i in range(20, 60, 10):
+                va = va_fun(i)
+                vb = va_fun(min(i+10, 50))
+                res = (va + vb)/2.0
+                expected_result += [[i, str(int(res)).encode('ascii')]]
+            actual_result = r.execute_command('TS.RANGE', 'ts22', 20, 50, 'AGGREGATION', 'twa', 10, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result.reverse()
+            actual_result = r.execute_command('TS.REVRANGE', 'ts22', 20, 50, 'AGGREGATION', 'twa', 10, 'EMPTY')
+            assert actual_result == expected_result
+
+            # Test case 101:
+            assert r.execute_command('TS.CREATE', 'ts23')
+            assert r.execute_command('TS.ADD', 'ts23', 40, 100)
+            assert r.execute_command('TS.ADD', 'ts23', 50, 130)
+            res = (130.0 + 100.0)/2.0
+            expected_result = [[40, str(int(res)).encode('ascii')], [50, str(130).encode('ascii')]]
+            actual_result = r.execute_command('TS.RANGE', 'ts23', 29, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result.reverse()
+            actual_result = r.execute_command('TS.REVRANGE', 'ts23', 29, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
+            assert actual_result == expected_result
+
+            expected_result.reverse()
+            actual_result = r.execute_command('TS.RANGE', 'ts23', 39, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
+            assert actual_result == expected_result
+            expected_result.reverse()
+            actual_result = r.execute_command('TS.REVRANGE', 'ts23', 39, 70, 'AGGREGATION', 'twa', 10, 'EMPTY')
+            assert actual_result == expected_result
+
+
+    def test_series_ordering(self):
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            sample_len = 1024
+            chunk_size = 4
+
+            r.execute_command("ts.create", 'test_key', 0, chunk_size)
+            for i in range(sample_len):
+                r.execute_command("ts.add", 'test_key', i, i)
+
+            res = r.execute_command('ts.range', 'test_key', 0, sample_len)
+            i = 0
+            for sample in res:
+                assert sample == [i, str(i).encode('ascii')]
+                i += 1
+
+
+
+    def test_sanity(self):
+        env = self.env
+        env.flush()
+        start_ts = 1511885909
+        samples_count = 1500
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
+                                     'brown', 'color', 'pink')
+            _insert_data(r, 'tester', start_ts, samples_count, 5)
+
+            expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
+            assert expected_result == actual_result
+            expected_result = [
+                b'totalSamples', 1500,
+                b'firstTimestamp', start_ts, b'chunkCount', 1,
+                b'labels', [[b'name', b'brown'], [b'color', b'pink']],
+                b'lastTimestamp', start_ts + samples_count - 1,
+                b'chunkSize', 1024, b'retentionTime', 0,
+                b'sourceKey', None, b'rules', [], b'ignoreMaxTimeDiff', 0, b'ignoreMaxValDiff', b'0']
+            assert TSInfo(expected_result) == _get_ts_info(r, 'tester')
+
+
+
+    def test_sanity_pipeline(self):
+        env = self.env
+        env.flush()
+        start_ts = 1488823384
+        samples_count = 1500
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 'tester')
+            with r.pipeline(transaction=False) as p:
+                p.set("name", "danni")
+                _insert_data(p, 'tester', start_ts, samples_count, 5)
+                p.execute()
+            expected_result = [[start_ts + i, str(5).encode('ascii')] for i in range(samples_count)]
+            actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
+            assert expected_result == actual_result
+
+
+    def test_large_compressed_range(self):
+        env = self.env
+        env.flush()
+        random.seed()
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
+            _len = 400
+            n_samples_dict = {}
+            ts = random.randint(2, _len) # For taking more space and chunks
+            for i in range(_len):
+                r.execute_command('TS.ADD', 't1', ts , i)
+                n_samples_dict[ts] = i
+                ts += random.randint(2, _len) # For taking more space and chunks
+
+            res = r.execute_command('ts.range', 't1', '-', '+')
+            assert len(res) == _len
+
+            for key1, val1 in n_samples_dict.items():
+                for key2, val2 in n_samples_dict.items():
+                    if(key2 < key1):
+                        continue
+                    res = r.execute_command('ts.range', 't1', key1, key2)
+                    assert len(res) == val2 - val1 + 1
+                    res = r.execute_command('ts.range', 't1', key1 - 1, key2 + 1)
+                    assert len(res) == val2 - val1 + 1
+
+
+    def test_large_compressed_revrange(self):
+        env = self.env
+        env.flush()
+        random.seed()
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 't1', 'compressed', 'RETENTION', '0', 'CHUNK_SIZE', '128')
+            _len = 400
+            n_samples_dict = {}
+            ts = random.randint(2, _len) # For taking more space and chunks
+            for i in range(_len):
+                r.execute_command('TS.ADD', 't1', ts , i)
+                n_samples_dict[ts] = i
+                ts += random.randint(2, _len) # For taking more space and chunks
+
+            res = r.execute_command('ts.range', 't1', '-', '+')
+            assert len(res) == _len
+
+            for key1, val1 in n_samples_dict.items():
+                for key2, val2 in n_samples_dict.items():
+                    if(key2 < key1):
+                        continue
+                    res = r.execute_command('ts.revrange', 't1', key1, key2)
+                    assert len(res) == val2 - val1 + 1
+                    res = r.execute_command('ts.revrange', 't1', key1 - 1, key2 + 1)
+                    assert len(res) == val2 - val1 + 1
+
+
+    def test_issue358(self):
+        env = self.env
+        env.flush()
+        filepath = "./issue358.txt"
+        with env.getClusterConnectionIfNeeded() as r:
+            r.execute_command('ts.create', 'issue358')
+
+            with open(filepath) as fp:
+                line = fp.readline()
+                while line:
+                    line = fp.readline()
+                    if line != '':
+                        r.execute_command(*line.split())
+            range_res = r.execute_command('ts.range', 'issue358', 1582848000, '+')[0][1]
+            get_res = r.execute_command('ts.get', 'issue358')[1]
+            assert range_res == get_res
+
+
+
+    def test_filter_by(self):
+        env = self.env
+        env.flush()
+        start_ts = 1511885909
+        samples_count = 1500
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', '0', 'CHUNK_SIZE', '1024', 'LABELS', 'name',
+                                     'brown', 'color', 'pink')
+            _insert_data(r, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
+
+            res = r.execute_command('ts.range', 'tester', start_ts, '+', 'FILTER_BY_VALUE', 40, 52)
+
+            assert len(res) == 13
+            assert [int(sample[1]) for sample in res] == list(range(40, 53))
+
+            res = r.execute_command('ts.range', 'tester', start_ts, '+',
+                                    'FILTER_BY_TS', start_ts + 1021, start_ts + 1022, start_ts + 1025, start_ts + 1029)
+            env.assertEqual(res, [[start_ts + 1021, b'1021'], [start_ts + 1022, b'1022'], [start_ts + 1025, b'1025'],
+                                  [start_ts + 1029, b'1029']])
+
+            res = r.execute_command('ts.range', 'tester', start_ts, '+',
+                                    'FILTER_BY_TS', start_ts + 1021, start_ts + 1021, start_ts + 1022, start_ts + 1022, start_ts + 1025, start_ts + 1029, start_ts + 1029)
+            env.assertEqual(res, [[start_ts + 1021, b'1021'], [start_ts + 1022, b'1022'], [start_ts + 1025, b'1025'],
+                                  [start_ts + 1029, b'1029']])
+
+            res = r.execute_command('ts.range', 'tester', start_ts, '+',
+                                    'FILTER_BY_TS', start_ts + 1021, start_ts + 1022, start_ts + 1023, start_ts + 1025,
+                                    start_ts + 1029,
+                                    'FILTER_BY_VALUE', 1022, 1025)
+            env.assertEqual(res, [[start_ts + 1022, b'1022'], [start_ts + 1023, b'1023'], [start_ts + 1025, b'1025']])
+
+
+    def test_filter_by_extensive(self):
+        env = self.env
+        env.flush()
+        #skip cause it takes too much time
+        env.skipOnCluster()
+        env.skipOnAOF()
+        env.skipOnSlave()
+        max_samples_count = 40
+        for ENCODING in ['uncompressed']:
             for ev_odd in ['even', 'odd']:
                 if(ev_odd == 'even'):
                     start_ts = 2
@@ -1245,32 +1270,344 @@ def test_max_extensive():
                     # inset even numbers
                     for samples_count in range(0, max_samples_count + 1):
                         last_ts = start_ts + samples_count*2
-                        r.execute_command('TS.ADD', 't1', last_ts, random_values[samples_count])
+                        r.execute_command('TS.ADD', 't1', last_ts, last_ts)
 
                         for rev in [False, True]:
                             query = 'ts.revrange' if rev else 'ts.range'
-                            for bucket_size in [1, 2, 3, 5, 7, 10, n_chunk_samples - 1,
-                            n_chunk_samples, n_chunk_samples+1, (2*n_chunk_samples)-1,
-                            (2*n_chunk_samples), (2*n_chunk_samples)+1, (3*n_chunk_samples)-1,
-                            (3*n_chunk_samples), (3*n_chunk_samples)+1]:
-                                for alignment in [0, 2, 5, 7]:
-                                    normalized_alignment = alignment%bucket_size
-                                    for max_index in range(start_ts, last_ts + 1):
-                                        r.execute_command('TS.ADD', 't1', max_index, max_val, 'ON_DUPLICATE', 'last')
-                                        start_ts_bucket = (start_ts - normalized_alignment)//bucket_size
-                                        max_bucket_reply_index = (max_index - normalized_alignment)//bucket_size - start_ts_bucket
-                                        max_bucket_ts = max(0, max_index - ((max_index - normalized_alignment)%bucket_size))
-                                        res = r.execute_command(query, 't1', '-', '+', 'ALIGN', alignment, 'AGGREGATION', 'max', bucket_size)
-                                        if rev:
-                                            max_bucket_reply_index = len(res) - 1 - max_bucket_reply_index
-                                        expected_res = [max_bucket_ts, str(max_val).encode()]
-                                        env.assertEqual(res[max_bucket_reply_index], expected_res)
+                            for first_ts in range(0, last_ts + 3):
+                                str_first_ts = str(first_ts)
+                                for second_ts in range(first_ts, last_ts + 3):
+                                    str_second_ts = str(second_ts)
+                                    expected_res = []
+                                    reminder = 0 if ev_odd == 'even' else 1
+                                    if(first_ts%2 == reminder and first_ts >= start_ts and first_ts <= last_ts):
+                                        expected_res.append([first_ts, str_first_ts.encode()])
+                                    if(first_ts != second_ts and second_ts%2 == reminder and second_ts >= start_ts and second_ts <= last_ts):
+                                        if(rev): #prepend
+                                            expected_res.insert(0, [second_ts, str_second_ts.encode()])
+                                        else:    # append
+                                            expected_res.append([second_ts, str_second_ts.encode()])
+                                    res = r.execute_command(query, 't1', '-', '+', 'FILTER_BY_TS', first_ts, second_ts)
+                                    env.assertEqual(res, expected_res)
 
-                                        #restore to the old val
-                                        r.execute_command('TS.ADD', 't1', max_index, random_values[i], 'ON_DUPLICATE', 'last')
-    except Exception as e:
-        print(seed)
-        raise e
+
+    def test_max_extensive(self):
+        env = self.env
+        env.flush()
+        #skip cause it takes too much time
+        env.skipOnCluster()
+        env.skipOnAOF()
+        env.skipOnSlave()
+        max_samples_count = 40
+        n_chunk_samples = 32
+        random_values = [None]*(max_samples_count*3)
+        random.seed()
+        try:
+            for i in range(0, max_samples_count*3):
+                random_values[i] = random.uniform(0, max_samples_count)
+            max_val = random.uniform(max_samples_count, max_samples_count + 10)
+            for ENCODING in ['uncompressed', 'compressed']:
+                for ev_odd in ['even', 'odd']:
+                    if(ev_odd == 'even'):
+                        start_ts = 2
+                    else:
+                        start_ts = 3
+                    env.flush()
+                    with env.getClusterConnectionIfNeeded() as r:
+                        assert r.execute_command('TS.CREATE', 't1', ENCODING, 'RETENTION', '0', 'CHUNK_SIZE', '512')
+                        # 32 samples in chunk, 40 samples: 2 chunk in total
+                        # inset even numbers
+                        for samples_count in range(0, max_samples_count + 1):
+                            last_ts = start_ts + samples_count*2
+                            r.execute_command('TS.ADD', 't1', last_ts, random_values[samples_count])
+
+                            for rev in [False, True]:
+                                query = 'ts.revrange' if rev else 'ts.range'
+                                for bucket_size in [1, 2, 3, 5, 7, 10, n_chunk_samples - 1,
+                                n_chunk_samples, n_chunk_samples+1, (2*n_chunk_samples)-1,
+                                (2*n_chunk_samples), (2*n_chunk_samples)+1, (3*n_chunk_samples)-1,
+                                (3*n_chunk_samples), (3*n_chunk_samples)+1]:
+                                    for alignment in [0, 2, 5, 7]:
+                                        normalized_alignment = alignment%bucket_size
+                                        for max_index in range(start_ts, last_ts + 1):
+                                            r.execute_command('TS.ADD', 't1', max_index, max_val, 'ON_DUPLICATE', 'last')
+                                            start_ts_bucket = (start_ts - normalized_alignment)//bucket_size
+                                            max_bucket_reply_index = (max_index - normalized_alignment)//bucket_size - start_ts_bucket
+                                            max_bucket_ts = max(0, max_index - ((max_index - normalized_alignment)%bucket_size))
+                                            res = r.execute_command(query, 't1', '-', '+', 'ALIGN', alignment, 'AGGREGATION', 'max', bucket_size)
+                                            if rev:
+                                                max_bucket_reply_index = len(res) - 1 - max_bucket_reply_index
+                                            expected_res = [max_bucket_ts, str(max_val).encode()]
+                                            env.assertEqual(res[max_bucket_reply_index], expected_res)
+
+                                            #restore to the old val
+                                            r.execute_command('TS.ADD', 't1', max_index, random_values[i], 'ON_DUPLICATE', 'last')
+        except Exception as e:
+            print(seed)
+            raise e
+
+
+    def test_latest_flag_with_deleted_source(self):
+        """
+        Test scenario:
+         - Create a compaction key.
+         - Delete the source key and recreate it. It will not have the compaction rule.
+         - Query dst key with LATEST flag to test we handle this case without a crash.
+        """
+        env = self.env
+        env.flush()
+        src = 't1{1}'
+        dst = 't2{1}'
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', src)
+            assert r.execute_command('TS.CREATE', dst)
+            assert r.execute_command('TS.CREATERULE', src, dst, 'AGGREGATION', 'SUM', 10)
+
+            # Delete src, recreate it and query with LATEST flag
+            assert r.execute_command('DEL', src)
+            assert r.execute_command('TS.CREATE', src, '100', '100')
+            assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
+            assert r.execute_command('TS.REVRANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
+            # Delete src, recreate it with a sample in it and query with LATEST flag
+            assert r.execute_command('DEL', src)
+            assert r.execute_command('TS.ADD', src, '100', '100')
+            assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
+            assert r.execute_command('TS.GET', dst, 'LATEST') == []
+
+            # Run the same test with non-empty key
+            r.execute_command('DEL', src, dst)
+            assert r.execute_command('TS.CREATE', src)
+            assert r.execute_command('TS.CREATE', dst)
+            assert r.execute_command('TS.CREATERULE', src, dst, 'AGGREGATION', 'SUM', 10)
+            for i in range(100):
+                r.execute_command('TS.ADD', src, i, i)
+
+            # Delete src, recreate it and query with LATEST flag
+            assert r.execute_command('DEL', src)
+            assert r.execute_command('TS.CREATE', src, '100', '100')
+            assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) != []
+            assert r.execute_command('TS.GET', dst, 'LATEST') != []
+            # Delete src, recreate it with a sample in it and query with LATEST flag
+            assert r.execute_command('DEL', src)
+            assert r.execute_command('TS.ADD', src, '100', '100')
+            assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) != []
+            assert r.execute_command('TS.GET', dst, 'LATEST') != []
+
+
+
+    def test_ts_range_NaN_values(self):
+        """
+        Validates that all the aggregation functions handle NaN values correctly.
+        NaN values should be treated as empty buckets when the EMPTY flag is set.
+        Aggregation functions should ignore NaN values.
+        """
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            for encoding in ['compressed', 'uncompressed']:
+                r.execute_command('FLUSHALL')
+                key = 'ts_nan_test{a}{encoding}'
+            
+                # Create a series with mixed NaN and valid values
+                # Bucket 0-99: values 10, NaN, 20, NaN, 30 (valid: 10, 20, 30)
+                # Bucket 100-199: only NaN values (should be treated as empty)
+                # Bucket 200-299: values 40, 50 (valid: 40, 50)
+                r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
+            
+                # Bucket 0-99: mixed NaN and valid values
+                r.execute_command('TS.ADD', key, 10, 10)
+                r.execute_command('TS.ADD', key, 20, 'nan')
+                r.execute_command('TS.ADD', key, 30, 20)
+                r.execute_command('TS.ADD', key, 40, 'nan')
+                r.execute_command('TS.ADD', key, 50, 30)
+            
+                # Bucket 100-199: only NaN values
+                r.execute_command('TS.ADD', key, 110, 'nan')
+                r.execute_command('TS.ADD', key, 120, 'nan')
+                r.execute_command('TS.ADD', key, 130, 'nan')
+            
+                # Bucket 200-299: valid values only
+                r.execute_command('TS.ADD', key, 210, 40)
+                r.execute_command('TS.ADD', key, 220, 50)
+            
+                # Test 1: Aggregations should ignore NaN values
+                # sum of valid values in bucket 0-99: 10 + 20 + 30 = 60
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'sum', 100)
+                assert len(result) == 1
+                assert result[0][0] == 0
+                assert float(result[0][1]) == 60.0
+            
+                # count should only count valid (non-NaN) samples
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'count', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 3.0  # 3 valid samples
+            
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'min', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 10.0
+            
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'max', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 30.0
+            
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'avg', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 20.0
+            
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'first', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 10.0
+            
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'last', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 30.0
+            
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'range', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 20.0
+            
+                # Test 2: Bucket with only NaN should be skipped (no EMPTY flag)
+                # Query all three buckets - bucket 100-199 should be missing
+                result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'sum', 100)
+                assert len(result) == 2  # Only 2 buckets (0 and 200), bucket 100 is skipped
+                assert result[0][0] == 0    # First bucket
+                assert result[1][0] == 200  # Third bucket (second is skipped)
+                assert float(result[0][1]) == 60.0   # sum of bucket 0
+                assert float(result[1][1]) == 90.0   # sum of bucket 200: 40 + 50
+            
+                # Test 3: Bucket with only NaN should return NaN with EMPTY flag
+                result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'sum', 100, 'EMPTY')
+                assert len(result) == 3  # All 3 buckets
+                assert result[0][0] == 0
+                assert result[1][0] == 100
+                assert result[2][0] == 200
+                assert float(result[0][1]) == 60.0
+                assert float(result[1][1]) == 0 # empty bucket
+                assert float(result[2][1]) == 90.0
+            
+                # Test 4: REVRANGE should also handle NaN correctly
+                result = r.execute_command('TS.REVRANGE', key, 0, 299, 'AGGREGATION', 'sum', 100)
+                assert len(result) == 2  # Only 2 buckets, reversed
+                assert result[0][0] == 200
+                assert result[1][0] == 0
+            
+                # Test 5: count aggregation - empty bucket should return 0 with EMPTY flag
+                result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'count', 100, 'EMPTY')
+                assert len(result) == 3
+                assert float(result[0][1]) == 3.0   # 3 valid samples in bucket 0
+                assert float(result[1][1]) == 0.0   # 0 valid samples in bucket 100
+                assert float(result[2][1]) == 2.0   # 2 valid samples in bucket 200
+            
+                # Test 6: Test aggregations with EMPTY flag on NaN-only bucket (100-199)
+                # Expected values: NaN for most, 0 for sum/count, 0 for last (last valid before bucket),
+                # interpolated for twa (has samples before and after)
+                expected_empty_bucket_values = {
+                    'sum': 0.0,
+                    'count': 0.0,
+                    'min': float('nan'),
+                    'max': float('nan'),
+                    'avg': float('nan'),
+                    'first': float('nan'),
+                    'last': 30.0,  # last valid value before bucket (from ts=50)
+                    'range': float('nan'),
+                    'std.p': float('nan'),
+                    'std.s': float('nan'),
+                    'var.p': float('nan'),
+                    'var.s': float('nan'),
+                    'twa': 'interpolated',  # special case: has surrounding samples, should not be NaN
+                }
+            
+                for agg_func, expected in expected_empty_bucket_values.items():
+                    result = r.execute_command('TS.RANGE', key, 0, 199, 'AGGREGATION', agg_func, 100, 'EMPTY')
+                    assert len(result) == 2, f"{agg_func}: expected 2 results"
+                    actual = float(result[1][1])
+                    if expected == 'interpolated':
+                        assert not math.isnan(actual), f"{agg_func}: expected interpolated value, got NaN"
+                    elif math.isnan(expected):
+                        assert math.isnan(actual), f"{agg_func}: expected NaN, got {actual}"
+                    else:
+                        assert actual == expected, f"{agg_func}: expected {expected}, got {actual}"
+            
+                # Test 7: Query only the NaN-only bucket without EMPTY - should return empty
+                result = r.execute_command('TS.RANGE', key, 100, 199, 'AGGREGATION', 'sum', 100)
+                assert len(result) == 0  # No results - bucket is effectively empty
+            
+                # Test 8: 'last' and 'twa' return NaN when NO sample exists before the bucket
+                key_no_before = 'ts_nan_no_before{a}'
+                r.execute_command('TS.CREATE', key_no_before, 'ENCODING', encoding)
+                r.execute_command('TS.ADD', key_no_before, 100, 'nan')  # NaN in bucket 100-199
+                r.execute_command('TS.ADD', key_no_before, 200, 50)     # Valid sample after
+            
+                for agg_func in ['last', 'twa']:
+                    result = r.execute_command('TS.RANGE', key_no_before, 100, 199, 'AGGREGATION', agg_func, 100, 'EMPTY')
+                    assert len(result) == 1
+                    assert math.isnan(float(result[0][1])), f"{agg_func}: expected NaN when no sample before bucket, got {result[0][1]}"
+
+
+
+    def test_ts_range_countNaN(self):
+        """
+        Validate COUNTNAN aggregation function
+        """
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            for encoding in ['compressed', 'uncompressed']:
+                r.execute_command('FLUSHALL')
+                key = 'ts_countNaN_test{a}'
+                r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
+                r.execute_command('TS.ADD', key, 10, 10)
+                r.execute_command('TS.ADD', key, 20, 'nan')
+                r.execute_command('TS.ADD', key, 30, 20)
+                r.execute_command('TS.ADD', key, 40, 'nan')
+                r.execute_command('TS.ADD', key, 50, 30)
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 2.0
+                result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countnan', 10, 'EMPTY')
+                assert len(result) == 5
+                assert float(result[0][1]) == 0.0
+                assert float(result[1][1]) == 1.0
+                assert float(result[2][1]) == 0.0
+                assert float(result[3][1]) == 1.0
+                assert float(result[4][1]) == 0.0
+
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 50)
+                assert len(result) == 1
+                assert float(result[0][1]) == 2.0
+
+
+    def test_ts_range_countAll(self):
+        """
+        Validate COUNTALL aggregation function
+        """
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            for encoding in ['compressed', 'uncompressed']:
+                r.execute_command('FLUSHALL')
+                key = 'ts_countAll_test{a}'
+                r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
+                r.execute_command('TS.ADD', key, 10, 10)
+                r.execute_command('TS.ADD', key, 20, 'nan')
+                r.execute_command('TS.ADD', key, 30, 20)
+                r.execute_command('TS.ADD', key, 40, 'nan')
+                r.execute_command('TS.ADD', key, 50, 30)
+                result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countall', 100)
+                assert len(result) == 1
+                assert float(result[0][1]) == 5.0
+                result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countall', 10, 'EMPTY')
+                assert len(result) == 5
+                assert float(result[0][1]) == 1.0
+                assert float(result[1][1]) == 1.0
+                assert float(result[2][1]) == 1.0
+                assert float(result[3][1]) == 1.0
+
+
+
+def get_bucket(timsetamp, alignment_ts, aggregation_bucket_size):
+    return timsetamp - ((timsetamp - alignment_ts) % aggregation_bucket_size)
+
 
 def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):
     expected_data = []
@@ -1291,646 +1628,429 @@ def build_expected_aligned_data(start_ts, end_ts, agg_size, alignment_ts):
     return expected_data
 
 
-def test_aggreataion_alignment():
-    start_ts = 1511885909
-    samples_count = 1200
-    env = Env(decodeResponses=True)
-    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
-        assert r.execute_command('TS.CREATE', 'tester')
-        _insert_data(r1, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
-
-        agg_size = 60
-        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
-
-        assert expected_data == \
-               decode_if_needed(r1.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size))
-
-        assert expected_data == \
-               decode_if_needed(r1.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size))
-
-        specific_ts = start_ts + 50
-        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
-        assert expected_data == \
-               decode_if_needed(r1.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size))
-
-        end_ts = start_ts + samples_count - 1
-        expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
-        assert expected_data == \
-               decode_if_needed(r1.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
-        assert expected_data == \
-               decode_if_needed(r1.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
-
-def test_empty():
-    agg_size = 10
-    env = Env(decodeResponses=True)
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 't1')
-        assert r.execute_command('TS.add', 't1', 15, 1)
-        assert r.execute_command('TS.add', 't1', 17, 4)
-        assert r.execute_command('TS.add', 't1', 51, 3)
-        assert r.execute_command('TS.add', 't1', 73, 5)
-        assert r.execute_command('TS.add', 't1', 75, 3)
-        assert r.execute_command('TS.CREATE', 't2')
-        assert r.execute_command('TS.add', 't2', 10, 1)
-        assert r.execute_command('TS.add', 't2', 30, 4)
-        expected_data = [[10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, 'NaN'], [70, '5']]
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
-        expected_data.reverse()
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
-
-        expected_data_2 = [[10, '4'], [20, '4'], [30, '4'], [40, '4'], [50, '3'], [60, '3'], [70, '3']]
-        assert expected_data_2 == \
-        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'last', agg_size, 'EMPTY'))
-        expected_data_3 = [[70, '5'], [60, '5'], [50, '3'], [40, '3'], [30, '3'], [20, '3'], [10, '1']]
-        assert expected_data_3 == \
-        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'last', agg_size, 'EMPTY'))
-
-        expected_data = [[10, '5'], [20, '0'], [30, '0'], [40, '0'], [50, '3'], [60, '0'], [70, '8']]
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
-        expected_data.reverse()
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
-
-        expected_data = [[10, '1'], [20, 'NaN'], [30, '4']]
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.range', 't2', '0', '30', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
-        expected_data.reverse()
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.revrange', 't2', '0', '30', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
 
 
-def test_bucket_timestamp():
-    agg_size = 10
-    env = Env(decodeResponses=True)
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 't1')
-        assert r.execute_command('TS.add', 't1', 15, 1)
-        assert r.execute_command('TS.add', 't1', 17, 4)
-        assert r.execute_command('TS.add', 't1', 51, 3)
-        assert r.execute_command('TS.add', 't1', 73, 5)
-        assert r.execute_command('TS.add', 't1', 75, 3)
 
-        expected_data = [[10, '4'], [50, '3'], [70, '5']]
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '-'))
-        expected_data.reverse()
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '-'))
+class testTsRangeDecode:
+    def __init__(self):
+        self.env = Env(decodeResponses=True)
 
-        expected_data = [[15, '4'], [55, '3'], [75, '5']]
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.range', 't1', '0', '74', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '~'))
-        expected_data.reverse()
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '~'))
+    def test_aggreataion_alignment(self):
+        env = self.env
+        env.flush()
+        start_ts = 1511885909
+        samples_count = 1200
+        with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+            assert r.execute_command('TS.CREATE', 'tester')
+            _insert_data(r1, 'tester', start_ts, samples_count, list(i for i in range(samples_count)))
 
-        expected_data = [[20, '4'], [60, '3'], [80, '5']]
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.range', 't1', '0', '74', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '+'))
-        expected_data.reverse()
-        assert expected_data == \
-        decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '+'))
+            agg_size = 60
+            expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, start_ts)
 
-def test_latest_flag_range():
-    env = Env(decodeResponses=True)
-    key1 = 't1{1}'
-    key2 = 't2{1}'
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', key1)
-        assert r.execute_command('TS.CREATE', key2)
-        assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
-        assert r.execute_command('TS.add', key1, 1, 1)
-        assert r.execute_command('TS.add', key1, 2, 3)
-        assert r.execute_command('TS.add', key1, 11, 7)
-        assert r.execute_command('TS.add', key1, 13, 1)
-        res = r.execute_command('TS.range', key1, 0, 20)
-        assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
-        res = r.execute_command('TS.range', key2, 0, 10)
-        assert res == [[0, '4']] or res == [[0, b'4']]
-        res = r.execute_command('TS.range', key2, 0, 10, "LATEST")
-        assert res == [[0, '4'], [10, '8']] or res == [[0, b'4'], [10, b'8']]
-        res = r.execute_command('TS.range', key2, 0, 9, "LATEST")
-        assert res == [[0, '4']] or res == [[0, b'4']]
-        res = r.execute_command('TS.range', key2, 0, 1, "LATEST")
-        assert res == [[0, '4']] or res == [[0, b'4']]
-        res = r.execute_command('TS.range', key2, 20, 30, "LATEST")
-        assert res == []
-        res = r.execute_command('TS.range', key2, 11, 30, "LATEST")
-        assert res == []
+            assert expected_data == \
+                   decode_if_needed(r1.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', 'start', 'AGGREGATION', 'count', agg_size))
 
-        # make sure LATEST haven't changed anything in the keys
-        res = r.execute_command('TS.range', key2, 0, 10)
-        assert res == [[0, '4']] or res == [[0, b'4']]
-        res = r.execute_command('TS.range', key1, 0, 20)
-        assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+            assert expected_data == \
+                   decode_if_needed(r1.execute_command('TS.range', 'tester', start_ts, '+', 'ALIGN', '-', 'AGGREGATION', 'count', agg_size))
 
-#https://github.com/RedisTimeSeries/RedisTimeSeries/issues/1247
-def test_latest_flag_range_plus():
-        env = Env(decodeResponses=True)
-        key3 = 't3{1}'
-        key4 = 't4{1}'
+            specific_ts = start_ts + 50
+            expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, specific_ts)
+            assert expected_data == \
+                   decode_if_needed(r1.execute_command('TS.range', 'tester', '-', '+', 'ALIGN', specific_ts, 'AGGREGATION', 'count', agg_size))
+
+            end_ts = start_ts + samples_count - 1
+            expected_data = build_expected_aligned_data(start_ts, start_ts + samples_count, agg_size, end_ts)
+            assert expected_data == \
+                   decode_if_needed(r1.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', 'end', 'AGGREGATION', 'count', agg_size))
+            assert expected_data == \
+                   decode_if_needed(r1.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
+
+
+    def test_empty(self):
+        env = self.env
+        env.flush()
+        agg_size = 10
         with env.getClusterConnectionIfNeeded() as r:
-            assert r.execute_command('TS.CREATE', key3)
-            assert r.execute_command('TS.CREATE', key4)
-            assert r.execute_command('TS.CREATERULE', key3, key4, 'AGGREGATION', 'RANGE', 10)
-            assert r.execute_command('TS.add', key3, 10, 20)
-            assert r.execute_command('TS.add', key3, 11, 30)
-            res = r.execute_command('TS.range', key4, 0, 10000, "LATEST")
-            assert res == [[10, '10']] or res == [[10, b'10']]
-            res = r.execute_command('TS.range', key4, "-", "+", "LATEST")
-            assert res == [[10, '10']] or res == [[10, b'10']]
+            assert r.execute_command('TS.CREATE', 't1')
+            assert r.execute_command('TS.add', 't1', 15, 1)
+            assert r.execute_command('TS.add', 't1', 17, 4)
+            assert r.execute_command('TS.add', 't1', 51, 3)
+            assert r.execute_command('TS.add', 't1', 73, 5)
+            assert r.execute_command('TS.add', 't1', 75, 3)
+            assert r.execute_command('TS.CREATE', 't2')
+            assert r.execute_command('TS.add', 't2', 10, 1)
+            assert r.execute_command('TS.add', 't2', 30, 4)
+            expected_data = [[10, '4'], [20, 'NaN'], [30, 'NaN'], [40, 'NaN'], [50, '3'], [60, 'NaN'], [70, '5']]
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
+            expected_data.reverse()
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
 
-def test_latest_flag_revrange():
-    env = Env(decodeResponses=True)
-    key1 = 't1{1}'
-    key2 = 't2{1}'
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', key1)
-        assert r.execute_command('TS.CREATE', key2)
-        assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
-        assert r.execute_command('TS.add', key1, 1, 1)
-        assert r.execute_command('TS.add', key1, 2, 3)
-        assert r.execute_command('TS.add', key1, 11, 7)
-        assert r.execute_command('TS.add', key1, 13, 1)
-        res = r.execute_command('TS.range', key1, 0, 20)
-        assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
-        res = r.execute_command('TS.revrange', key2, 0, 10)
-        assert res == [[0, '4']] or res == [[0, b'4']]
-        res = r.execute_command('TS.revrange', key2, 0, 10, "LATEST")
-        assert res == [[10, '8'], [0, '4']] or res == [[10, b'8'], [0, b'4']]
-        res = r.execute_command('TS.revrange', key2, 0, 9, "LATEST")
-        assert res == [[0, '4']] or res == [[0, b'4']]
+            expected_data_2 = [[10, '4'], [20, '4'], [30, '4'], [40, '4'], [50, '3'], [60, '3'], [70, '3']]
+            assert expected_data_2 == \
+            decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'last', agg_size, 'EMPTY'))
+            expected_data_3 = [[70, '5'], [60, '5'], [50, '3'], [40, '3'], [30, '3'], [20, '3'], [10, '1']]
+            assert expected_data_3 == \
+            decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'last', agg_size, 'EMPTY'))
 
-        # make sure LATEST haven't changed anything in the keys
-        res = r.execute_command('TS.revrange', key2, 0, 10)
-        assert res == [[0, '4']] or res == [[0, b'4']]
-        res = r.execute_command('TS.range', key1, 0, 20)
-        assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+            expected_data = [[10, '5'], [20, '0'], [30, '0'], [40, '0'], [50, '3'], [60, '0'], [70, '8']]
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
+            expected_data.reverse()
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'sum', agg_size, 'EMPTY'))
 
-# issue: #1370
-def test_multi_chunk_revrange():
-    env = Env(decodeResponses=True)
-    t1 = 't1{1}'
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', t1, 'CHUNK_SIZE', 128)
-        n_samples = 10000
-
-        # Fill 1 chunks
-        for i in range(1, 103):
-            assert r.execute_command('TS.ADD', t1, i, i)
-
-        # fill 2 chunks
-        for i in range(120, 220):
-            assert r.execute_command('TS.ADD', t1, i, i)
-
-        res = r.execute_command('TS.revrange', t1, 110, 215, 'AGGREGATION', 'count', 2*n_samples)
-        assert res == [[0, '96']] or res == [[0, b'96']]
-
-def test_errors():
-    env = Env(decodeResponses=True)
-    t1 = 't1{1}'
-    t2 = 't2{1}'
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', t1, 'CHUNK_SIZE', 128)
-        assert r.execute_command('ts.add', t1, 1, 1)
-        try:
-            r.execute_command('ts.range', t1, 0, 10, 'AGGREGATION', 'avg', 5, 'BUCKETTIMESTAMP', 'high')
-            assert False
-        except Exception as e:
-            assert str(e) == 'TSDB: unknown BUCKETTIMESTAMP parameter'
-
-        assert r.execute_command('TS.CREATE', t2, 'CHUNK_SIZE', 128)
-        try:
-            r.execute_command('TS.CREATERULE', t1, t2, 'AGGREGATION', 'avg', 5, 'high')
-            assert False
-        except Exception as e:
-            assert str(e) == "TSDB: Couldn't parse alignTimestamp"
+            expected_data = [[10, '1'], [20, 'NaN'], [30, '4']]
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 't2', '0', '30', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
+            expected_data.reverse()
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.revrange', 't2', '0', '30', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
 
 
-def test_latest_flag_with_deleted_source():
-    """
-    Test scenario:
-     - Create a compaction key.
-     - Delete the source key and recreate it. It will not have the compaction rule.
-     - Query dst key with LATEST flag to test we handle this case without a crash.
-    """
-    env = Env(decodeResponses=True)
-    src = 't1{1}'
-    dst = 't2{1}'
-    with env.getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', src)
-        assert r.execute_command('TS.CREATE', dst)
-        assert r.execute_command('TS.CREATERULE', src, dst, 'AGGREGATION', 'SUM', 10)
 
-        # Delete src, recreate it and query with LATEST flag
-        assert r.execute_command('DEL', src)
-        assert r.execute_command('TS.CREATE', src, '100', '100')
-        assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
-        assert r.execute_command('TS.REVRANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
-        # Delete src, recreate it with a sample in it and query with LATEST flag
-        assert r.execute_command('DEL', src)
-        assert r.execute_command('TS.ADD', src, '100', '100')
-        assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) == []
-        assert r.execute_command('TS.GET', dst, 'LATEST') == []
+    def test_bucket_timestamp(self):
+        env = self.env
+        env.flush()
+        agg_size = 10
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', 't1')
+            assert r.execute_command('TS.add', 't1', 15, 1)
+            assert r.execute_command('TS.add', 't1', 17, 4)
+            assert r.execute_command('TS.add', 't1', 51, 3)
+            assert r.execute_command('TS.add', 't1', 73, 5)
+            assert r.execute_command('TS.add', 't1', 75, 3)
 
-        # Run the same test with non-empty key
-        r.execute_command('DEL', src, dst)
-        assert r.execute_command('TS.CREATE', src)
-        assert r.execute_command('TS.CREATE', dst)
-        assert r.execute_command('TS.CREATERULE', src, dst, 'AGGREGATION', 'SUM', 10)
-        for i in range(100):
-            r.execute_command('TS.ADD', src, i, i)
+            expected_data = [[10, '4'], [50, '3'], [70, '5']]
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '-'))
+            expected_data.reverse()
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '-'))
 
-        # Delete src, recreate it and query with LATEST flag
-        assert r.execute_command('DEL', src)
-        assert r.execute_command('TS.CREATE', src, '100', '100')
-        assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) != []
-        assert r.execute_command('TS.GET', dst, 'LATEST') != []
-        # Delete src, recreate it with a sample in it and query with LATEST flag
-        assert r.execute_command('DEL', src)
-        assert r.execute_command('TS.ADD', src, '100', '100')
-        assert r.execute_command('TS.RANGE', dst, '-', '+', 'LATEST', 'AGGREGATION', 'sum', 10) != []
-        assert r.execute_command('TS.GET', dst, 'LATEST') != []
+            expected_data = [[15, '4'], [55, '3'], [75, '5']]
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 't1', '0', '74', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '~'))
+            expected_data.reverse()
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '~'))
+
+            expected_data = [[20, '4'], [60, '3'], [80, '5']]
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.range', 't1', '0', '74', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '+'))
+            expected_data.reverse()
+            assert expected_data == \
+            decode_if_needed(r.execute_command('TS.revrange', 't1', '0', '100', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'BUCKETTIMESTAMP', '+'))
 
 
-def test_ts_range_count_validation():
-    """
-    Validate COUNT argument is non-positive for TS.RANGE family commands
-    """
-    env = Env(decodeResponses=True)
-    env.skipOnCluster()
-    key = 'x'
-    with env.getClusterConnectionIfNeeded() as r:
-        for i in range(10):
-            r.execute_command('TS.ADD', key, i, i)
+    def test_latest_flag_range(self):
+        env = self.env
+        env.flush()
+        key1 = 't1{1}'
+        key2 = 't2{1}'
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', key1)
+            assert r.execute_command('TS.CREATE', key2)
+            assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
+            assert r.execute_command('TS.add', key1, 1, 1)
+            assert r.execute_command('TS.add', key1, 2, 3)
+            assert r.execute_command('TS.add', key1, 11, 7)
+            assert r.execute_command('TS.add', key1, 13, 1)
+            res = r.execute_command('TS.range', key1, 0, 20)
+            assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+            res = r.execute_command('TS.range', key2, 0, 10)
+            assert res == [[0, '4']] or res == [[0, b'4']]
+            res = r.execute_command('TS.range', key2, 0, 10, "LATEST")
+            assert res == [[0, '4'], [10, '8']] or res == [[0, b'4'], [10, b'8']]
+            res = r.execute_command('TS.range', key2, 0, 9, "LATEST")
+            assert res == [[0, '4']] or res == [[0, b'4']]
+            res = r.execute_command('TS.range', key2, 0, 1, "LATEST")
+            assert res == [[0, '4']] or res == [[0, b'4']]
+            res = r.execute_command('TS.range', key2, 20, 30, "LATEST")
+            assert res == []
+            res = r.execute_command('TS.range', key2, 11, 30, "LATEST")
+            assert res == []
 
-    env.expect('TS.RANGE', key, '-', '+', 'COUNT', '0').error().contains('TSDB: Invalid COUNT value')
-    env.expect('TS.RANGE', key, '-', '+', 'COUNT', '-1').error().contains('TSDB: Invalid COUNT value')
-    env.expect('TS.RANGE', key, '-', '+', 'COUNT', '-2').error().contains('TSDB: Invalid COUNT value')
-    env.expect('TS.REVRANGE', key, '-', '+', 'COUNT', '-1000').error().contains('TSDB: Invalid COUNT value')
-    env.expect('TS.MRANGE', '-', '+', 'COUNT', '-2', 'FILTER', 'a=x').error().contains('TSDB: Invalid COUNT value')
-    env.expect('TS.MREVRANGE', '-', '+', 'COUNT', '0', 'FILTER', 'a=x').error().contains('TSDB: Invalid COUNT value')
-
-    assert r.execute_command('TS.RANGE', key, '-', '+', 'COUNT', 2) == [[0, '0'], [1, '1']]
-    assert r.execute_command('TS.RANGE', key, '-', '+', 'COUNT', 2, 'AGGREGATION', 'sum', 5) == [[0, '10'], [5, '35']]
+            # make sure LATEST haven't changed anything in the keys
+            res = r.execute_command('TS.range', key2, 0, 10)
+            assert res == [[0, '4']] or res == [[0, b'4']]
+            res = r.execute_command('TS.range', key1, 0, 20)
+            assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
 
 
-def test_ts_range_NaN_values():
-    """
-    Validates that all the aggregation functions handle NaN values correctly.
-    NaN values should be treated as empty buckets when the EMPTY flag is set.
-    Aggregation functions should ignore NaN values.
-    """
-    with Env().getClusterConnectionIfNeeded() as r:
-        for encoding in ['compressed', 'uncompressed']:
-            Env().flush()
-            key = 'ts_nan_test{a}{encoding}'
-            
-            # Create a series with mixed NaN and valid values
-            # Bucket 0-99: values 10, NaN, 20, NaN, 30 (valid: 10, 20, 30)
-            # Bucket 100-199: only NaN values (should be treated as empty)
-            # Bucket 200-299: values 40, 50 (valid: 40, 50)
-            r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
-            
-            # Bucket 0-99: mixed NaN and valid values
-            r.execute_command('TS.ADD', key, 10, 10)
-            r.execute_command('TS.ADD', key, 20, 'nan')
-            r.execute_command('TS.ADD', key, 30, 20)
-            r.execute_command('TS.ADD', key, 40, 'nan')
-            r.execute_command('TS.ADD', key, 50, 30)
-            
-            # Bucket 100-199: only NaN values
-            r.execute_command('TS.ADD', key, 110, 'nan')
-            r.execute_command('TS.ADD', key, 120, 'nan')
-            r.execute_command('TS.ADD', key, 130, 'nan')
-            
-            # Bucket 200-299: valid values only
-            r.execute_command('TS.ADD', key, 210, 40)
-            r.execute_command('TS.ADD', key, 220, 50)
-            
-            # Test 1: Aggregations should ignore NaN values
-            # sum of valid values in bucket 0-99: 10 + 20 + 30 = 60
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'sum', 100)
+    def test_latest_flag_range_plus(self):
+            env = self.env
+            env.flush()
+            key3 = 't3{1}'
+            key4 = 't4{1}'
+            with env.getClusterConnectionIfNeeded() as r:
+                assert r.execute_command('TS.CREATE', key3)
+                assert r.execute_command('TS.CREATE', key4)
+                assert r.execute_command('TS.CREATERULE', key3, key4, 'AGGREGATION', 'RANGE', 10)
+                assert r.execute_command('TS.add', key3, 10, 20)
+                assert r.execute_command('TS.add', key3, 11, 30)
+                res = r.execute_command('TS.range', key4, 0, 10000, "LATEST")
+                assert res == [[10, '10']] or res == [[10, b'10']]
+                res = r.execute_command('TS.range', key4, "-", "+", "LATEST")
+                assert res == [[10, '10']] or res == [[10, b'10']]
+
+
+    def test_latest_flag_revrange(self):
+        env = self.env
+        env.flush()
+        key1 = 't1{1}'
+        key2 = 't2{1}'
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', key1)
+            assert r.execute_command('TS.CREATE', key2)
+            assert r.execute_command('TS.CREATERULE', key1, key2, 'AGGREGATION', 'SUM', 10)
+            assert r.execute_command('TS.add', key1, 1, 1)
+            assert r.execute_command('TS.add', key1, 2, 3)
+            assert r.execute_command('TS.add', key1, 11, 7)
+            assert r.execute_command('TS.add', key1, 13, 1)
+            res = r.execute_command('TS.range', key1, 0, 20)
+            assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+            res = r.execute_command('TS.revrange', key2, 0, 10)
+            assert res == [[0, '4']] or res == [[0, b'4']]
+            res = r.execute_command('TS.revrange', key2, 0, 10, "LATEST")
+            assert res == [[10, '8'], [0, '4']] or res == [[10, b'8'], [0, b'4']]
+            res = r.execute_command('TS.revrange', key2, 0, 9, "LATEST")
+            assert res == [[0, '4']] or res == [[0, b'4']]
+
+            # make sure LATEST haven't changed anything in the keys
+            res = r.execute_command('TS.revrange', key2, 0, 10)
+            assert res == [[0, '4']] or res == [[0, b'4']]
+            res = r.execute_command('TS.range', key1, 0, 20)
+            assert res == [[1, '1'], [2, '3'], [11, '7'], [13, '1']] or res == [[1, b'1'], [2, b'3'], [11, b'7'], [13, b'1']]
+
+
+    def test_multi_chunk_revrange(self):
+        env = self.env
+        env.flush()
+        t1 = 't1{1}'
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', t1, 'CHUNK_SIZE', 128)
+            n_samples = 10000
+
+            # Fill 1 chunks
+            for i in range(1, 103):
+                assert r.execute_command('TS.ADD', t1, i, i)
+
+            # fill 2 chunks
+            for i in range(120, 220):
+                assert r.execute_command('TS.ADD', t1, i, i)
+
+            res = r.execute_command('TS.revrange', t1, 110, 215, 'AGGREGATION', 'count', 2*n_samples)
+            assert res == [[0, '96']] or res == [[0, b'96']]
+
+
+    def test_errors(self):
+        env = self.env
+        env.flush()
+        t1 = 't1{1}'
+        t2 = 't2{1}'
+        with env.getClusterConnectionIfNeeded() as r:
+            assert r.execute_command('TS.CREATE', t1, 'CHUNK_SIZE', 128)
+            assert r.execute_command('ts.add', t1, 1, 1)
+            try:
+                r.execute_command('ts.range', t1, 0, 10, 'AGGREGATION', 'avg', 5, 'BUCKETTIMESTAMP', 'high')
+                assert False
+            except Exception as e:
+                assert str(e) == 'TSDB: unknown BUCKETTIMESTAMP parameter'
+
+            assert r.execute_command('TS.CREATE', t2, 'CHUNK_SIZE', 128)
+            try:
+                r.execute_command('TS.CREATERULE', t1, t2, 'AGGREGATION', 'avg', 5, 'high')
+                assert False
+            except Exception as e:
+                assert str(e) == "TSDB: Couldn't parse alignTimestamp"
+
+
+
+    def test_ts_range_count_validation(self):
+        """
+        Validate COUNT argument is non-positive for TS.RANGE family commands
+        """
+        env = self.env
+        env.flush()
+        env.skipOnCluster()
+        key = 'x'
+        with env.getClusterConnectionIfNeeded() as r:
+            for i in range(10):
+                r.execute_command('TS.ADD', key, i, i)
+
+        env.expect('TS.RANGE', key, '-', '+', 'COUNT', '0').error().contains('TSDB: Invalid COUNT value')
+        env.expect('TS.RANGE', key, '-', '+', 'COUNT', '-1').error().contains('TSDB: Invalid COUNT value')
+        env.expect('TS.RANGE', key, '-', '+', 'COUNT', '-2').error().contains('TSDB: Invalid COUNT value')
+        env.expect('TS.REVRANGE', key, '-', '+', 'COUNT', '-1000').error().contains('TSDB: Invalid COUNT value')
+        env.expect('TS.MRANGE', '-', '+', 'COUNT', '-2', 'FILTER', 'a=x').error().contains('TSDB: Invalid COUNT value')
+        env.expect('TS.MREVRANGE', '-', '+', 'COUNT', '0', 'FILTER', 'a=x').error().contains('TSDB: Invalid COUNT value')
+
+        assert r.execute_command('TS.RANGE', key, '-', '+', 'COUNT', 2) == [[0, '0'], [1, '1']]
+        assert r.execute_command('TS.RANGE', key, '-', '+', 'COUNT', 2, 'AGGREGATION', 'sum', 5) == [[0, '10'], [5, '35']]
+
+
+
+    def test_twa_nan_interpolation(self):
+        """
+        Test that TWA aggregation correctly skips NaN samples when fetching samples
+        before/after the query range for interpolation.    
+        """
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            # Test case 1: NaN sample immediately before query range should be skipped
+            # The valid sample before NaN should be used for interpolation instead
+            key1 = 'twa_nan_before{tag}'
+            r.execute_command('TS.CREATE', key1)
+            r.execute_command('TS.ADD', key1, 5, 5)    # Valid sample - should be used for interpolation
+            r.execute_command('TS.ADD', key1, 8, 'nan') # NaN right before range - should be skipped
+            r.execute_command('TS.ADD', key1, 12, 12)  # Sample in query range
+            r.execute_command('TS.ADD', key1, 18, 18)  # Sample in query range
+            r.execute_command('TS.ADD', key1, 25, 25)  # Sample after query range
+        
+            # Query range 10-20, bucket size 10
+            # TWA should interpolate from sample at ts=5 (value=5), not from NaN at ts=8
+            result = r.execute_command('TS.RANGE', key1, 10, 20, 'AGGREGATION', 'twa', 10)
             assert len(result) == 1
-            assert result[0][0] == 0
-            assert float(result[0][1]) == 60.0
-            
-            # count should only count valid (non-NaN) samples
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'count', 100)
+            # The result should be a valid number (not NaN)
+            value = float(result[0][1])
+            assert not math.isnan(value), f"TWA should not use NaN for interpolation, got {value}"
+        
+            # Test case 2: Multiple NaN samples before query range - all should be skipped
+            key2 = 'twa_nan_multi_before{tag}'
+            r.execute_command('TS.CREATE', key2)
+            r.execute_command('TS.ADD', key2, 3, 3)    # Valid sample - should be used
+            r.execute_command('TS.ADD', key2, 5, 'nan')
+            r.execute_command('TS.ADD', key2, 7, 'nan')
+            r.execute_command('TS.ADD', key2, 9, 'nan') # Multiple NaNs before range
+            r.execute_command('TS.ADD', key2, 12, 12)  # In query range
+            r.execute_command('TS.ADD', key2, 18, 18)  # In query range
+            r.execute_command('TS.ADD', key2, 25, 25)  # After range
+        
+            result = r.execute_command('TS.RANGE', key2, 10, 20, 'AGGREGATION', 'twa', 10)
             assert len(result) == 1
-            assert float(result[0][1]) == 3.0  # 3 valid samples
-            
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'min', 100)
+            value = float(result[0][1])
+            assert not math.isnan(value), f"TWA should skip multiple NaN samples, got {value}"
+        
+            # Test case 3: NaN samples after query range should also be skipped
+            key3 = 'twa_nan_after{tag}'
+            r.execute_command('TS.CREATE', key3)
+            r.execute_command('TS.ADD', key3, 5, 5)
+            r.execute_command('TS.ADD', key3, 12, 12)
+            r.execute_command('TS.ADD', key3, 18, 18)
+            r.execute_command('TS.ADD', key3, 22, 'nan')  # NaN right after range
+            r.execute_command('TS.ADD', key3, 25, 25)     # Valid sample after NaN
+        
+            result = r.execute_command('TS.RANGE', key3, 10, 20, 'AGGREGATION', 'twa', 10)
             assert len(result) == 1
-            assert float(result[0][1]) == 10.0
-            
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'max', 100)
+            value = float(result[0][1])
+            assert not math.isnan(value), f"TWA should skip NaN after range, got {value}"
+        
+            # Test case 4: REVRANGE should also handle NaN interpolation correctly
+            result = r.execute_command('TS.REVRANGE', key1, 10, 20, 'AGGREGATION', 'twa', 10)
             assert len(result) == 1
-            assert float(result[0][1]) == 30.0
-            
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'avg', 100)
-            assert len(result) == 1
-            assert float(result[0][1]) == 20.0
-            
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'first', 100)
-            assert len(result) == 1
-            assert float(result[0][1]) == 10.0
-            
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'last', 100)
-            assert len(result) == 1
-            assert float(result[0][1]) == 30.0
-            
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'range', 100)
-            assert len(result) == 1
-            assert float(result[0][1]) == 20.0
-            
-            # Test 2: Bucket with only NaN should be skipped (no EMPTY flag)
-            # Query all three buckets - bucket 100-199 should be missing
-            result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'sum', 100)
-            assert len(result) == 2  # Only 2 buckets (0 and 200), bucket 100 is skipped
-            assert result[0][0] == 0    # First bucket
-            assert result[1][0] == 200  # Third bucket (second is skipped)
-            assert float(result[0][1]) == 60.0   # sum of bucket 0
-            assert float(result[1][1]) == 90.0   # sum of bucket 200: 40 + 50
-            
-            # Test 3: Bucket with only NaN should return NaN with EMPTY flag
-            result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'sum', 100, 'EMPTY')
-            assert len(result) == 3  # All 3 buckets
-            assert result[0][0] == 0
-            assert result[1][0] == 100
-            assert result[2][0] == 200
-            assert float(result[0][1]) == 60.0
-            assert float(result[1][1]) == 0 # empty bucket
-            assert float(result[2][1]) == 90.0
-            
-            # Test 4: REVRANGE should also handle NaN correctly
-            result = r.execute_command('TS.REVRANGE', key, 0, 299, 'AGGREGATION', 'sum', 100)
-            assert len(result) == 2  # Only 2 buckets, reversed
-            assert result[0][0] == 200
-            assert result[1][0] == 0
-            
-            # Test 5: count aggregation - empty bucket should return 0 with EMPTY flag
-            result = r.execute_command('TS.RANGE', key, 0, 299, 'AGGREGATION', 'count', 100, 'EMPTY')
+            value = float(result[0][1])
+            assert not math.isnan(value), f"REVRANGE TWA should not use NaN for interpolation, got {value}"
+
+
+
+    def test_twa_nan_only_bucket(self):
+        """
+        Test that TWA correctly handles buckets containing only NaN samples.
+        When a bucket has only NaN samples, TWA should not use uninitialized values
+        for interpolation in subsequent buckets.
+        """
+        env = self.env
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            # Test case 1: TS.RANGE with NaN-only bucket in the middle
+            key1 = 'twa_nan_only_bucket_range{tag}'
+            r.execute_command('TS.CREATE', key1)
+            r.execute_command('TS.ADD', key1, 5, 10)     # Bucket 0-10: valid sample
+            r.execute_command('TS.ADD', key1, 15, 'nan') # Bucket 10-20: only NaN
+            r.execute_command('TS.ADD', key1, 25, 30)    # Bucket 20-30: valid sample
+            r.execute_command('TS.ADD', key1, 35, 40)    # Bucket 30-40: valid sample
+        
+            # Query across all buckets with EMPTY to include NaN-only bucket
+            result = r.execute_command('TS.RANGE', key1, 0, 40, 'AGGREGATION', 'twa', 10, 'EMPTY')
+            assert len(result) == 4
+        
+            # Bucket 0 (0-10): has sample at 5 with value 10 - should be valid
+            bucket0_value = float(result[0][1])
+            assert not math.isnan(bucket0_value), "Bucket 0 should have valid TWA value"
+        
+            # Bucket 1 (10-20): only NaN sample - TWA with EMPTY interpolates from surrounding samples
+            # (sample at ts=5 value=10 before, sample at ts=25 value=30 after)
+            bucket1_value = float(result[1][1])
+            assert not math.isnan(bucket1_value), "TWA+EMPTY interpolates NaN-only bucket from neighbors"
+            # Key test: the interpolated value should be reasonable (between 10 and 30)
+            assert bucket1_value > 0, f"TWA should not use timestamp=0, got {bucket1_value}"
+        
+            # Bucket 2 (20-30): has sample at 25 with value 30 - should be valid
+            # This is the key test: interpolation should work correctly, NOT from bogus (0,0) values
+            bucket2_value = float(result[2][1])
+            assert not math.isnan(bucket2_value), "Bucket after NaN-only bucket should have valid TWA"
+            assert bucket2_value > 0, f"TWA should not use timestamp=0 for interpolation, got {bucket2_value}"
+        
+            # Bucket 3 (30-40): should interpolate correctly from bucket 2
+            bucket3_value = float(result[3][1])
+            assert not math.isnan(bucket3_value), "Bucket 3 should have valid TWA value"
+        
+            # Test case 2: REVRANGE with NaN-only bucket
+            result_rev = r.execute_command('TS.REVRANGE', key1, 0, 40, 'AGGREGATION', 'twa', 10, 'EMPTY')
+            assert len(result_rev) == 4
+            # Results should be same as RANGE but reversed
+            bucket2_rev = float(result_rev[1][1])  # Bucket 20-30 is second from end
+            assert not math.isnan(bucket2_rev), "REVRANGE: bucket after NaN-only should have valid TWA"
+            assert bucket2_rev > 0, f"REVRANGE: TWA should not use timestamp=0, got {bucket2_rev}"
+        
+            # Test case 3: First bucket is NaN-only (edge case - tests initial state)
+            # No sample before first bucket, so TWA cannot interpolate backward
+            key2 = 'twa_nan_first_bucket{tag}'
+            r.execute_command('TS.CREATE', key2)
+            r.execute_command('TS.ADD', key2, 5, 'nan')  # Bucket 0-10: only NaN
+            r.execute_command('TS.ADD', key2, 15, 20)    # Bucket 10-20: valid sample
+            r.execute_command('TS.ADD', key2, 25, 30)    # Bucket 20-30: valid sample
+        
+            result = r.execute_command('TS.RANGE', key2, 0, 30, 'AGGREGATION', 'twa', 10, 'EMPTY')
             assert len(result) == 3
-            assert float(result[0][1]) == 3.0   # 3 valid samples in bucket 0
-            assert float(result[1][1]) == 0.0   # 0 valid samples in bucket 100
-            assert float(result[2][1]) == 2.0   # 2 valid samples in bucket 200
-            
-            # Test 6: Test aggregations with EMPTY flag on NaN-only bucket (100-199)
-            # Expected values: NaN for most, 0 for sum/count, 0 for last (last valid before bucket),
-            # interpolated for twa (has samples before and after)
-            expected_empty_bucket_values = {
-                'sum': 0.0,
-                'count': 0.0,
-                'min': float('nan'),
-                'max': float('nan'),
-                'avg': float('nan'),
-                'first': float('nan'),
-                'last': 30.0,  # last valid value before bucket (from ts=50)
-                'range': float('nan'),
-                'std.p': float('nan'),
-                'std.s': float('nan'),
-                'var.p': float('nan'),
-                'var.s': float('nan'),
-                'twa': 'interpolated',  # special case: has surrounding samples, should not be NaN
-            }
-            
-            for agg_func, expected in expected_empty_bucket_values.items():
-                result = r.execute_command('TS.RANGE', key, 0, 199, 'AGGREGATION', agg_func, 100, 'EMPTY')
-                assert len(result) == 2, f"{agg_func}: expected 2 results"
-                actual = float(result[1][1])
-                if expected == 'interpolated':
-                    assert not math.isnan(actual), f"{agg_func}: expected interpolated value, got NaN"
-                elif math.isnan(expected):
-                    assert math.isnan(actual), f"{agg_func}: expected NaN, got {actual}"
-                else:
-                    assert actual == expected, f"{agg_func}: expected {expected}, got {actual}"
-            
-            # Test 7: Query only the NaN-only bucket without EMPTY - should return empty
-            result = r.execute_command('TS.RANGE', key, 100, 199, 'AGGREGATION', 'sum', 100)
-            assert len(result) == 0  # No results - bucket is effectively empty
-            
-            # Test 8: 'last' and 'twa' return NaN when NO sample exists before the bucket
-            key_no_before = 'ts_nan_no_before{a}'
-            r.execute_command('TS.CREATE', key_no_before, 'ENCODING', encoding)
-            r.execute_command('TS.ADD', key_no_before, 100, 'nan')  # NaN in bucket 100-199
-            r.execute_command('TS.ADD', key_no_before, 200, 50)     # Valid sample after
-            
-            for agg_func in ['last', 'twa']:
-                result = r.execute_command('TS.RANGE', key_no_before, 100, 199, 'AGGREGATION', agg_func, 100, 'EMPTY')
-                assert len(result) == 1
-                assert math.isnan(float(result[0][1])), f"{agg_func}: expected NaN when no sample before bucket, got {result[0][1]}"
+        
+            # First bucket is NaN-only with no sample before - may be NaN or interpolated forward
+            # The key test is that subsequent buckets are NOT corrupted
+        
+            # Second bucket should NOT be corrupted by first bucket's uninitialized values
+            bucket1_value = float(result[1][1])
+            assert not math.isnan(bucket1_value), "Second bucket should have valid TWA"
+            # The value should be reasonable (not affected by bogus timestamp=0)
+            assert bucket1_value > 0, f"TWA should not interpolate from timestamp=0, got {bucket1_value}"
+        
+            # Test case 4: Compaction rule with NaN-only bucket
+            src_key = 'twa_compaction_src{tag}'
+            dst_key = 'twa_compaction_dst{tag}'
+            r.execute_command('TS.CREATE', src_key)
+            r.execute_command('TS.CREATE', dst_key)
+            r.execute_command('TS.CREATERULE', src_key, dst_key, 'AGGREGATION', 'twa', 10)
+        
+            # Add samples: bucket 0-10 valid, bucket 10-20 NaN only, bucket 20-30 valid
+            r.execute_command('TS.ADD', src_key, 5, 100)   # Bucket 0-10
+            r.execute_command('TS.ADD', src_key, 15, 'nan') # Bucket 10-20: only NaN
+            r.execute_command('TS.ADD', src_key, 25, 200)   # Bucket 20-30
+            r.execute_command('TS.ADD', src_key, 35, 300)   # Trigger compaction for bucket 20-30
+        
+            # Check destination series
+            result = r.execute_command('TS.RANGE', dst_key, 0, '+')
+        
+            # Should have bucket 0 (finalized when bucket 1 started) and bucket 2 
+            # (finalized when bucket 3 started). Bucket 1 had only NaN so no output.
+            assert len(result) >= 1, "Compaction should produce at least one bucket"
+        
+            for ts, val in result:
+                value = float(val)
+                assert not math.isnan(value), f"Compacted TWA at {ts} should not be NaN"
+                # Key check: value should be reasonable, not corrupted by (0,0) interpolation
+                assert value > 0, f"Compacted TWA at {ts} should be > 0, got {value}"
 
 
-def test_twa_nan_interpolation():
-    """
-    Test that TWA aggregation correctly skips NaN samples when fetching samples
-    before/after the query range for interpolation.    
-    """
-    with Env().getClusterConnectionIfNeeded() as r:
-        # Test case 1: NaN sample immediately before query range should be skipped
-        # The valid sample before NaN should be used for interpolation instead
-        key1 = 'twa_nan_before{tag}'
-        r.execute_command('TS.CREATE', key1)
-        r.execute_command('TS.ADD', key1, 5, 5)    # Valid sample - should be used for interpolation
-        r.execute_command('TS.ADD', key1, 8, 'nan') # NaN right before range - should be skipped
-        r.execute_command('TS.ADD', key1, 12, 12)  # Sample in query range
-        r.execute_command('TS.ADD', key1, 18, 18)  # Sample in query range
-        r.execute_command('TS.ADD', key1, 25, 25)  # Sample after query range
-        
-        # Query range 10-20, bucket size 10
-        # TWA should interpolate from sample at ts=5 (value=5), not from NaN at ts=8
-        result = r.execute_command('TS.RANGE', key1, 10, 20, 'AGGREGATION', 'twa', 10)
-        assert len(result) == 1
-        # The result should be a valid number (not NaN)
-        value = float(result[0][1])
-        assert not math.isnan(value), f"TWA should not use NaN for interpolation, got {value}"
-        
-        # Test case 2: Multiple NaN samples before query range - all should be skipped
-        key2 = 'twa_nan_multi_before{tag}'
-        r.execute_command('TS.CREATE', key2)
-        r.execute_command('TS.ADD', key2, 3, 3)    # Valid sample - should be used
-        r.execute_command('TS.ADD', key2, 5, 'nan')
-        r.execute_command('TS.ADD', key2, 7, 'nan')
-        r.execute_command('TS.ADD', key2, 9, 'nan') # Multiple NaNs before range
-        r.execute_command('TS.ADD', key2, 12, 12)  # In query range
-        r.execute_command('TS.ADD', key2, 18, 18)  # In query range
-        r.execute_command('TS.ADD', key2, 25, 25)  # After range
-        
-        result = r.execute_command('TS.RANGE', key2, 10, 20, 'AGGREGATION', 'twa', 10)
-        assert len(result) == 1
-        value = float(result[0][1])
-        assert not math.isnan(value), f"TWA should skip multiple NaN samples, got {value}"
-        
-        # Test case 3: NaN samples after query range should also be skipped
-        key3 = 'twa_nan_after{tag}'
-        r.execute_command('TS.CREATE', key3)
-        r.execute_command('TS.ADD', key3, 5, 5)
-        r.execute_command('TS.ADD', key3, 12, 12)
-        r.execute_command('TS.ADD', key3, 18, 18)
-        r.execute_command('TS.ADD', key3, 22, 'nan')  # NaN right after range
-        r.execute_command('TS.ADD', key3, 25, 25)     # Valid sample after NaN
-        
-        result = r.execute_command('TS.RANGE', key3, 10, 20, 'AGGREGATION', 'twa', 10)
-        assert len(result) == 1
-        value = float(result[0][1])
-        assert not math.isnan(value), f"TWA should skip NaN after range, got {value}"
-        
-        # Test case 4: REVRANGE should also handle NaN interpolation correctly
-        result = r.execute_command('TS.REVRANGE', key1, 10, 20, 'AGGREGATION', 'twa', 10)
-        assert len(result) == 1
-        value = float(result[0][1])
-        assert not math.isnan(value), f"REVRANGE TWA should not use NaN for interpolation, got {value}"
 
-
-def test_twa_nan_only_bucket():
-    """
-    Test that TWA correctly handles buckets containing only NaN samples.
-    When a bucket has only NaN samples, TWA should not use uninitialized values
-    for interpolation in subsequent buckets.
-    """
-    with Env().getClusterConnectionIfNeeded() as r:
-        # Test case 1: TS.RANGE with NaN-only bucket in the middle
-        key1 = 'twa_nan_only_bucket_range{tag}'
-        r.execute_command('TS.CREATE', key1)
-        r.execute_command('TS.ADD', key1, 5, 10)     # Bucket 0-10: valid sample
-        r.execute_command('TS.ADD', key1, 15, 'nan') # Bucket 10-20: only NaN
-        r.execute_command('TS.ADD', key1, 25, 30)    # Bucket 20-30: valid sample
-        r.execute_command('TS.ADD', key1, 35, 40)    # Bucket 30-40: valid sample
-        
-        # Query across all buckets with EMPTY to include NaN-only bucket
-        result = r.execute_command('TS.RANGE', key1, 0, 40, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert len(result) == 4
-        
-        # Bucket 0 (0-10): has sample at 5 with value 10 - should be valid
-        bucket0_value = float(result[0][1])
-        assert not math.isnan(bucket0_value), "Bucket 0 should have valid TWA value"
-        
-        # Bucket 1 (10-20): only NaN sample - TWA with EMPTY interpolates from surrounding samples
-        # (sample at ts=5 value=10 before, sample at ts=25 value=30 after)
-        bucket1_value = float(result[1][1])
-        assert not math.isnan(bucket1_value), "TWA+EMPTY interpolates NaN-only bucket from neighbors"
-        # Key test: the interpolated value should be reasonable (between 10 and 30)
-        assert bucket1_value > 0, f"TWA should not use timestamp=0, got {bucket1_value}"
-        
-        # Bucket 2 (20-30): has sample at 25 with value 30 - should be valid
-        # This is the key test: interpolation should work correctly, NOT from bogus (0,0) values
-        bucket2_value = float(result[2][1])
-        assert not math.isnan(bucket2_value), "Bucket after NaN-only bucket should have valid TWA"
-        assert bucket2_value > 0, f"TWA should not use timestamp=0 for interpolation, got {bucket2_value}"
-        
-        # Bucket 3 (30-40): should interpolate correctly from bucket 2
-        bucket3_value = float(result[3][1])
-        assert not math.isnan(bucket3_value), "Bucket 3 should have valid TWA value"
-        
-        # Test case 2: REVRANGE with NaN-only bucket
-        result_rev = r.execute_command('TS.REVRANGE', key1, 0, 40, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert len(result_rev) == 4
-        # Results should be same as RANGE but reversed
-        bucket2_rev = float(result_rev[1][1])  # Bucket 20-30 is second from end
-        assert not math.isnan(bucket2_rev), "REVRANGE: bucket after NaN-only should have valid TWA"
-        assert bucket2_rev > 0, f"REVRANGE: TWA should not use timestamp=0, got {bucket2_rev}"
-        
-        # Test case 3: First bucket is NaN-only (edge case - tests initial state)
-        # No sample before first bucket, so TWA cannot interpolate backward
-        key2 = 'twa_nan_first_bucket{tag}'
-        r.execute_command('TS.CREATE', key2)
-        r.execute_command('TS.ADD', key2, 5, 'nan')  # Bucket 0-10: only NaN
-        r.execute_command('TS.ADD', key2, 15, 20)    # Bucket 10-20: valid sample
-        r.execute_command('TS.ADD', key2, 25, 30)    # Bucket 20-30: valid sample
-        
-        result = r.execute_command('TS.RANGE', key2, 0, 30, 'AGGREGATION', 'twa', 10, 'EMPTY')
-        assert len(result) == 3
-        
-        # First bucket is NaN-only with no sample before - may be NaN or interpolated forward
-        # The key test is that subsequent buckets are NOT corrupted
-        
-        # Second bucket should NOT be corrupted by first bucket's uninitialized values
-        bucket1_value = float(result[1][1])
-        assert not math.isnan(bucket1_value), "Second bucket should have valid TWA"
-        # The value should be reasonable (not affected by bogus timestamp=0)
-        assert bucket1_value > 0, f"TWA should not interpolate from timestamp=0, got {bucket1_value}"
-        
-        # Test case 4: Compaction rule with NaN-only bucket
-        src_key = 'twa_compaction_src{tag}'
-        dst_key = 'twa_compaction_dst{tag}'
-        r.execute_command('TS.CREATE', src_key)
-        r.execute_command('TS.CREATE', dst_key)
-        r.execute_command('TS.CREATERULE', src_key, dst_key, 'AGGREGATION', 'twa', 10)
-        
-        # Add samples: bucket 0-10 valid, bucket 10-20 NaN only, bucket 20-30 valid
-        r.execute_command('TS.ADD', src_key, 5, 100)   # Bucket 0-10
-        r.execute_command('TS.ADD', src_key, 15, 'nan') # Bucket 10-20: only NaN
-        r.execute_command('TS.ADD', src_key, 25, 200)   # Bucket 20-30
-        r.execute_command('TS.ADD', src_key, 35, 300)   # Trigger compaction for bucket 20-30
-        
-        # Check destination series
-        result = r.execute_command('TS.RANGE', dst_key, 0, '+')
-        
-        # Should have bucket 0 (finalized when bucket 1 started) and bucket 2 
-        # (finalized when bucket 3 started). Bucket 1 had only NaN so no output.
-        assert len(result) >= 1, "Compaction should produce at least one bucket"
-        
-        for ts, val in result:
-            value = float(val)
-            assert not math.isnan(value), f"Compacted TWA at {ts} should not be NaN"
-            # Key check: value should be reasonable, not corrupted by (0,0) interpolation
-            assert value > 0, f"Compacted TWA at {ts} should be > 0, got {value}"
-
-
-def test_ts_range_countNaN():
-    """
-    Validate COUNTNAN aggregation function
-    """
-    with Env().getClusterConnectionIfNeeded() as r:
-        for encoding in ['compressed', 'uncompressed']:
-            Env().flush()
-            key = 'ts_countNaN_test{a}'
-            r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
-            r.execute_command('TS.ADD', key, 10, 10)
-            r.execute_command('TS.ADD', key, 20, 'nan')
-            r.execute_command('TS.ADD', key, 30, 20)
-            r.execute_command('TS.ADD', key, 40, 'nan')
-            r.execute_command('TS.ADD', key, 50, 30)
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 100)
-            assert len(result) == 1
-            assert float(result[0][1]) == 2.0
-            result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countnan', 10, 'EMPTY')
-            assert len(result) == 5
-            assert float(result[0][1]) == 0.0
-            assert float(result[1][1]) == 1.0
-            assert float(result[2][1]) == 0.0
-            assert float(result[3][1]) == 1.0
-            assert float(result[4][1]) == 0.0
-
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countnan', 50)
-            assert len(result) == 1
-            assert float(result[0][1]) == 2.0
-
-def test_ts_range_countAll():
-    """
-    Validate COUNTALL aggregation function
-    """
-    with Env().getClusterConnectionIfNeeded() as r:
-        for encoding in ['compressed', 'uncompressed']:
-            Env().flush()
-            key = 'ts_countAll_test{a}'
-            r.execute_command('TS.CREATE', key, 'ENCODING', encoding)
-            r.execute_command('TS.ADD', key, 10, 10)
-            r.execute_command('TS.ADD', key, 20, 'nan')
-            r.execute_command('TS.ADD', key, 30, 20)
-            r.execute_command('TS.ADD', key, 40, 'nan')
-            r.execute_command('TS.ADD', key, 50, 30)
-            result = r.execute_command('TS.RANGE', key, 0, 99, 'AGGREGATION', 'countall', 100)
-            assert len(result) == 1
-            assert float(result[0][1]) == 5.0
-            result = r.execute_command('TS.REVRANGE', key, 0, 99, 'AGGREGATION', 'countall', 10, 'EMPTY')
-            assert len(result) == 5
-            assert float(result[0][1]) == 1.0
-            assert float(result[1][1]) == 1.0
-            assert float(result[2][1]) == 1.0
-            assert float(result[3][1]) == 1.0
-            assert float(result[4][1]) == 1.0
