@@ -6,6 +6,8 @@ permissions:
 
 on:
   pull_request:
+    paths-ignore:
+      - 'src/version.h'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
