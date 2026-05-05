@@ -506,6 +506,10 @@ static void Compressed_Serialize(Chunk_t *chunk,
                                                                                                    \
         size_t len;                                                                                \
         compchunk->data = (uint64_t *)readStringBuffer(ctx, &len, ##__VA_ARGS__);                  \
+        if (len == 0)                                                                              \
+            goto err; /* Buffer size must be non-zero */                                           \
+        if (compchunk->idx > len * 8)                                                              \
+            goto err; /* Bit index can't exceed buffer size in bits */                             \
         *chunk = (Chunk_t *)compchunk;                                                             \
         return TSDB_OK;                                                                            \
                                                                                                    \
