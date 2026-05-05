@@ -519,7 +519,12 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     errdefer(err, Compressed_FreeChunk(compchunk));
 
     compchunk->data = NULL;
-    compchunk->size = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    const uint64_t size = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    if (size > SIZE_MAX) {
+        err = true;
+        return TSDB_ERROR; /* Serialized metadata exceeds in-memory representation */
+    }
+    compchunk->size = (size_t)size;
     compchunk->count = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     compchunk->idx = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     compchunk->baseValue.u = LoadUnsigned_IOError(io, err, TSDB_ERROR);
@@ -536,7 +541,11 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
         err = true;
         return TSDB_ERROR; /* Buffer size must be non-zero */
     }
-    if (compchunk->idx > len * 8) {
+    if (compchunk->size != len) {
+        err = true;
+        return TSDB_ERROR; /* Size must match buffer */
+    }
+    if (compchunk->idx / BIT > len || (compchunk->idx % BIT != 0 && compchunk->idx / BIT == len)) {
         err = true;
         return TSDB_ERROR; /* Bit index can't exceed buffer size in bits */
     }

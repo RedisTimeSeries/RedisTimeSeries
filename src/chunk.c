@@ -14,6 +14,8 @@
 
 #include "rmutil/alloc.h"
 
+#include <limits.h>
+
 Chunk_t *Uncompressed_NewChunk(size_t size) {
     Chunk *newChunk = (Chunk *)malloc(sizeof(Chunk));
     newChunk->base_timestamp = 0;
@@ -338,12 +340,20 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     errdefer(err, Uncompressed_FreeChunk(uncompchunk));
 
     uncompchunk->base_timestamp = LoadUnsigned_IOError(io, err, TSDB_ERROR);
-    uncompchunk->num_samples = LoadUnsigned_IOError(io, err, TSDB_ERROR);
-    uncompchunk->size = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+
+    const uint64_t num_samples = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    const uint64_t size = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    if (num_samples > UINT_MAX) {
+        err = true;
+        return TSDB_ERROR; /* Serialized metadata exceeds in-memory representation */
+    }
+    uncompchunk->num_samples = (unsigned int)num_samples;
+    uncompchunk->size = (size_t)size;
+
     size_t string_buffer_size;
     uncompchunk->samples =
         (Sample *)LoadStringBuffer_IOError(io, &string_buffer_size, err, TSDB_ERROR);
-    if (uncompchunk->num_samples * SAMPLE_SIZE > uncompchunk->size) {
+    if (uncompchunk->num_samples > uncompchunk->size / SAMPLE_SIZE) {
         err = true;
         return TSDB_ERROR; /* num_samples can't exceed capacity */
     }
