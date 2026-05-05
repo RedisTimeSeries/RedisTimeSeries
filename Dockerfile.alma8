@@ -3,21 +3,17 @@ FROM almalinux:8
 
 WORKDIR /workspace
 
-RUN dnf update -y
+# Install build/test deps via the unified abstract installer; quirks/alma8.sh
+# pulls gcc-toolset-11 and drops a /etc/profile.d snippet enabling it.
+COPY dependencies.yaml /workspace/dependencies.yaml
+COPY .install /workspace/.install
+RUN bash /workspace/.install/install_script.sh
+RUN chmod +x /workspace/.install/install_cmake.sh && /workspace/.install/install_cmake.sh
 
-RUN dnf groupinstall "Development Tools" -yqq
-RUN dnf config-manager --set-enabled powertools
-RUN dnf install epel-release -yqq
-RUN dnf install -y gcc-toolset-11-gcc gcc-toolset-11-gcc-c++ gcc-toolset-11-libatomic-devel make wget git openssl openssl-devel \
-    bzip2-devel libffi-devel zlib-devel tar xz which rsync clang curl jq python3.11-devel \
-    autoconf automake libtool
-
-RUN cp /opt/rh/gcc-toolset-11/enable /etc/profile.d/gcc-toolset-11.sh
+# Expose the toolset on PATH for subsequent RUNs (the profile.d snippet only
+# fires for login shells).
 ENV PATH="/opt/rh/gcc-toolset-11/root/usr/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-11/root/usr/lib64:${LD_LIBRARY_PATH}"
-
-COPY .install /workspace/.install
-RUN chmod +x /workspace/.install/install_cmake.sh && /workspace/.install/install_cmake.sh
 
 ARG REDIS_REF=unstable
 ARG SANITIZER=
