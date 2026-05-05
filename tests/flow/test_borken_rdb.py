@@ -70,6 +70,16 @@ def _rdb_load_len(buf: bytes, idx: int):
         return v, False, idx + 8
     raise AssertionError("Unknown RDB length encoding")
 
+def _rdb_encode_len(value: int) -> bytes:
+    assert 0 <= value <= 0xFFFFFFFFFFFFFFFF
+    if value < (1 << 6):
+        return bytes([value])
+    if value < (1 << 14):
+        return bytes([0x40 | (value >> 8), value & 0xFF])
+    if value <= 0xFFFFFFFF:
+        return b"\x80" + value.to_bytes(4, "big", signed=False)
+    return b"\x81" + value.to_bytes(8, "big", signed=False)
+
 def _rdb_skip_string(buf: bytes, idx: int):
     """Skip an RDB string object payload starting at idx (right after the STRING opcode)."""
     strlen_or_enc, isenc, idx = _rdb_load_len(buf, idx)
@@ -107,8 +117,6 @@ def _rdb_read_string_len_and_skip(buf: bytes, idx: int):
     raise AssertionError("Unknown RDB string encoding")
 
 def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: int) -> bytes:
-    # We keep the same encoding width by ensuring new_num_samples fits in 6-bit len (0..63).
-    assert 0 <= new_num_samples <= 63
     b = bytearray(dump)
     assert _verify_dump_payload(dump), "baseline DUMP payload should have valid checksum"
 
@@ -128,11 +136,10 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
         nonlocal idx
         op = read_opcode()
         assert op == 2  # RDB_MODULE_OPCODE_UINT
-        # value is also rdb len; for 0..63 it's 1 byte and stored directly in that byte.
         val_start = idx
         val, _, idx2 = _rdb_load_len(dump, idx)
         idx = idx2
-        return val, val_start
+        return val, val_start, idx2
 
     def read_string_skip():
         nonlocal idx
@@ -149,24 +156,24 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
     # series_rdb_save() fields (minimal path used by DUMP/RESTORE).
     read_string_skip()                 # keyName
     read_uint_capture_offset()         # retentionTime
-    chunk_size_bytes, _ = read_uint_capture_offset()  # chunkSizeBytes
-    options, _ = read_uint_capture_offset()           # options
+    chunk_size_bytes, _, _ = read_uint_capture_offset()  # chunkSizeBytes
+    read_uint_capture_offset()         # options
     read_uint_capture_offset()         # lastTimestamp
     read_double_skip()                 # lastValue
     read_uint_capture_offset()         # totalSamples
     read_uint_capture_offset()         # duplicatePolicy
-    has_src, _ = read_uint_capture_offset()
+    has_src, _, _ = read_uint_capture_offset()
     assert has_src == 0
     if has_src:
         read_string_skip()
     read_uint_capture_offset()         # ignoreMaxTimeDiff
     read_double_skip()                 # ignoreMaxValDiff
-    labels_count, _ = read_uint_capture_offset()
+    labels_count, _, _ = read_uint_capture_offset()
     assert labels_count == 0
     for _ in range(labels_count):
         read_string_skip()
         read_string_skip()
-    rules_count, _ = read_uint_capture_offset()
+    rules_count, _, _ = read_uint_capture_offset()
     assert rules_count == 0
     for _ in range(rules_count):
         # Not expected in this test (DUMP saves 0 rules), but keep parser future-proof.
@@ -178,16 +185,15 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
         # agg context is module-defined; can't parse generically here.
         raise AssertionError("Unexpected rules payload in DUMP for this test")
 
-    num_chunks, _ = read_uint_capture_offset()
+    num_chunks, _, _ = read_uint_capture_offset()
     assert num_chunks == 1
 
     # First uncompressed chunk: base_timestamp, num_samples, size, samples buffer.
-    base_ts, _ = read_uint_capture_offset()
+    base_ts, _, _ = read_uint_capture_offset()
     assert base_ts == 1
-    old_num_samples, num_samples_off = read_uint_capture_offset()
+    old_num_samples, num_samples_off, num_samples_end = read_uint_capture_offset()
     assert old_num_samples == 1
-    assert old_num_samples <= 63, "test assumes 1-byte rdb len encoding"
-    size_bytes, _ = read_uint_capture_offset()
+    size_bytes, _, _ = read_uint_capture_offset()
     assert size_bytes == chunk_size_bytes
 
     # samples string buffer
@@ -197,8 +203,7 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
     # samples buffer is binary and large enough that it should never be integer-encoded.
     assert decoded_len == size_bytes
 
-    # Patch the single byte directly.
-    b[num_samples_off] = new_num_samples & 0x3F
+    b[num_samples_off:num_samples_end] = _rdb_encode_len(new_num_samples)
 
     _patch_dump_crc(b)
     assert _verify_dump_payload(bytes(b)), "patched DUMP payload should have valid checksum"
@@ -338,3 +343,14 @@ def test_broken_rdb_invalid_uncompressed_chunk_metadata(env):
     env.skipOnCluster()
     rdb_payload = b'\x07\x81M \xc1\xf96\x0f\x10\x08\x05\x04zxcv\x02\x00\x02P\x00\x02\x01\x02\x01\x04\x00\x00\x00\x00\x00\x00\xf0?\x02\x01\x02\x00\x02\x00\x02\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x02\x00\x02\x01\x02\x00\x02\x80AAAA\x02\x01\x05B\xbbXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\x00\xff\x0c\x00\xf4\x02\x01#\x17\x97f\xae'
     env.expect('RESTORE', 'test_key', 0, rdb_payload, replace=True).error().contains("Bad data format")
+
+
+def test_broken_rdb_rejects_uncompressed_chunk_sample_count_overflow(env):
+    env.skipOnCluster()
+    env.cmd('TS.CREATE', 'test_key', 'UNCOMPRESSED')
+    env.cmd('TS.ADD', 'test_key', 1, 1.0)
+
+    valid_dump = env.cmd('DUMP', 'test_key')
+    overflow_dump = _patch_first_uncompressed_chunk_num_samples(valid_dump, 2 ** 32)
+
+    env.expect('RESTORE', 'test_key2', 0, overflow_dump).error().contains("Bad data format")
