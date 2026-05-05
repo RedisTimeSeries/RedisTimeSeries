@@ -46,7 +46,7 @@ ChunkResult MultiSeriesAggDupSampleIterator_GetNext(
     if (likely(any_valid)) {
         iter->aggregation->finalize(aggContext, &sample->value);
     } else {
-         // In the reduce context, NaN inputs represent "no data" from source series.
+        // In the reduce context, NaN inputs represent "no data" from source series.
         // Count-type reducers (count, countnan, countall) should return 0 when no
         // valid inputs exist. All other value-type reducers (sum, min, max, avg, etc.)
         // must propagate NaN to signal "no data" for this timestamp bucket.
