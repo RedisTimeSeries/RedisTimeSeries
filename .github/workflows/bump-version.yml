@@ -182,8 +182,8 @@ jobs:
         id: approver-token
         uses: actions/create-github-app-token@v2
         with:
-          app-id: ${{ vars.GH_PR_APP_ID }}
-          private-key: ${{ secrets.GH_PR_APP_PRIVATE_KEY }}
+          app-id: ${{ vars.RELEASE_ORCHESTRATOR_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_ORCHESTRATOR_BOT_PRIVATE_KEY }}
           owner: RedisTimeSeries
 
       - name: Approve auto-merge PR with module App
