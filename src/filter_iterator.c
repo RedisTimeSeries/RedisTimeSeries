@@ -855,7 +855,7 @@ static void agg_iter_compute_empty_prefix_bounds(const AggregationIterator *self
 }
 
 /**
- * @brief Emits `EMPTY` buckets for aligned span [@p first_bucket, @p last_bucket] into the output chunk.
+ * @brief Appends `EMPTY` buckets for aligned span [@p first_bucket, @p last_bucket] into the output chunk.
  *
  * Delegates to `fillEmptyBuckets`. Single-aggregation path appends into @p enrichedChunk and advances
  * @p si past the filled span on success. Multi-aggregation path appends after existing prefix samples
@@ -871,7 +871,7 @@ static void agg_iter_compute_empty_prefix_bounds(const AggregationIterator *self
  * @param[in,out] si read index for `fillEmptyBuckets` on single-agg path; reset to `-1`, then incremented on success.
  * @return `0` on success (single-agg), or `-1` on failure; multi-agg returns `fillEmptyBuckets`'s return code.
  */
-static int agg_iter_fill_empty_span_in_chunk(AggregationIterator *self,
+static int agg_iter_append_empty_buckets(AggregationIterator *self,
                                              EnrichedChunk *enrichedChunk,
                                              timestamp_t first_bucket,
                                              timestamp_t last_bucket,
@@ -901,7 +901,19 @@ static int agg_iter_fill_empty_span_in_chunk(AggregationIterator *self,
     return 0;
 }
 
-/* aux_chunk: fill aligned span for whole query window [startTimestamp,endTimestamp]. */
+/**
+ * @brief Emit `EMPTY` buckets for the full query range into `aux_chunk` via `fillEmptyBuckets`.
+ *
+ * Used when there is no in-range data to merge into an `EnrichedChunk` but `EMPTY` still needs
+ * every bucket (TWA empty range; non-TWA empty full range after LOCF). `aux_chunk` is the scratch
+ * buffer because there is no upstream chunk to extend.
+ *
+ * @param[in,out] self iterator (range, alignment, contexts).
+ * @param[in] aggregationTimeDelta bucket width.
+ * @param[in] is_reversed forward vs reverse (`fillEmptyBuckets`; may swap aligned bounds).
+ * @param[out] agg_n_samples emitted row count; @p si set to `-1` then passed to `fillEmptyBuckets`.
+ * @return `fillEmptyBuckets` return value.
+ */
 static int agg_iter_fill_aux_query_window(AggregationIterator *self,
                                           uint64_t aggregationTimeDelta,
                                           bool is_reversed,
@@ -988,9 +1000,7 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
             return self->aux_chunk;
         }
         return NULL;
-    }
-    if (self->empty && !self->initialized && !self->handled_non_twa_empty_full_range &&
-        !TWA_EMPTY_RANGE(self)) {
+    } else if (self->empty && !self->initialized && !self->handled_non_twa_empty_full_range) {
         return agg_iter_empty_range_no_samples(
             self, aggregationTimeDelta, is_reversed, agg_n_samples, si);
     }
@@ -1032,7 +1042,7 @@ static int agg_iter_apply_empty_prefix(AggregationIterator *self,
         !self->last_locf_seed_ok) {
         return 0;
     }
-    return agg_iter_fill_empty_span_in_chunk(self,
+    return agg_iter_append_empty_buckets(self,
                                              enrichedChunk,
                                              first_bucket,
                                              last_bucket,
