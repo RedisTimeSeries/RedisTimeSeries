@@ -55,7 +55,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -84,30 +83,11 @@ jobs:
           fi
           echo "Tag v$VERSION does not exist, proceeding..."
 
-      - name: Check if bump branch already exists
-        working-directory: release-branch
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          BRANCH="bump-version-v$VERSION"
-          if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1; then
-            echo "::error::Branch $BRANCH already exists on remote"
-            exit 1
-          fi
-          echo "Branch $BRANCH does not exist, proceeding..."
-
       - name: Configure Git
         working-directory: release-branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Create bump branch
-        working-directory: release-branch
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          git checkout -b "bump-version-v$VERSION"
 
       - name: Set version
         shell: python
@@ -154,45 +134,22 @@ jobs:
           git add src/version.h
           git commit -m "bump version v$VERSION"
 
-      - name: Push bump branch and open auto-merge PR
+      - name: Push changes
         if: ${{ !inputs.dry_run }}
-        id: open-pr
         working-directory: release-branch
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          VERSION: ${{ inputs.version }}
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
         run: |
-          BRANCH="bump-version-v$VERSION"
-          git push origin "$BRANCH"
+          git push origin "$RELEASE_BRANCH"
 
-          PR_URL=$(gh pr create \
-            --base "$RELEASE_BRANCH" \
-            --head "$BRANCH" \
-            --title "bump version v$VERSION" \
-            --body "Automated version bump to v$VERSION on \`$RELEASE_BRANCH\`.")
-          echo "Opened PR: $PR_URL"
-          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
-
-          gh pr merge "$PR_URL" --auto --squash
-          echo "Auto-merge enabled (squash); PR will merge once all required checks pass."
-
-      - name: Generate approver App token
+      - name: Verify push
         if: ${{ !inputs.dry_run }}
-        id: approver-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.RELEASE_ORCHESTRATOR_BOT_APP_ID }}
-          private-key: ${{ secrets.RELEASE_ORCHESTRATOR_BOT_PRIVATE_KEY }}
-          owner: RedisTimeSeries
-
-      - name: Approve auto-merge PR with module App
-        if: ${{ !inputs.dry_run }}
+        working-directory: release-branch
         env:
-          GH_TOKEN: ${{ steps.approver-token.outputs.token }}
-          PR_URL: ${{ steps.open-pr.outputs.pr_url }}
+          RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
         run: |
-          gh pr review "$PR_URL" --approve --body "Approved by module release App to satisfy required-review rule."
+          git ls-remote --exit-code origin "refs/heads/$RELEASE_BRANCH"
+          echo "Verified: bump commit pushed to $RELEASE_BRANCH"
 
       - name: Dry run summary
         if: ${{ inputs.dry_run }}
@@ -201,11 +158,8 @@ jobs:
           VERSION: ${{ inputs.version }}
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
         run: |
-          echo "::notice::DRY RUN - Branch was not pushed and no PR was opened"
-          echo "Would have:"
-          echo "  - Pushed branch: bump-version-v$VERSION"
-          echo "  - Opened PR into: $RELEASE_BRANCH"
-          echo "  - Enabled auto-merge (squash) on the PR"
+          echo "::notice::DRY RUN - Bump commit was not pushed"
+          echo "Would have pushed commit 'bump version v$VERSION' to $RELEASE_BRANCH"
           git log -1 --oneline
 
       - name: Summary
@@ -214,16 +168,10 @@ jobs:
           RELEASE_BRANCH: ${{ needs.validate-and-check.outputs.release_branch }}
           REF_NAME: ${{ github.ref_name }}
           DRY_RUN: ${{ inputs.dry_run }}
-          PR_URL: ${{ steps.open-pr.outputs.pr_url }}
         run: |
           echo "## Bump Version Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: v$VERSION" >> $GITHUB_STEP_SUMMARY
           echo "- **Release Branch**: $RELEASE_BRANCH" >> $GITHUB_STEP_SUMMARY
-          echo "- **Bump Branch**: bump-version-v$VERSION" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered From**: $REF_NAME" >> $GITHUB_STEP_SUMMARY
           echo "- **Dry Run**: $DRY_RUN" >> $GITHUB_STEP_SUMMARY
-          if [[ -n "$PR_URL" ]]; then
-            echo "- **Pull Request**: $PR_URL" >> $GITHUB_STEP_SUMMARY
-            echo "- **Auto-merge**: enabled (squash)" >> $GITHUB_STEP_SUMMARY
-          fi
