@@ -16,13 +16,6 @@
 #include <math.h> /* ceil */
 #include <string.h>
 
-static void agg_iter_load_last_pre_window(AggregationIterator *self, Sample *sample);
-static EnrichedChunk *agg_iter_empty_range_no_samples(AggregationIterator *self,
-                                                        uint64_t aggregationTimeDelta,
-                                                        bool is_reversed,
-                                                        size_t *agg_n_samples,
-                                                        int64_t *si);
-
 /**
  * @brief True if @p agg uses LOCF for `EMPTY` (last context / `finalize_empty_last_value`; @c LAST).
  * @param[in] agg aggregation class.
@@ -326,21 +319,73 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     return iter;
 }
 
+/**
+ * @brief Return up to two nearest non-NaN samples on one side of @p cur_ts.
+ *
+ * Unifies the previous `..._from_left` / `..._from_right` pair. NaN samples are skipped
+ * because they can't serve as interpolation/carry sources.
+ *
+ * @param[in]  cur_ts    pivot timestamp.
+ * @param[in]  from_left true: scan `[0, cur_ts - 1]` newest-first (samples strictly before).
+ *                       false: scan `[cur_ts, UINT64_MAX]` oldest-first (samples at or after).
+ * @param[out] sample_1  closest sample to @p cur_ts on the chosen side.
+ * @param[out] sample_2  second-closest sample on the chosen side (written only when 2 found).
+ * @return number of samples written (0, 1, or 2).
+ */
 static size_t get_samples_from_side(timestamp_t cur_ts,
                                     bool from_left,
                                     const AggregationIterator *self,
                                     Sample *sample_1,
-                                    Sample *sample_2);
-static timestamp_t calc_ta(bool reverse,
+                                    Sample *sample_2) {
+    if (from_left ? (cur_ts == 0) : (cur_ts == UINT64_MAX)) {
+        return 0;
+    }
+    RangeArgs args = {
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+        .filterByTSArgs = { 0 },
+        .startTimestamp = from_left ? 0 : cur_ts,
+        .endTimestamp = from_left ? cur_ts - 1 : UINT64_MAX,
+        .latest = false,
+    };
+    AbstractSampleIterator *sample_iterator =
+        SeriesCreateSampleIterator(self->series, &args, from_left, true);
+    Sample sample;
+    size_t n = 0;
+    while (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
+        if (isnan(sample.value)) {
+            continue;
+        }
+        if (n == 0) {
+            *sample_1 = sample;
+            n = 1;
+        } else {
+            *sample_2 = sample;
+            n = 2;
+            break;
+        }
+    }
+    sample_iterator->Close(sample_iterator);
+    return n;
+}
+
+/** @brief Clipped leading edge of a bucket in iteration order (forward: start, reverse: end). */
+static timestamp_t get_bucket_start_in_query_window(bool reverse,
                            timestamp_t bucketStartTS,
                            timestamp_t bucketEndTS,
                            timestamp_t rangeStart,
-                           timestamp_t rangeEnd);
-static timestamp_t calc_tb(bool reverse,
+                           timestamp_t rangeEnd) {
+    return reverse ? min(bucketEndTS, rangeEnd) : max(bucketStartTS, rangeStart);
+}
+
+/** @brief Clipped trailing edge of a bucket in iteration order (forward: end, reverse: start). */
+static timestamp_t get_bucket_end_in_query_window(bool reverse,
                            timestamp_t bucketStartTS,
                            timestamp_t bucketEndTS,
                            timestamp_t rangeStart,
-                           timestamp_t rangeEnd);
+                           timestamp_t rangeEnd) {
+    return reverse ? max(bucketStartTS, rangeStart) : min(bucketEndTS, rangeEnd);
+}
 
 static void twa_calc_empty_bucket_val(timestamp_t ta,
                                       timestamp_t tb,
@@ -403,9 +448,9 @@ static void twa_compute_empty_bucket_value(const AggregationIterator *self,
     Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
     int64_t agg_time_delta = self->aggregationTimeDelta;
 
-    timestamp_t ta = calc_ta(
+    timestamp_t ta = get_bucket_start_in_query_window(
         false, bucket_ts, bucket_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
-    timestamp_t tb = calc_tb(
+    timestamp_t tb = get_bucket_end_in_query_window(
         false, bucket_ts, bucket_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
 
     size_t n_samples_before =
@@ -531,74 +576,6 @@ static void fillEmptyBucketsWithDefaultVals(size_t *write_index,
     }
 }
 
-/**
- * @brief Return up to two nearest non-NaN samples on one side of @p cur_ts.
- *
- * Unifies the previous `..._from_left` / `..._from_right` pair. NaN samples are skipped
- * because they can't serve as interpolation/carry sources.
- *
- * @param[in]  cur_ts    pivot timestamp.
- * @param[in]  from_left true: scan `[0, cur_ts - 1]` newest-first (samples strictly before).
- *                       false: scan `[cur_ts, UINT64_MAX]` oldest-first (samples at or after).
- * @param[out] sample_1  closest sample to @p cur_ts on the chosen side.
- * @param[out] sample_2  second-closest sample on the chosen side (written only when 2 found).
- * @return number of samples written (0, 1, or 2).
- */
-static size_t get_samples_from_side(timestamp_t cur_ts,
-                                    bool from_left,
-                                    const AggregationIterator *self,
-                                    Sample *sample_1,
-                                    Sample *sample_2) {
-    if (from_left ? (cur_ts == 0) : (cur_ts == UINT64_MAX)) {
-        return 0;
-    }
-    RangeArgs args = {
-        .aggregationArgs = { 0 },
-        .filterByValueArgs = { 0 },
-        .filterByTSArgs = { 0 },
-        .startTimestamp = from_left ? 0 : cur_ts,
-        .endTimestamp = from_left ? cur_ts - 1 : UINT64_MAX,
-        .latest = false,
-    };
-    AbstractSampleIterator *sample_iterator =
-        SeriesCreateSampleIterator(self->series, &args, from_left, true);
-    Sample sample;
-    size_t n = 0;
-    while (sample_iterator->GetNext(sample_iterator, &sample) == CR_OK) {
-        if (isnan(sample.value)) {
-            continue;
-        }
-        if (n == 0) {
-            *sample_1 = sample;
-            n = 1;
-        } else {
-            *sample_2 = sample;
-            n = 2;
-            break;
-        }
-    }
-    sample_iterator->Close(sample_iterator);
-    return n;
-}
-
-/** @brief Clipped leading edge of a bucket in iteration order (forward: start, reverse: end). */
-static timestamp_t calc_ta(bool reverse,
-                           timestamp_t bucketStartTS,
-                           timestamp_t bucketEndTS,
-                           timestamp_t rangeStart,
-                           timestamp_t rangeEnd) {
-    return reverse ? min(bucketEndTS, rangeEnd) : max(bucketStartTS, rangeStart);
-}
-
-/** @brief Clipped trailing edge of a bucket in iteration order (forward: end, reverse: start). */
-static timestamp_t calc_tb(bool reverse,
-                           timestamp_t bucketStartTS,
-                           timestamp_t bucketEndTS,
-                           timestamp_t rangeStart,
-                           timestamp_t rangeEnd) {
-    return reverse ? max(bucketStartTS, rangeStart) : min(bucketEndTS, rangeEnd);
-}
-
 static void twa_fillEmptyBuckets(size_t *write_index,
                                  timestamp_t cur_ts,
                                  Samples *samples,
@@ -609,15 +586,15 @@ static void twa_fillEmptyBuckets(size_t *write_index,
     size_t n_samples_before = 0, n_samples_after = 0;
     timestamp_t ta, tb;
     int64_t agg_time_delta = self->aggregationTimeDelta;
-    ta = calc_ta(
+    ta = get_bucket_start_in_query_window(
         false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
     n_samples_before = get_samples_from_side(ta, true, self, &sample_before, &sample_befBefore);
     n_samples_after = get_samples_from_side(ta, false, self, &sample_after, &sample_afAfter);
 
     for (size_t i = 0; i < n_empty_buckets; ++i) {
-        ta = calc_ta(
+        ta = get_bucket_start_in_query_window(
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
-        tb = calc_tb(
+        tb = get_bucket_end_in_query_window(
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
 
         timestamp_t ts = calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta);
@@ -654,20 +631,24 @@ static void twa_fillEmptyBuckets(size_t *write_index,
 #ifndef PREFIX_SUFFIX_IMPL
 
 /**
- * @brief True if a run of empty buckets lies outside the data span and should be skipped.
+ * @brief Should an `EMPTY` bucket gap be dropped because it sits outside the data?
  *
- * Aggregation-agnostic: at @p first_bucket_of_gap, asks the series whether raw samples exist on
- * both sides of the bucket's leading edge. If either side has no samples, the gap is outside the
- * data span and the caller omits it. Used identically by:
- *   - TWA  : interpolation is undefined without left/right neighbors.
- *   - LOCF (e.g. `LAST + EMPTY`) : no carrier value exists outside the data span.
- *   - Plain `EMPTY` (`SUM`, `COUNT`, ...) : avoid synthesizing values past the data.
+ * Looks at the leading edge of @p first_bucket_of_gap and checks the series for raw samples on
+ * **both** sides. If either side has no sample, the gap lies outside the data span and the
+ * caller drops it. Aggregation-agnostic — applied uniformly to TWA, LOCF (`LAST + EMPTY`), and
+ * plain `EMPTY` (`SUM`, `COUNT`, ...) so that `TS.RANGE` and `TS.REVRANGE` produce the same
+ * set of buckets.
+ *
+ * @param[in] self                  aggregation iterator (provides series + query window).
+ * @param[in] first_bucket_of_gap   timestamp of the first empty bucket in the gap.
+ * @param[in] aggregationTimeDelta  bucket width.
+ * @return true → caller should drop the whole gap; false → emit empty buckets normally.
  */
 static bool should_skip_empty_gap(const AggregationIterator *self,
                                   timestamp_t first_bucket_of_gap,
                                   uint64_t aggregationTimeDelta) {
     Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
-    timestamp_t ta = calc_ta(
+    timestamp_t ta = get_bucket_start_in_query_window(
         false,
         first_bucket_of_gap,
         first_bucket_of_gap + aggregationTimeDelta,
@@ -884,7 +865,7 @@ static int agg_iter_append_empty_buckets(AggregationIterator *self,
  * @param[out] agg_n_samples emitted row count; @p si set to `-1` then passed to `fillEmptyBuckets`.
  * @return `fillEmptyBuckets` return value.
  */
-static int agg_iter_fill_aux_query_window(AggregationIterator *self,
+static int agg_iter_fill_window_when_empty(AggregationIterator *self,
                                           uint64_t aggregationTimeDelta,
                                           bool is_reversed,
                                           size_t *agg_n_samples,
@@ -905,6 +886,184 @@ static int agg_iter_fill_aux_query_window(AggregationIterator *self,
                             self,
                             is_reversed,
                             si);
+}
+
+/**
+ * @brief Hand a single out-of-region "neighbor" `sample` to every aggregation that wants it.
+ *
+ * "Out-of-region" = chronologically just outside the bucket (TWA) or just outside the query
+ * window (LOCF). Three mutually-exclusive modes, picked by the two flags:
+ *
+ * - `as_prev_bucket_neighbor` ⇒ TWA `addPrevBucketLastSample`: the sample anchors the
+ *   *left* endpoint of the time-weighted integral for the current bucket.
+ * - `as_next_bucket_neighbor` ⇒ TWA `addNextBucketFirstSample`: the sample anchors the
+ *   *right* endpoint of the integral.
+ * - both false ⇒ LOCF `appendValue` for aggs reported by `agg_class_needs_locf_empty_seed`
+ *   (today only `LAST`): stores the value as the agg's "latest", which becomes the carry
+ *   for empty buckets in `finalize_empty_last_value`.
+ *
+ * Aggs are skipped silently when the relevant hook is absent or `isValueValid(sample->value)`
+ * is false (e.g. `NaN` cannot anchor an integral or be carried forward).
+ *
+ * @return true if at least one aggregation accepted the sample.
+ */
+static bool agg_iter_apply_neighbor_sample(AggregationIterator *self,
+                                           const Sample *sample,
+                                           bool as_prev_bucket_neighbor,
+                                           bool as_next_bucket_neighbor) {
+    bool applied = false;
+    for (size_t a = 0; a < self->numAggregations; a++) {
+        AggregationClass *agg = &self->aggregations[a];
+        bool applies;
+        if (as_prev_bucket_neighbor) {
+            applies = (agg->addPrevBucketLastSample != NULL);
+        } else if (as_next_bucket_neighbor) {
+            applies = (agg->addNextBucketFirstSample != NULL);
+        } else {
+            applies = agg_class_needs_locf_empty_seed(agg);
+        }
+        if (!applies || !agg->isValueValid(sample->value)) {
+            continue;
+        }
+        if (as_prev_bucket_neighbor) {
+            agg->addPrevBucketLastSample(
+                self->aggregationContexts[a], sample->value, sample->timestamp);
+        } else if (as_next_bucket_neighbor) {
+            agg->addNextBucketFirstSample(
+                self->aggregationContexts[a], sample->value, sample->timestamp);
+        } else {
+            agg->appendValue(self->aggregationContexts[a], sample->value, sample->timestamp);
+        }
+        applied = true;
+    }
+    return applied;
+}
+
+/**
+ * @brief Seeds aggregation contexts from a raw sample in `[range_start, range_end]`.
+ *
+ * Iterates the series via `SeriesCreateSampleIterator` and stops at the first sample that
+ * successfully seeds at least one aggregation. Modes (mutually exclusive):
+ * - `as_prev_bucket_neighbor`: TWA `addPrevBucketLastSample`.
+ * - `as_next_bucket_neighbor`: TWA `addNextBucketFirstSample`.
+ * - `seed_last_locf`: LOCF `appendValue` for aggs needing LOCF empty seeding (e.g. `LAST`);
+ *   on success also sets `self->last_locf_seed_ok`.
+ */
+static void agg_iter_neighbor_sample_scan(AggregationIterator *self,
+                                          Sample *sample,
+                                          timestamp_t range_start,
+                                          timestamp_t range_end,
+                                          bool reverse_iteration,
+                                          bool as_prev_bucket_neighbor,
+                                          bool as_next_bucket_neighbor,
+                                          bool seed_last_locf) {
+    RangeArgs args = {
+        .aggregationArgs = { 0 },
+        .filterByValueArgs = { 0 },
+        .filterByTSArgs = { 0 },
+        .startTimestamp = range_start,
+        .endTimestamp = range_end,
+        .latest = false,
+    };
+    AbstractSampleIterator *sample_iterator =
+        SeriesCreateSampleIterator(self->series, &args, reverse_iteration, true);
+    while (sample_iterator->GetNext(sample_iterator, sample) == CR_OK) {
+        if (as_prev_bucket_neighbor &&
+            agg_iter_apply_neighbor_sample(self, sample, true, false)) {
+            sample_iterator->Close(sample_iterator);
+            return;
+        }
+        if (as_next_bucket_neighbor &&
+            agg_iter_apply_neighbor_sample(self, sample, false, true)) {
+            sample_iterator->Close(sample_iterator);
+            return;
+        }
+        if (seed_last_locf && agg_iter_apply_neighbor_sample(self, sample, false, false)) {
+            self->last_locf_seed_ok = true;
+            sample_iterator->Close(sample_iterator);
+            return;
+        }
+    }
+    sample_iterator->Close(sample_iterator);
+}
+
+/**
+ * @brief Pre-loads LOCF empty seed from the latest raw sample chronologically just outside the
+ *        query window in the iteration direction (forward: before `startTimestamp`; reverse:
+ *        after `endTimestamp`).
+ *
+ * Used by `TS.RANGE`/`TS.REVRANGE ... AGGREGATION LAST ... EMPTY` so empty buckets at the
+ * leading edge of the window (in iteration order) can produce a value via
+ * `finalize_empty_last_value`. No-ops if `EMPTY` is inactive, the relevant edge is at the
+ * timestamp domain boundary, or no aggregation needs an LOCF empty seed. Resets
+ * `last_locf_seed_ok` and delegates the scan to `agg_iter_neighbor_sample_scan`, which sets
+ * the flag on success.
+ */
+static void agg_iter_load_last_pre_window(AggregationIterator *self, Sample *sample) {
+    if (!self->empty) {
+        return;
+    }
+    if (!self->reverse && self->startTimestamp == 0) {
+        return;
+    }
+    if (self->reverse && self->endTimestamp == UINT64_MAX) {
+        return;
+    }
+    // LOCF carry via appendValue is only safe for LAST: any other agg (SUM/COUNT/AVG/MIN/MAX/
+    // FIRST/STD/VAR/TWA) would silently corrupt its in-window result by treating the
+    // out-of-window carry sample as in-window data.
+    if (!agg_iter_any_locf_empty_agg(self)) {
+        return;
+    }
+    self->last_locf_seed_ok = false;
+    agg_iter_neighbor_sample_scan(self,
+                                  sample,
+                                  self->reverse ? self->endTimestamp + 1 : 0,
+                                  self->reverse ? UINT64_MAX : self->startTimestamp - 1,
+                                  !self->reverse,
+                                  false,
+                                  false,
+                                  true);
+}
+
+/**
+ * @brief Fills `[startTimestamp, endTimestamp]` with empty buckets when no in-range samples exist (non-TWA `EMPTY`).
+ *
+ * Marks the full empty range as handled, pre-loads an LOCF seed, then writes empty buckets into
+ * the aux chunk via `agg_iter_fill_window_when_empty`. Returns @c NULL when forward LOCF has no
+ * pre-window seed, the fill fails, or no buckets were written. Caller must ensure `self->empty`,
+ * `!initialized`, `!handled_non_twa_empty_full_range`, and `!TWA_EMPTY_RANGE(self)`.
+ *
+ * @param[in,out] self                 aggregation iterator (`handled_non_twa_empty_full_range`, aux chunk).
+ * @param[in]     aggregationTimeDelta bucket duration.
+ * @param[in]     is_reversed          forward vs reverse direction.
+ * @param[out]    agg_n_samples        number of samples written to the aux chunk.
+ * @param[in,out] si                   current sample index into the aux chunk.
+ * @return The aux `EnrichedChunk` populated with empty buckets, or @c NULL on failure / no output.
+ */
+static EnrichedChunk *agg_iter_empty_range_no_samples(AggregationIterator *self,
+                                                        uint64_t aggregationTimeDelta,
+                                                        bool is_reversed,
+                                                        size_t *agg_n_samples,
+                                                        int64_t *si) {
+    self->handled_non_twa_empty_full_range = true;
+    *agg_n_samples = 0;
+    Sample locf;
+    agg_iter_load_last_pre_window(self, &locf);
+    if (!is_reversed && self->startTimestamp > 0 && !self->last_locf_seed_ok) {
+        return NULL;
+    }
+    int err = agg_iter_fill_window_when_empty(
+        self, aggregationTimeDelta, is_reversed, agg_n_samples, si);
+    if (err != 0) {
+        return NULL;
+    }
+    if (*agg_n_samples == 0) {
+        return NULL;
+    }
+    (*si)++;
+    self->aux_chunk->samples.num_samples = *agg_n_samples;
+    return self->aux_chunk;
 }
 
 /**
@@ -945,7 +1104,7 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
         if (!self->handled_twa_empty_prefix) {
             self->handled_twa_empty_prefix = true;
             self->handled_twa_empty_suffix = true; // The prefix in this case is also the suffix
-            int err = agg_iter_fill_aux_query_window(
+            int err = agg_iter_fill_window_when_empty(
                 self, aggregationTimeDelta, is_reversed, agg_n_samples, si);
             if (err != 0) {
                 return NULL;
@@ -1058,174 +1217,6 @@ static int agg_iter_apply_empty_prefix(AggregationIterator *self,
                                              si);
 }
 
-/**
- * @brief Seeds all applicable aggregations from a single raw `sample`.
- *
- * Three mutually-exclusive seed modes (the first true flag wins):
- * - `seed_prev_bucket_neighbors`: TWA prev-bucket seeding via `addPrevBucketLastSample`.
- * - `seed_next_bucket_neighbors`: TWA next-bucket seeding via `addNextBucketFirstSample`.
- * - otherwise: LOCF empty-bucket seeding via `appendValue` for aggs reported by
- *   `agg_class_needs_locf_empty_seed` (e.g. `TS_AGG_LAST`).
- *
- * Aggs are skipped when the relevant hook is absent or `isValueValid(sample->value)` is false.
- *
- * @return true if at least one aggregation was seeded.
- */
-static bool agg_iter_try_seed_sample(AggregationIterator *self,
-                                     const Sample *sample,
-                                     bool seed_prev_bucket_neighbors,
-                                     bool seed_next_bucket_neighbors) {
-    bool seeded = false;
-    for (size_t a = 0; a < self->numAggregations; a++) {
-        AggregationClass *agg = &self->aggregations[a];
-        bool applies;
-        if (seed_prev_bucket_neighbors) {
-            applies = (agg->addPrevBucketLastSample != NULL);
-        } else if (seed_next_bucket_neighbors) {
-            applies = (agg->addNextBucketFirstSample != NULL);
-        } else {
-            applies = agg_class_needs_locf_empty_seed(agg);
-        }
-        if (!applies || !agg->isValueValid(sample->value)) {
-            continue;
-        }
-        if (seed_prev_bucket_neighbors) {
-            agg->addPrevBucketLastSample(
-                self->aggregationContexts[a], sample->value, sample->timestamp);
-        } else if (seed_next_bucket_neighbors) {
-            agg->addNextBucketFirstSample(
-                self->aggregationContexts[a], sample->value, sample->timestamp);
-        } else {
-            agg->appendValue(self->aggregationContexts[a], sample->value, sample->timestamp);
-        }
-        seeded = true;
-    }
-    return seeded;
-}
-
-/**
- * @brief Seeds aggregation contexts from a raw sample in `[range_start, range_end]`.
- *
- * Iterates the series via `SeriesCreateSampleIterator` and stops at the first sample that
- * successfully seeds at least one aggregation. Modes (mutually exclusive):
- * - `seed_prev_bucket_neighbors`: TWA `addPrevBucketLastSample`.
- * - `seed_next_bucket_neighbors`: TWA `addNextBucketFirstSample`.
- * - `seed_last_locf`: LOCF `appendValue` for aggs needing LOCF empty seeding (e.g. `LAST`);
- *   on success also sets `self->last_locf_seed_ok`.
- */
-static void agg_iter_neighbor_sample_scan(AggregationIterator *self,
-                                          Sample *sample,
-                                          timestamp_t range_start,
-                                          timestamp_t range_end,
-                                          bool reverse_iteration,
-                                          bool seed_prev_bucket_neighbors,
-                                          bool seed_next_bucket_neighbors,
-                                          bool seed_last_locf) {
-    RangeArgs args = {
-        .aggregationArgs = { 0 },
-        .filterByValueArgs = { 0 },
-        .filterByTSArgs = { 0 },
-        .startTimestamp = range_start,
-        .endTimestamp = range_end,
-        .latest = false,
-    };
-    AbstractSampleIterator *sample_iterator =
-        SeriesCreateSampleIterator(self->series, &args, reverse_iteration, true);
-    while (sample_iterator->GetNext(sample_iterator, sample) == CR_OK) {
-        if (seed_prev_bucket_neighbors &&
-            agg_iter_try_seed_sample(self, sample, true, false)) {
-            sample_iterator->Close(sample_iterator);
-            return;
-        }
-        if (seed_next_bucket_neighbors &&
-            agg_iter_try_seed_sample(self, sample, false, true)) {
-            sample_iterator->Close(sample_iterator);
-            return;
-        }
-        if (seed_last_locf && agg_iter_try_seed_sample(self, sample, false, false)) {
-            self->last_locf_seed_ok = true;
-            sample_iterator->Close(sample_iterator);
-            return;
-        }
-    }
-    sample_iterator->Close(sample_iterator);
-}
-
-/**
- * @brief Pre-loads LOCF empty seed from the latest raw sample chronologically just outside the
- *        query window in the iteration direction (forward: before `startTimestamp`; reverse:
- *        after `endTimestamp`).
- *
- * Used by `TS.RANGE`/`TS.REVRANGE ... AGGREGATION LAST ... EMPTY` so empty buckets at the
- * leading edge of the window (in iteration order) can produce a value via
- * `finalize_empty_last_value`. No-ops if `EMPTY` is inactive, the relevant edge is at the
- * timestamp domain boundary, or no aggregation needs an LOCF empty seed. Resets
- * `last_locf_seed_ok` and delegates the scan to `agg_iter_neighbor_sample_scan`, which sets
- * the flag on success.
- */
-static void agg_iter_load_last_pre_window(AggregationIterator *self, Sample *sample) {
-    if (!self->empty) {
-        return;
-    }
-    if (!self->reverse && self->startTimestamp == 0) {
-        return;
-    }
-    if (self->reverse && self->endTimestamp == UINT64_MAX) {
-        return;
-    }
-    if (!agg_iter_any_locf_empty_agg(self)) {
-        return;
-    }
-    self->last_locf_seed_ok = false;
-    agg_iter_neighbor_sample_scan(self,
-                                  sample,
-                                  self->reverse ? self->endTimestamp + 1 : 0,
-                                  self->reverse ? UINT64_MAX : self->startTimestamp - 1,
-                                  !self->reverse,
-                                  false,
-                                  false,
-                                  true);
-}
-
-/**
- * @brief Fills `[startTimestamp, endTimestamp]` with empty buckets when no in-range samples exist (non-TWA `EMPTY`).
- *
- * Marks the full empty range as handled, pre-loads an LOCF seed, then writes empty buckets into
- * the aux chunk via `agg_iter_fill_aux_query_window`. Returns @c NULL when forward LOCF has no
- * pre-window seed, the fill fails, or no buckets were written. Caller must ensure `self->empty`,
- * `!initialized`, `!handled_non_twa_empty_full_range`, and `!TWA_EMPTY_RANGE(self)`.
- *
- * @param[in,out] self                 aggregation iterator (`handled_non_twa_empty_full_range`, aux chunk).
- * @param[in]     aggregationTimeDelta bucket duration.
- * @param[in]     is_reversed          forward vs reverse direction.
- * @param[out]    agg_n_samples        number of samples written to the aux chunk.
- * @param[in,out] si                   current sample index into the aux chunk.
- * @return The aux `EnrichedChunk` populated with empty buckets, or @c NULL on failure / no output.
- */
-static EnrichedChunk *agg_iter_empty_range_no_samples(AggregationIterator *self,
-                                                        uint64_t aggregationTimeDelta,
-                                                        bool is_reversed,
-                                                        size_t *agg_n_samples,
-                                                        int64_t *si) {
-    self->handled_non_twa_empty_full_range = true;
-    *agg_n_samples = 0;
-    Sample locf;
-    agg_iter_load_last_pre_window(self, &locf);
-    if (!is_reversed && self->startTimestamp > 0 && !self->last_locf_seed_ok) {
-        return NULL;
-    }
-    int err = agg_iter_fill_aux_query_window(
-        self, aggregationTimeDelta, is_reversed, agg_n_samples, si);
-    if (err != 0) {
-        return NULL;
-    }
-    if (*agg_n_samples == 0) {
-        return NULL;
-    }
-    (*si)++;
-    self->aux_chunk->samples.num_samples = *agg_n_samples;
-    return self->aux_chunk;
-}
 
 // First chunk only: bucket start from first sample, TWA params, optional prior sample for TWA.
 static void agg_iter_init_if_needed(AggregationIterator *self,
@@ -1243,12 +1234,12 @@ static void agg_iter_init_if_needed(AggregationIterator *self,
     self->initialized = true;
 
     if (self->hasTwa) {
-        timestamp_t ta = calc_ta(self->reverse,
+        timestamp_t ta = get_bucket_start_in_query_window(self->reverse,
                                      BucketStartNormalize(self->aggregationLastTimestamp),
                                      self->aggregationLastTimestamp + aggregationTimeDelta,
                                      self->startTimestamp,
                                      self->endTimestamp);
-        timestamp_t tb = calc_tb(self->reverse,
+        timestamp_t tb = get_bucket_end_in_query_window(self->reverse,
                                      BucketStartNormalize(self->aggregationLastTimestamp),
                                      self->aggregationLastTimestamp + aggregationTimeDelta,
                                      self->startTimestamp,
@@ -1485,7 +1476,7 @@ static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
         // correct value during fillEmptyBuckets. The subsequent appendValue for the same
         // sample (in process_chunk_general) is idempotent for LOCF aggs (e.g. LAST).
         if (is_reversed) {
-            agg_iter_try_seed_sample(self, sample, false, false);
+            agg_iter_apply_neighbor_sample(self, sample, false, false);
         }
         timestamp_t first_bucket, last_bucket;
         if (agg_iter_empty_gap_after_finalize(*contextScope,
@@ -1515,7 +1506,7 @@ static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
     agg_iter_advance_context_scope(self, aggregationTimeDelta, contextScope);
 
     if (self->hasTwa) {
-        timestamp_t tb = calc_tb(self->reverse,
+        timestamp_t tb = get_bucket_end_in_query_window(self->reverse,
                                      self->aggregationLastTimestamp,
                                      *contextScope,
                                      self->startTimestamp,
