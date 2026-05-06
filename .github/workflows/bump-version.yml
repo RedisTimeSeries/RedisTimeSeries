@@ -177,23 +177,6 @@ jobs:
           gh pr merge "$PR_URL" --auto --squash
           echo "Auto-merge enabled (squash); PR will merge once all required checks pass."
 
-      - name: Generate approver App token
-        if: ${{ !inputs.dry_run }}
-        id: approver-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.RELEASE_ORCHESTRATOR_BOT_APP_ID }}
-          private-key: ${{ secrets.RELEASE_ORCHESTRATOR_BOT_PRIVATE_KEY }}
-          owner: RedisTimeSeries
-
-      - name: Approve auto-merge PR with module App
-        if: ${{ !inputs.dry_run }}
-        env:
-          GH_TOKEN: ${{ steps.approver-token.outputs.token }}
-          PR_URL: ${{ steps.open-pr.outputs.pr_url }}
-        run: |
-          gh pr review "$PR_URL" --approve --body "Approved by module release App to satisfy required-review rule."
-
       - name: Dry run summary
         if: ${{ inputs.dry_run }}
         working-directory: release-branch
