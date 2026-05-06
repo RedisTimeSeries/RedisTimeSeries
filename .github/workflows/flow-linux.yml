@@ -33,6 +33,11 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      test:
+        description: 'Specific test(s) to run, passed as TEST= to make'
+        type: string
+        required: false
+        default: ''
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -65,6 +70,11 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      test:
+        description: 'Specific test(s) to run, passed as TEST= to make'
+        type: string
+        required: false
+        default: ''
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -172,7 +182,8 @@ jobs:
             bash -c "make test \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-              QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
+              QUICK=${{ inputs.quick && '1' || '0' }} \
+              ${{ inputs.test != '' && format('TEST={0}', inputs.test) || '' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
 
       - name: Fix test log permissions
         if: always()
