@@ -61,6 +61,12 @@ typedef struct AggregationIterator
     bool hasTwa; // precomputed: any aggregation is TWA
     bool handled_twa_empty_prefix;
     bool handled_twa_empty_suffix;
+    // No points in [start,end] but EMPTY is on: we already returned the "all buckets empty" result once.
+    bool handled_non_twa_empty_full_range;
+    // We already inserted EMPTY buckets between range start and the first real point; do not repeat.
+    bool handled_non_twa_empty_prefix;
+    // LAST+EMPTY: we already copied the last raw value from before `startTimestamp` into LAST (or LAST not used).
+    bool last_locf_seed_ok;
     timestamp_t prev_ts;
     bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
     bool validPerAgg[TS_AGG_TYPES_MAX]; // per-aggregation validity tracking for current bucket
