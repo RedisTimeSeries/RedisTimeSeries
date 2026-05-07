@@ -45,6 +45,10 @@ system:
   - blocksruntime_dev
   - readline_dev
   - coreutils
+  # `uv` provides the project-local Python toolchain used by `make setup`.
+  # Where the OS package manager doesn't ship it (apt/dnf/yum/tdnf today),
+  # the Makefile falls back to the official curl|sh installer.
+  - uv
 
 # Python requirement files to install via pip after system deps are present.
 # Paths are relative to the module src root.
@@ -313,3 +317,15 @@ package_map:
     tdnf: []
     apk:  [lcov]
     brew: [lcov]
+
+  # ---- Python toolchain manager -----------------------------------------
+  # `uv` is used by `make setup` to provision the project-local venv with a
+  # pinned Python version. Where the OS package manager doesn't ship it,
+  # `make setup` falls back to the official `curl … | sh` installer.
+  uv:
+    apt:  []   # not in Debian/Ubuntu main repos → fallback installer used
+    dnf:  []   # not in Fedora/RHEL main repos  → fallback installer used
+    yum:  []   #                                  fallback installer used
+    tdnf: []   #                                  fallback installer used
+    apk:  [uv]
+    brew: [uv]

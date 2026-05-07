@@ -366,4 +366,15 @@ git config --global --add safe.directory '*' || true
 # install_script.sh focused on system packages and lets Docker images that
 # manage their own Python environment (uv, venv) skip the duplicate work.
 
+# Provision a project-local venv via uv (declared in dependencies.yaml's
+# system: list, so the package-map loop above installs it where the PM ships
+# it). Fall back to the official user-local installer otherwise. The venv is
+# created here so the Makefile's `test -d venv || python3 -m venv venv` is a
+# no-op and never touches the host python3.
+if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+fi
+[ -d "$ROOT/venv" ] || uv venv "$ROOT/venv" --python "${SETUP_PYTHON_VERSION:-3.12}"
+
 echo "install_script.sh: done"
