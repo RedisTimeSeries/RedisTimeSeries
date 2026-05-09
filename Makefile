@@ -574,7 +574,7 @@ INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
 
 bootstrap:
 	$(SHOW)cd .install && ./install_script.sh $(INSTALL_SCRIPT_MODE)
-	$(SHOW)test -d venv || python3 -m venv venv
-	$(SHOW). ./venv/bin/activate && ./.install/common_installations.sh && pip install gevent
+	$(SHOW)rm -rf venv && python3 -m venv venv
+	$(SHOW). ./venv/bin/activate && python -m ensurepip --upgrade && ./.install/common_installations.sh && pip install gevent
 
 .PHONY: bootstrap
