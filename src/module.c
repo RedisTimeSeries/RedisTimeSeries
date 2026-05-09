@@ -305,15 +305,16 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+static void groupedAddSeriesCb(RedisModuleCtx *ctx, Series *series, void *userData) {
+    TS_ResultSet *resultset = userData;
+    ResultSet_AddSeries(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
+}
+
 // multi-series groupby logic
 static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                   TS_ResultSet *resultset,
                                   RedisModuleDict *result,
                                   const MRangeArgs *args) {
-    RedisModuleDictIter *iter;
-    char *currentKey = NULL;
-    size_t currentKeyLen;
-    Series *series = NULL;
     int exitStatus = REDISMODULE_OK;
 
     if (CheckDictSeriesPermissions(
@@ -324,30 +325,7 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
         goto exit;
     }
 
-    iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        // ACL permissions were already validated by CheckDictSeriesPermissions above.
-        const GetSeriesResult status =
-            GetSeries(ctx,
-                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                      &key,
-                      &series,
-                      REDISMODULE_READ,
-                      GetSeriesFlags_SilentOperation);
-        if (status != GetSeriesResult_Success) {
-            // The iterator may have been invalidated, stop and restart from after the current
-            // key.
-            RedisModule_DictIteratorStop(iter);
-            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
-            continue;
-        }
-
-        ResultSet_AddSeries(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
-        RedisModule_CloseKey(key);
-    }
-    RedisModule_DictIteratorStop(iter);
+    ForEachDictSeries(ctx, result, groupedAddSeriesCb, resultset);
 
     // todo: this is duplicated in resultset.c
     // Apply the reducer
@@ -408,46 +386,58 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
     return GetSeriesResult_Success;
 }
 
-int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {
-    RedisModuleDictIter *iter;
+long long ForEachDictSeries(RedisModuleCtx *ctx,
+                            RedisModuleDict *dict,
+                            DictSeriesFn fn,
+                            void *userData) {
+    long long count = 0;
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
     RedisModuleString *currentKey;
-    long long replylen = 0;
     Series *series;
+    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
+        RedisModuleKey *key;
+        // ACL must be validated by the caller (e.g. via CheckDictSeriesPermissions) before
+        // invoking this iterator; we read silently here.
+        const GetSeriesResult status = GetSeries(
+            ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
+        if (status != GetSeriesResult_Success) {
+            // GetSeries may have invalidated the iterator; restart from after the current key.
+            RedisModule_DictIteratorStop(iter);
+            iter = RedisModule_DictIteratorStart(dict, ">", currentKey);
+            RedisModule_FreeString(ctx, currentKey);
+            continue;
+        }
+        fn(ctx, series, userData);
+        count++;
+        RedisModule_CloseKey(key);
+        RedisModule_FreeString(ctx, currentKey);
+    }
+    RedisModule_DictIteratorStop(iter);
+    return count;
+}
+
+static void ungroupedReplyCb(RedisModuleCtx *ctx, Series *series, void *userData) {
+    const MRangeArgs *args = userData;
+    ReplySeriesArrayPos(ctx,
+                        series,
+                        args->withLabels,
+                        (RedisModuleString **)args->limitLabels,
+                        args->numLimitLabels,
+                        &args->rangeArgs,
+                        args->reverse,
+                        false);
+}
+
+int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {
     if (CheckDictSeriesPermissions(
             ctx, result, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
         GetSeriesResult_PermissionError) {
         RTS_ReplyKeyPermissionsError(ctx);
         return REDISMODULE_ERR;
     }
-    iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+
     ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
-    while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
-        RedisModuleKey *key;
-        // ACL permissions were already validated by CheckDictSeriesPermissions above.
-        const GetSeriesResult status = GetSeries(
-            ctx, currentKey, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
-        if (status != GetSeriesResult_Success) {
-            // The iterator may have been invalidated, stop and restart from after the current key.
-            RedisModule_DictIteratorStop(iter);
-            iter = RedisModule_DictIteratorStart(result, ">", currentKey);
-            RedisModule_FreeString(ctx, currentKey);
-            continue;
-        }
-
-        ReplySeriesArrayPos(ctx,
-                            series,
-                            args->withLabels,
-                            (RedisModuleString **)args->limitLabels,
-                            args->numLimitLabels,
-                            &args->rangeArgs,
-                            args->reverse,
-                            false);
-        replylen++;
-        RedisModule_CloseKey(key);
-        RedisModule_FreeString(ctx, currentKey);
-    }
-
-    RedisModule_DictIteratorStop(iter);
+    long long replylen = ForEachDictSeries(ctx, result, ungroupedReplyCb, (void *)args);
     ReplySetMapOrArrayLength(ctx, replylen, false);
     return REDISMODULE_OK;
 }
