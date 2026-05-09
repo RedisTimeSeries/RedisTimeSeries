@@ -18,7 +18,7 @@ brew install llvm@$LLVM_VERSION
 brew install libblocksruntime
 # autoconf/automake/libtool are needed for some C deps that ship configure.ac
 # (matches the explicit `brew install ... autoconf automake libtool` step in
-# .github/workflows/flow-macos.yml so local `make setup` is self-sufficient).
+# .github/workflows/flow-macos.yml so local `make bootstrap` is self-sufficient).
 brew install autoconf
 brew install automake
 brew install libtool

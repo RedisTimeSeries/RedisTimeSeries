@@ -45,7 +45,7 @@ system:
   - blocksruntime_dev
   - readline_dev
   - coreutils
-  # `uv` provides the project-local Python toolchain used by `make setup`.
+  # `uv` provides the project-local Python toolchain used by `make bootstrap`.
   # Where the OS package manager doesn't ship it (apt/dnf/yum/tdnf today),
   # the Makefile falls back to the official curl|sh installer.
   - uv
@@ -233,7 +233,7 @@ package_map:
     # with brew's `python@3.11`, making `brew install python@3.11` fail at
     # the link step. We rely on whatever python3 is already on PATH; the
     # legacy `.install/macos.sh` did the same for years. If a user has no
-    # python3, `make setup`'s `python3 -m venv` will give a clear error.
+    # python3, `make bootstrap`'s `python3 -m venv` will give a clear error.
     apt:  [python3, python3-pip, python3-venv, python3-dev]
     dnf:  [python3, python3-pip, python3-devel]
     yum:  [python3, python3-pip, python3-devel]
@@ -319,9 +319,9 @@ package_map:
     brew: [lcov]
 
   # ---- Python toolchain manager -----------------------------------------
-  # `uv` is used by `make setup` to provision the project-local venv with a
+  # `uv` is used by `make bootstrap` to provision the project-local venv with a
   # pinned Python version. Where the OS package manager doesn't ship it,
-  # `make setup` falls back to the official `curl … | sh` installer.
+  # `make bootstrap` falls back to the official `curl … | sh` installer.
   uv:
     apt:  []   # not in Debian/Ubuntu main repos → fallback installer used
     dnf:  []   # not in Fedora/RHEL main repos  → fallback installer used

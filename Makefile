@@ -9,8 +9,8 @@ MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
-# readies `platform.cfg` skips exporting ARCH when __NO_PYTHON=1 (e.g. `make setup`
-# before python3 is installed). Uname keeps setup/build usable in that state.
+# readies `platform.cfg` skips exporting ARCH when __NO_PYTHON=1 (e.g. `make bootstrap`
+# before python3 is installed). Uname keeps bootstrap/build usable in that state.
 ifeq ($(ARCH),)
 ARCH:=$(shell uname -m | tr '[:upper:]' '[:lower:]' | sed -e 's/^x86_64$$/x64/' -e 's/^amd64$$/x64/' -e 's/^aarch64$$/arm64v8/' -e 's/^arm64$$/arm64v8/')
 export ARCH
@@ -556,7 +556,7 @@ endif
 .PHONY: pack upload-release upload-artifacts
 
 #----------------------------------------------------------------------------------------------
-# `make setup` — install build & test prereqs for RedisTimeSeries.
+# `make bootstrap` — install build & test prereqs for RedisTimeSeries.
 #
 # Standalone-friendly. Steps:
 #   1. `sbin/setup`  -> getpy3 + system-setup.py + readies (autoconf,
@@ -567,14 +567,14 @@ endif
 #
 # install_script.sh MODE: on Linux, default `sudo` so apt works for non-root
 # users; on macOS, empty (brew must not run under sudo). Override with
-# `make setup INSTALL_SCRIPT_MODE=` when already root (e.g. some containers).
+# `make bootstrap INSTALL_SCRIPT_MODE=` when already root (e.g. some containers).
 #----------------------------------------------------------------------------------------------
 
 INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
 
-setup:
+bootstrap:
 	$(SHOW)cd .install && ./install_script.sh $(INSTALL_SCRIPT_MODE)
 	$(SHOW)test -d venv || python3 -m venv venv
 	$(SHOW). ./venv/bin/activate && ./.install/common_installations.sh && pip install gevent
 
-.PHONY: setup
+.PHONY: bootstrap
