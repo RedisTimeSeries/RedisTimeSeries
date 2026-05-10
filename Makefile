@@ -5,12 +5,29 @@ endif
 
 ROOT=.
 
+# Standalone `make bootstrap` on a host with no python3 yet: skip Readies (which
+# errors during Makefile parse) and run install_script.sh first; it installs
+# python3 from dependencies.yaml, then we create venv. Any other goal loads
+# the full Makefile + Readies as usual.
+ifeq ($(MAKECMDGOALS),bootstrap)
+override ROOT:=$(shell cd $(ROOT) && pwd)
+INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
+
+bootstrap:
+	@cd $(ROOT)/.install && ./install_script.sh $(INSTALL_SCRIPT_MODE)
+	@rm -rf $(ROOT)/venv && cd $(ROOT) && python3 -m venv venv
+	@cd $(ROOT) && . ./venv/bin/activate && python -m ensurepip --upgrade && ./.install/common_installations.sh && pip install gevent
+
+.PHONY: bootstrap
+
+else
+
 MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
 
-# readies `platform.cfg` skips exporting ARCH when __NO_PYTHON=1 (e.g. `make bootstrap`
-# before python3 is installed). Uname keeps bootstrap/build usable in that state.
+# readies `platform.cfg` skips exporting ARCH when __NO_PYTHON=1 (e.g. `make setup`
+# before python3 is installed). Uname keeps build usable in that state.
 ifeq ($(ARCH),)
 ARCH:=$(shell uname -m | tr '[:upper:]' '[:lower:]' | sed -e 's/^x86_64$$/x64/' -e 's/^amd64$$/x64/' -e 's/^aarch64$$/arm64v8/' -e 's/^arm64$$/arm64v8/')
 export ARCH
@@ -578,3 +595,5 @@ bootstrap:
 	$(SHOW). ./venv/bin/activate && python -m ensurepip --upgrade && ./.install/common_installations.sh && pip install gevent
 
 .PHONY: bootstrap
+
+endif
