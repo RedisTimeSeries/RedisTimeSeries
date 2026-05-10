@@ -311,6 +311,7 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->handled_non_twa_empty_full_range = false;
     iter->handled_non_twa_empty_prefix = false;
     iter->last_locf_seed_ok = true;
+    iter->last_bucket_sample_count = 0;
     iter->prev_ts = DC;
     iter->validSamplesInBucket = false;
     memset(iter->validPerAgg, 0, sizeof(iter->validPerAgg));
@@ -1445,6 +1446,9 @@ static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
                                                int64_t *si,
                                                Sample *twa_last_samples,
                                                bool *twaHadValid) {
+    const size_t samples_in_bucket_being_closed = self->last_bucket_sample_count;
+    self->last_bucket_sample_count = 0;
+
     for (size_t a = 0; a < self->numAggregations; a++) {
         if (self->aggregations[a].type == TS_AGG_TWA &&
             self->aggregations[a].isValueValid(sample->value)) {
@@ -1470,22 +1474,22 @@ static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
     self->aggregationLastTimestamp =
         CalcBucketStart(sample->timestamp, aggregationTimeDelta, self->timestampAlignment);
     if (self->empty) {
-        // In reverse iteration, the chronologically-previous-in-time sample relative to the
-        // empty gap is the upcoming one (sample arg here), not the bucket we just finalized.
-        // Pre-load LOCF aggregations' contexts with it so finalize_empty_*_value emits the
-        // correct value during fillEmptyBuckets. The subsequent appendValue for the same
-        // sample (in process_chunk_general) is idempotent for LOCF aggs (e.g. LAST).
-        if (is_reversed) {
+        timestamp_t first_bucket, last_bucket;
+        const bool has_gap = agg_iter_empty_gap_after_finalize(*contextScope,
+                                                               self->aggregationLastTimestamp,
+                                                               aggregationTimeDelta,
+                                                               is_reversed,
+                                                               false,
+                                                               &first_bucket,
+                                                               &last_bucket);
+        /* Blind reverse LOCF seeding breaks (a) multi-sample buckets and (b) multi-bucket empty
+         * spans. Seed only for a *single* empty bucket between two populated buckets where the
+         * bucket we closed had one raw sample (reverse iteration order bug). */
+        if (has_gap && is_reversed && agg_iter_any_locf_empty_agg(self) &&
+            samples_in_bucket_being_closed == 1 && first_bucket == last_bucket) {
             agg_iter_apply_neighbor_sample(self, sample, false, false);
         }
-        timestamp_t first_bucket, last_bucket;
-        if (agg_iter_empty_gap_after_finalize(*contextScope,
-                                              self->aggregationLastTimestamp,
-                                              aggregationTimeDelta,
-                                              is_reversed,
-                                              false,
-                                              &first_bucket,
-                                              &last_bucket)) {
+        if (has_gap) {
             Samples *emptySamples = ensureOutputSamples(self, enrichedChunk, *agg_n_samples + 256);
             if (multiAgg) {
                 emptySamples->num_samples = *agg_n_samples;
@@ -1537,6 +1541,9 @@ static void agg_iter_append_sample_to_all_aggs(AggregationIterator *self,
     if (self->numAggregations == 1) {
         if (aggregation->isValueValid(sample->value)) {
             appendValue(aggregationContext, sample->value, sample->timestamp);
+            if (aggregation->type == TS_AGG_LAST) {
+                self->last_bucket_sample_count++;
+            }
             self->validSamplesInBucket = true;
             self->validPerAgg[0] = true;
         }
@@ -1545,6 +1552,9 @@ static void agg_iter_append_sample_to_all_aggs(AggregationIterator *self,
             if (self->aggregations[a].isValueValid(sample->value)) {
                 self->aggregations[a].appendValue(
                     self->aggregationContexts[a], sample->value, sample->timestamp);
+                if (self->aggregations[a].type == TS_AGG_LAST) {
+                    self->last_bucket_sample_count++;
+                }
                 self->validSamplesInBucket = true;
                 self->validPerAgg[a] = true;
             }

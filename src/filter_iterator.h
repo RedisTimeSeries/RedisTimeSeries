@@ -67,6 +67,8 @@ typedef struct AggregationIterator
     bool handled_non_twa_empty_prefix;
     // LAST+EMPTY: we already copied the last raw value from before `startTimestamp` into LAST (or LAST not used).
     bool last_locf_seed_ok;
+    /** Single-agg LAST: valid raw samples counted for the in-memory bucket being filled (cleared on boundary). */
+    size_t last_bucket_sample_count;
     timestamp_t prev_ts;
     bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
     bool validPerAgg[TS_AGG_TYPES_MAX]; // per-aggregation validity tracking for current bucket
