@@ -11,7 +11,7 @@ from includes import Env, VALGRIND, SANITIZER
 from utils import slot_table
 
 
-MIGRATION_CYCLES = 10
+MIGRATION_CYCLES = 500
 
 
 def test_asm_without_data():
