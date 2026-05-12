@@ -2316,9 +2316,12 @@ def test_mrange_mrevrange_symmetry():
             for t, v in samples:
                 r.execute_command('TS.ADD', key, t, v + i * 100)
 
-        fwd = r.execute_command('TS.MRANGE',    10, 40,
+        # Timestamps must be strings: redis-py's cluster command parser calls
+        # args[1].lower() while determining the slot for MRANGE-style commands,
+        # which crashes on int. Matches the rest of the MRANGE tests in this repo.
+        fwd = r.execute_command('TS.MRANGE',    '10', '40',
                                 'FILTER', 'tag=mirror_sym')
-        rev = r.execute_command('TS.MREVRANGE', 10, 40,
+        rev = r.execute_command('TS.MREVRANGE', '10', '40',
                                 'FILTER', 'tag=mirror_sym')
 
         fwd_by_key = dict(_decode_mrange_entry(e) for e in fwd)
