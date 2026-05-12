@@ -27,6 +27,12 @@
 #include "valgrind/valgrind.h"
 #endif
 
+/* Placeholder written in place of the removed `reverse` field on the TwaContext.
+ * Preserves the on-disk RDB layout so older binaries can still parse new RDBs and
+ * vice versa without bumping the encoding version. TWA always operates forward now,
+ * and the legacy flag was never set for compaction-rule contexts anyway. */
+ #define TWA_LEGACY_REVERSE_FLAG 0
+ 
 typedef struct FirstValueContext
 {
     double value;
@@ -385,7 +391,7 @@ void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->last_ts);
     RedisModule_SaveUnsigned(io, context->is_first_bucket);
     RedisModule_SaveUnsigned(io, context->iteration);
-    RedisModule_SaveUnsigned(io, 0);
+    RedisModule_SaveUnsigned(io, TWA_LEGACY_REVERSE_FLAG);
 }
 
 int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
