@@ -132,13 +132,11 @@ AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
 AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **series,
                                                                    size_t n_series,
                                                                    const RangeArgs *args,
-                                                                   bool reverse,
                                                                    bool check_retention);
 
 AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
                                                               size_t n_series,
                                                               const RangeArgs *args,
-                                                              bool reverse,
                                                               bool check_retention,
                                                               const ReducerArgs *reducerArgs);
 
