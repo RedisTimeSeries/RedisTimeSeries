@@ -2307,7 +2307,8 @@ def test_mrange_mrevrange_symmetry():
     label must return the same set of keys, each with its samples reversed.
     """
     samples = [(10, 1), (20, 2), (30, 3), (40, 4)]
-    with Env().getClusterConnectionIfNeeded() as r:
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
         keys = ['ts_m_a{a}', 'ts_m_b{a}']
         for i, key in enumerate(keys):
             r.execute_command('DEL', key)
@@ -2316,13 +2317,12 @@ def test_mrange_mrevrange_symmetry():
             for t, v in samples:
                 r.execute_command('TS.ADD', key, t, v + i * 100)
 
-        # Timestamps must be strings: redis-py's cluster command parser calls
-        # args[1].lower() while determining the slot for MRANGE-style commands,
-        # which crashes on int. Matches the rest of the MRANGE tests in this repo.
-        fwd = r.execute_command('TS.MRANGE',    '10', '40',
-                                'FILTER', 'tag=mirror_sym')
-        rev = r.execute_command('TS.MREVRANGE', '10', '40',
-                                'FILTER', 'tag=mirror_sym')
+        # MRANGE / MREVRANGE go through a specific shard connection — see docstring.
+        shard_conn = env.getConnection(1)
+        fwd = shard_conn.execute_command('TS.MRANGE',    '10', '40',
+                                         'FILTER', 'tag=mirror_sym')
+        rev = shard_conn.execute_command('TS.MREVRANGE', '10', '40',
+                                         'FILTER', 'tag=mirror_sym')
 
         fwd_by_key = dict(_decode_mrange_entry(e) for e in fwd)
         rev_by_key = dict(_decode_mrange_entry(e) for e in rev)
