@@ -6,9 +6,9 @@ endif
 ROOT=.
 
 # Standalone `make bootstrap` on a host with no python3 yet: skip Readies (which
-# errors during Makefile parse) and run install_script.sh first; it installs
-# python3 from dependencies.yaml, then we create venv. Any other goal loads
-# the full Makefile + Readies as usual.
+# errors during Makefile parse) and run install_script.sh first. The
+# installer detects OSNICK, installs system packages via .install/os/<osnick>.sh,
+# then provisions uv + $(ROOT)/venv + pip deps via .install/lib/setup-python.sh.
 ifeq ($(MAKECMDGOALS),bootstrap)
 override ROOT:=$(shell cd $(ROOT) && pwd)
 INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
@@ -16,9 +16,6 @@ INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
 bootstrap:
 	@rm -rf $(ROOT)/venv
 	@cd $(ROOT)/.install && ./install_script.sh $(INSTALL_SCRIPT_MODE)
-	# uv creates venv on migrated OSes; legacy needs python3 -m venv (EL8 python3 is 3.6).
-	@cd $(ROOT) && test -d venv || python3 -m venv venv
-	@cd $(ROOT) && . ./venv/bin/activate && python -m ensurepip --upgrade && ./.install/common_installations.sh && pip install gevent
 
 .PHONY: bootstrap
 
@@ -577,14 +574,11 @@ endif
 #----------------------------------------------------------------------------------------------
 # `make bootstrap` — install build & test prereqs for RedisTimeSeries.
 #
-# Standalone-friendly. Steps:
-#   1. `sbin/setup`  -> getpy3 + system-setup.py + readies (autoconf,
-#      libtool, m4, automake, openssl, gnu-utils on macOS, cmake, RAMP,
-#      RLTest, etc.).
-#   2. `gevent`     -> imported by tests/flow/test_short_read.py but
-#      commented out in tests/flow/requirements.txt, so install it here.
+# Detects the host OSNICK and runs the matching .install/os/<osnick>.sh, then
+# provisions uv + venv + pip deps (incl. gevent) via .install/lib/setup-python.sh.
+# See .install/install_script.sh for the full flow.
 #
-# install_script.sh MODE: on Linux, default `sudo` so apt works for non-root
+# INSTALL_SCRIPT_MODE: on Linux, default `sudo` so apt works for non-root
 # users; on macOS, empty (brew must not run under sudo). Override with
 # `make bootstrap INSTALL_SCRIPT_MODE=` when already root (e.g. some containers).
 #----------------------------------------------------------------------------------------------
@@ -592,9 +586,8 @@ endif
 INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
 
 bootstrap:
+	$(SHOW)rm -rf venv
 	$(SHOW)cd .install && ./install_script.sh $(INSTALL_SCRIPT_MODE)
-	$(SHOW)rm -rf venv && python3 -m venv venv
-	$(SHOW). ./venv/bin/activate && python -m ensurepip --upgrade && ./.install/common_installations.sh && pip install gevent
 
 .PHONY: bootstrap
 
