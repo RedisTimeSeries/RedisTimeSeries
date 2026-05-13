@@ -127,38 +127,80 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
+/* TS.RANGE / TS.REVRANGE reply.
+ *
+ * REVRANGE is a mirror image of RANGE: produce the regular forward result, then walk it
+ * backwards at reply time. COUNT is bounded in both directions:
+ *   - RANGE  COUNT N: cap the loop and exit as soon as N samples are buffered.
+ *   - REVRANGE COUNT N: drop the oldest excess after each chunk, so the buffer never
+ *     grows beyond ~N + chunk_size and ends with the last N samples chronologically. */
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
-    long long arraylen = 0;
-    long long _count = LLONG_MAX;
-    unsigned int n;
-    if (args->count != -1) {
-        _count = args->count;
-    }
-
-    AbstractIterator *iter = SeriesQuery(series, args, reverse, true);
+    AbstractIterator *iter = SeriesQuery(series, args, false, true);
     EnrichedChunk *enrichedChunk;
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
-    while ((arraylen < _count) && (enrichedChunk = iter->GetNext(iter))) {
-        n = (unsigned int)min(_count - arraylen, enrichedChunk->samples.num_samples);
-        size_t vps = enrichedChunk->samples.values_per_sample;
-        for (size_t i = 0; i < n; ++i) {
-            if (vps > 1) {
-                ReplyWithMultiAggSample(ctx,
-                                        enrichedChunk->samples.timestamps[i],
-                                        Samples_values_row_ptr(&enrichedChunk->samples, i),
-                                        vps);
-            } else {
-                ReplyWithSample(ctx,
-                                enrichedChunk->samples.timestamps[i],
-                                Samples_value_at(&enrichedChunk->samples, i, 0));
+    timestamp_t *timestamps = NULL;
+    double *values = NULL;
+    size_t total = 0;
+    size_t cap = 0;
+    size_t vps = 1;
+    const bool count_limited = (args->count != -1);
+    const size_t budget = count_limited ? (size_t)args->count : 0;
+
+    while ((enrichedChunk = iter->GetNext(iter))) {
+        size_t n = enrichedChunk->samples.num_samples;
+        if (n == 0) {
+            continue;
+        }
+        vps = enrichedChunk->samples.values_per_sample;
+
+        if (count_limited && !reverse) {
+            size_t remaining = budget - total;
+            if (n > remaining) {
+                n = remaining;
             }
         }
-        arraylen += n;
+
+        if (total + n > cap) {
+            size_t new_cap = cap == 0 ? 64 : cap * 2;
+            while (new_cap < total + n) {
+                new_cap *= 2;
+            }
+            timestamps = realloc(timestamps, new_cap * sizeof(timestamp_t));
+            values = realloc(values, new_cap * vps * sizeof(double));
+            cap = new_cap;
+        }
+
+        memcpy(timestamps + total,
+               enrichedChunk->samples.timestamps,
+               n * sizeof(timestamp_t));
+        memcpy(values + total * vps,
+               enrichedChunk->samples._values,
+               n * vps * sizeof(double));
+        total += n;
+
+        if (count_limited && reverse && total > budget) {
+            size_t drop = total - budget;
+            memmove(timestamps, timestamps + drop, budget * sizeof(timestamp_t));
+            memmove(values, values + drop * vps, budget * vps * sizeof(double));
+            total = budget;
+        } else if (count_limited && !reverse && total >= budget) {
+            break;
+        }
     }
     iter->Close(iter);
 
-    RedisModule_ReplySetArrayLength(ctx, arraylen);
+    RedisModule_ReplyWithArray(ctx, total);
+    for (size_t k = 0; k < total; ++k) {
+        size_t i = reverse ? (total - 1 - k) : k;
+        if (vps > 1) {
+            ReplyWithMultiAggSample(ctx, timestamps[i], &values[i * vps], vps);
+        } else {
+            ReplyWithSample(ctx, timestamps[i], values[i * vps]);
+        }
+    }
+
+    free(timestamps);
+    free(values);
     return REDISMODULE_OK;
 }
 

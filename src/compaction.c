@@ -27,6 +27,12 @@
 #include "valgrind/valgrind.h"
 #endif
 
+/* Placeholder written in place of the removed `reverse` field on the TwaContext.
+ * Preserves the on-disk RDB layout so older binaries can still parse new RDBs and
+ * vice versa without bumping the encoding version. TWA always operates forward now,
+ * and the legacy flag was never set for compaction-rule contexts anyway. */
+ #define TWA_LEGACY_REVERSE_FLAG 0
+ 
 typedef struct FirstValueContext
 {
     double value;
@@ -55,7 +61,6 @@ typedef struct TwaContext
     timestamp_t first_ts;
     timestamp_t last_ts;
     bool is_first_bucket;
-    bool reverse;
     int64_t iteration;
 } TwaContext;
 
@@ -79,7 +84,7 @@ void finalize_empty_last_value(void *contextPtr, double *value) {
     *value = context->value;
 }
 
-void *SingleValueCreateContext(__unused bool reverse) {
+void *SingleValueCreateContext(void) {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
     return context;
@@ -96,7 +101,7 @@ void SingleValueReset(void *contextPtr) {
     context->value = 0;
 }
 
-void *LastValueCreateContext(__unused bool reverse) {
+void *LastValueCreateContext(void) {
     SingleValueContext *context = malloc(sizeof *context);
     context->value = NAN;
     return context;
@@ -129,7 +134,7 @@ int SingleValueReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     return TSDB_OK;
 }
 
-void *FirstValueCreateContext(__unused bool reverse) {
+void *FirstValueCreateContext(void) {
     FirstValueContext *context = (FirstValueContext *)malloc(sizeof(FirstValueContext));
     context->value = 0;
     context->isResetted = true;
@@ -176,7 +181,7 @@ static inline void _AvgInitContext(AvgContext *context) {
     context->isOverflow = false;
 }
 
-void *AvgCreateContext(__unused bool reverse) {
+void *AvgCreateContext(void) {
     AvgContext *context = (AvgContext *)malloc(sizeof(AvgContext));
     _AvgInitContext(context);
     return context;
@@ -265,7 +270,7 @@ int AvgReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     return TSDB_OK;
 }
 
-static inline void _TwainitContext(TwaContext *context, bool reverse) {
+static inline void _TwainitContext(TwaContext *context) {
     context->res = 0;
     context->prevTS = DC;        // arbitrary value
     context->prevValue = DC;     // arbitrary value
@@ -275,7 +280,6 @@ static inline void _TwainitContext(TwaContext *context, bool reverse) {
     context->last_ts = DC;
     context->is_first_bucket = true;
     context->iteration = 0;
-    context->reverse = reverse;
 }
 
 void *TwaCloneContext(void *contextPtr) {
@@ -284,9 +288,9 @@ void *TwaCloneContext(void *contextPtr) {
     return buf;
 }
 
-void *TwaCreateContext(bool reverse) {
+void *TwaCreateContext(void) {
     TwaContext *context = (TwaContext *)malloc(sizeof(TwaContext));
-    _TwainitContext(context, reverse);
+    _TwainitContext(context);
     return context;
 }
 
@@ -299,9 +303,6 @@ static inline void _update_twaContext(TwaContext *wcontext,
 
 void TwaAddBucketParams(void *contextPtr, timestamp_t bucketStartTS, timestamp_t bucketEndTS) {
     TwaContext *context = (TwaContext *)contextPtr;
-    if (context->reverse) {
-        __SWAP(bucketStartTS, bucketEndTS);
-    }
     context->bucketStartTS = bucketStartTS;
     context->bucketEndTS = bucketEndTS;
 }
@@ -315,12 +316,8 @@ void TwaAddPrevBucketLastSample(void *contextPtr, double value, timestamp_t ts) 
 void TwaAddValue(void *contextPtr, double value, timestamp_t ts) {
     TwaContext *context = (TwaContext *)contextPtr;
     int64_t *iter = &context->iteration;
-    timestamp_t t1 = context->prevTS, t2 = ts;
-    double v1 = context->prevValue, v2 = value;
-    if (context->reverse) {
-        __SWAP(t1, t2);
-        __SWAP(v1, v2);
-    }
+    const timestamp_t t1 = context->prevTS, t2 = ts;
+    const double v1 = context->prevValue, v2 = value;
     const double delta_time = t2 - t1;
     const double delta_val = v2 - v1;
     const bool *is_first_bucket = &context->is_first_bucket;
@@ -330,11 +327,7 @@ void TwaAddValue(void *contextPtr, double value, timestamp_t ts) {
         if (!(*is_first_bucket)) {
             context->first_ts = ta;
             double vab = v1 + ((double)((ta - t1) * delta_val)) / delta_time;
-            if (!context->reverse) {
-                context->res += ((vab + v2) * (t2 - ta)) / 2.0;
-            } else {
-                context->res += ((vab + v1) * (ta - t1)) / 2.0;
-            }
+            context->res += ((vab + v2) * (t2 - ta)) / 2.0;
         } else {
             // else: cur sample is the first in the series, so just store it
             context->first_ts = ts;
@@ -351,22 +344,14 @@ void TwaAddValue(void *contextPtr, double value, timestamp_t ts) {
 
 void TwaAddNextBucketFirstSample(void *contextPtr, double value, timestamp_t ts) {
     TwaContext *context = (TwaContext *)contextPtr;
-    timestamp_t t1 = context->prevTS, t2 = ts;
-    double v1 = context->prevValue, v2 = value;
-    if (context->reverse) {
-        __SWAP(t1, t2);
-        __SWAP(v1, v2);
-    }
+    const timestamp_t t1 = context->prevTS, t2 = ts;
+    const double v1 = context->prevValue, v2 = value;
     const double delta_time = t2 - t1;
     const double delta_val = v2 - v1;
     const timestamp_t tb = context->bucketEndTS;
 
     double vab = v1 + ((double)((tb - t1) * delta_val)) / delta_time;
-    if (!context->reverse) {
-        context->res += ((vab + v1) * (tb - t1)) / 2.0;
-    } else {
-        context->res += ((vab + v2) * (t2 - tb)) / 2.0;
-    }
+    context->res += ((vab + v1) * (tb - t1)) / 2.0;
 
     context->last_ts = tb;
 }
@@ -390,10 +375,11 @@ void TwaGetLastSample(void *contextPtr, Sample *sample) {
 }
 
 void TwaReset(void *contextPtr) {
-    TwaContext *wcontext = (TwaContext *)contextPtr;
-    _TwainitContext(contextPtr, wcontext->reverse);
+    _TwainitContext(contextPtr);
 }
 
+/* The trailing zero preserves the on-disk layout (TWA always operated forward; the legacy
+ * `reverse` field on disk was never set for compaction-rule contexts). */
 void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
     TwaContext *context = (TwaContext *)contextPtr;
     RedisModule_SaveDouble(io, context->res);
@@ -405,7 +391,7 @@ void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->last_ts);
     RedisModule_SaveUnsigned(io, context->is_first_bucket);
     RedisModule_SaveUnsigned(io, context->iteration);
-    RedisModule_SaveUnsigned(io, context->reverse);
+    RedisModule_SaveUnsigned(io, TWA_LEGACY_REVERSE_FLAG);
 }
 
 int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
@@ -420,11 +406,11 @@ int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     context->last_ts = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     context->is_first_bucket = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     context->iteration = LoadUnsigned_IOError(io, err, TSDB_ERROR);
-    context->reverse = LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    (void)LoadUnsigned_IOError(io, err, TSDB_ERROR); /* legacy reverse flag, ignored */
     return TSDB_OK;
 }
 
-void *StdCreateContext(__unused bool reverse) {
+void *StdCreateContext(void) {
     StdContext *context = (StdContext *)malloc(sizeof(StdContext));
     context->cnt = 0;
     context->sum = 0;
@@ -648,7 +634,7 @@ static AggregationClass aggVarS = {
     .isValueValid = nonNaNValueValid,
 };
 
-void *MaxMinCreateContext(__unused bool reverse) {
+void *MaxMinCreateContext(void) {
     MaxMinContext *context = (MaxMinContext *)malloc(sizeof(MaxMinContext));
     context->minValue = DBL_MAX;
     context->maxValue = _DOUBLE_MIN;

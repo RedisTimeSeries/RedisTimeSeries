@@ -18,17 +18,9 @@ typedef struct
     AbstractSampleIterator *iter; // The iterator this sample belongs to
 } MSSample;
 
-// implements min heap
+// implements min heap (samples are merged in chronological order; the reply layer reverses if needed)
 static int heap_cmp_func(const void *sample1, const void *sample2, __unused const void *udata) {
     return (((MSSample *)sample1)->sample.timestamp < ((MSSample *)sample2)->sample.timestamp) ? 1
-                                                                                               : -1;
-}
-
-// implements max heap
-static int heap_cmp_func_reverse(const void *sample1,
-                                 const void *sample2,
-                                 __unused const void *udata) {
-    return (((MSSample *)sample1)->sample.timestamp > ((MSSample *)sample2)->sample.timestamp) ? 1
                                                                                                : -1;
 }
 
@@ -64,15 +56,14 @@ ChunkResult MultiSeriesSampleIterator_GetNext(struct AbstractMultiSeriesSampleIt
 }
 
 MultiSeriesSampleIterator *MultiSeriesSampleIterator_New(AbstractSampleIterator **iters,
-                                                         size_t n_series,
-                                                         bool reverse) {
+                                                         size_t n_series) {
     MultiSeriesSampleIterator *newIter = malloc(sizeof(MultiSeriesSampleIterator));
     newIter->base.input = malloc(sizeof(AbstractSampleIterator *) * n_series);
     memcpy(newIter->base.input, iters, sizeof(AbstractSampleIterator *) * n_series);
     newIter->base.GetNext = MultiSeriesSampleIterator_GetNext;
     newIter->base.Close = MultiSeriesSampleIterator_Close;
     newIter->n_series = n_series;
-    newIter->samples_heap = heap_new(reverse ? heap_cmp_func_reverse : heap_cmp_func, NULL);
+    newIter->samples_heap = heap_new(heap_cmp_func, NULL);
     for (size_t i = 0; i < newIter->n_series; ++i) {
         AbstractSampleIterator *sample_iter = newIter->base.input[i];
         MSSample *sample = malloc(sizeof(MSSample));

@@ -572,8 +572,8 @@ void MultiSeriesReduce(Series *dest,
                        const ReducerArgs *groupByReducerArgs,
                        RangeArgs *args) {
     Sample sample;
-    AbstractSampleIterator *iterator = MultiSeriesCreateAggDupSampleIterator(
-        series, n_series, args, false, true, groupByReducerArgs);
+    AbstractSampleIterator *iterator =
+        MultiSeriesCreateAggDupSampleIterator(series, n_series, args, true, groupByReducerArgs);
     while (iterator->GetNext(iterator, &sample) == CR_OK) {
         SeriesAddSample(dest, sample.timestamp, sample.value);
     }
@@ -1190,7 +1190,7 @@ CompactionRule *NewRule(RedisModuleString *destKey,
     CompactionRule *rule = malloc(sizeof *rule);
     rule->aggClass = GetAggClass(aggType);
     rule->aggType = aggType;
-    rule->aggContext = rule->aggClass->createContext(false);
+    rule->aggContext = rule->aggClass->createContext();
     rule->bucketDuration = bucketDuration;
     rule->timestampAlignment = timestampAlignment;
     rule->destKey = destKey;
@@ -1250,7 +1250,7 @@ int SeriesCalcRange(Series *series,
                     bool *is_empty) {
     Sample sample;
     AggregationClass *aggObject = rule->aggClass;
-    void *context = aggObject->createContext(false);
+    void *context = aggObject->createContext();
     bool _is_empty = true;
     AbstractSampleIterator *iterator;
     RangeArgs args = {
@@ -1346,6 +1346,11 @@ timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
     return sample.timestamp;
 }
 
+/* `reverse` only controls how raw samples are scanned from the chunk dictionary; the user-visible
+ * direction is decided by the reply layer (REVRANGE = forward result, then reversed). The flag is
+ * still threaded through so internal helpers (LOCF/TWA neighbor scans in filter_iterator.c) can
+ * walk samples newest-first when looking for the closest-in-time sample. Aggregation, filtering
+ * and reply paths always run forward. */
 AbstractIterator *SeriesQuery(Series *series,
                               const RangeArgs *args,
                               bool reverse,
@@ -1359,16 +1364,11 @@ AbstractIterator *SeriesQuery(Series *series,
                 : args->startTimestamp;
     }
 
-    // When there is a TS filter because we wanted the logic to be one for both reverse and non
-    // reverse chunk, if the requested range should be reverse, we reverse it after the filter, and
-    // should_reverse_chunk point it out.
-    bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
     AbstractIterator *chain = SeriesIterator_New(
-        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk, args->latest);
+        series, startTimestamp, args->endTimestamp, reverse, reverse, args->latest);
 
     if (args->filterByTSArgs.hasValue) {
-        chain =
-            (AbstractIterator *)SeriesFilterTSIterator_New(chain, args->filterByTSArgs, reverse);
+        chain = (AbstractIterator *)SeriesFilterTSIterator_New(chain, args->filterByTSArgs);
     }
 
     if (args->filterByValueArgs.hasValue) {
@@ -1398,7 +1398,6 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             args->aggregationArgs.classes,
                                                             args->aggregationArgs.timeDelta,
                                                             timestampAlignment,
-                                                            reverse,
                                                             args->aggregationArgs.empty,
                                                             args->aggregationArgs.bucketTS,
                                                             series,
@@ -1417,21 +1416,19 @@ AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
     return (AbstractSampleIterator *)SeriesSampleIterator_New(chain);
 }
 
-// returns sample iterator over multiple series
+// returns sample iterator over multiple series (always chronological; reply layer reverses if needed)
 AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **series,
                                                                    size_t n_series,
                                                                    const RangeArgs *args,
-                                                                   bool reverse,
                                                                    bool check_retention) {
     size_t i;
     AbstractSampleIterator **iters = malloc(n_series * sizeof(AbstractSampleIterator *));
     for (i = 0; i < n_series; ++i) {
-        iters[i] = SeriesCreateSampleIterator(series[i], args, reverse, check_retention);
+        iters[i] = SeriesCreateSampleIterator(series[i], args, false, check_retention);
     }
 
     AbstractMultiSeriesSampleIterator *res =
-        (AbstractMultiSeriesSampleIterator *)MultiSeriesSampleIterator_New(
-            iters, n_series, reverse);
+        (AbstractMultiSeriesSampleIterator *)MultiSeriesSampleIterator_New(iters, n_series);
 
     free(iters);
     return res;
@@ -1441,11 +1438,10 @@ AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **seri
 AbstractSampleIterator *MultiSeriesCreateAggDupSampleIterator(Series **series,
                                                               size_t n_series,
                                                               const RangeArgs *args,
-                                                              bool reverse,
                                                               bool check_retention,
                                                               const ReducerArgs *reducerArgs) {
     AbstractMultiSeriesSampleIterator *chain =
-        MultiSeriesCreateSampleIterator(series, n_series, args, reverse, check_retention);
+        MultiSeriesCreateSampleIterator(series, n_series, args, check_retention);
     return (AbstractSampleIterator *)MultiSeriesAggDupSampleIterator_New(chain, reducerArgs);
 }
 
