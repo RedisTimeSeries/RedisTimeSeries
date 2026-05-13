@@ -18,7 +18,7 @@ on:
       redis-ref:
         description: 'Redis ref to checkout'
         required: true
-        default: 'unstable'
+        default: '8.8'
       send-slack-message:
         description: 'Send Slack notification on completion'
         required: false
