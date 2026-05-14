@@ -10,6 +10,7 @@ RUN tdnf -y update && \
     curl \
     gcc \
     g++ \
+    binutils \
     make \
     cmake \
     libffi-devel \
@@ -23,6 +24,18 @@ RUN tdnf -y update && \
     jq \
     ca-certificates \
     tar
+
+# Expose GCC's LTO plugin to `ar` via /usr/lib/bfd-plugins/. Without this,
+# plain `ar` can't index LTO-bitcode symbols when building static archives,
+# so the bundled jemalloc (now compiled with -flto since redis/redis#15096)
+# produces a libjemalloc.a whose symbol table is missing `je_*_with_usize`,
+# and the final Redis link fails with undefined references. Other distros
+# (Ubuntu, Debian, RHEL family, Alpine) ship this symlink as part of their
+# GCC package; Microsoft's Azure Linux does not, so we add it manually.
+RUN PLUG="$(find /usr/libexec/gcc /usr/lib/gcc -name liblto_plugin.so 2>/dev/null | head -1)" \
+    && test -n "$PLUG" \
+    && mkdir -p /usr/lib/bfd-plugins \
+    && ln -sf "$PLUG" /usr/lib/bfd-plugins/liblto_plugin.so
 
 COPY .install /workspace/.install
 
