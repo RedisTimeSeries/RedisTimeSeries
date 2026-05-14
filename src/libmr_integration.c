@@ -436,7 +436,8 @@ Record *ListWithSeriesLastDatapoint(const Series *series, bool latest, bool resp
     }
 }
 
-void FreeContextUser(RedisModuleCtx *ctx) {
+
+static void ReleaseCtxUser(RedisModuleCtx *ctx) {
     if (!API_USER_CONTEXT_SUPPORTED)
         return;
     RedisModuleUser *user = (RedisModuleUser *)RedisModule_GetContextUser(ctx);
@@ -450,6 +451,7 @@ void FreeContextUser(RedisModuleCtx *ctx) {
 // already has the same user set, to avoid redundant alloc+free cycles.
 static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     RedisModuleString *currentName = NULL;
+    User_Ctx_t currentUserCtx = { .user = NULL, .is_owned = false };
     if (!API_USER_CONTEXT_SUPPORTED)
         return;
 
@@ -459,14 +461,14 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     RedisModule_StringPtrLen(userName, &len);
     RedisModule_Assert(len > 0);
 
-    // Check if the requested user is already set on the context
-    const RedisModuleUser *currentUser = GetUserFromContext(ctx);
-    if (currentUser) {
-        currentName = RedisModule_GetUserUsername(ctx, currentUser);
+    // Check if the requested user is already set on the context.
+    currentUserCtx = GetUserFromContext(ctx);
+    if (currentUserCtx.user) {
+        currentName = RedisModule_GetUserUsername(ctx, currentUserCtx.user);
         if (currentName && RedisModule_StringCompare(currentName, userName) == 0) {
             goto _cleanup;
         }
-        RedisModule_SetContextUser(ctx, NULL);
+        ReleaseCtxUser(ctx);
     }
 
     // Allocate and set the new user on the context
@@ -475,21 +477,9 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
         RedisModule_SetContextUser(ctx, user);
     }
 _cleanup:
-if(currentUser){
-    RedisModule_FreeModuleUser((RedisModuleUser *)currentUser);
-}
-if(currentName){
-    RedisModule_FreeString(ctx, currentName);
-}
-}
-
-static void ReleaseCtxUser(RedisModuleCtx *ctx) {
-    if (!API_USER_CONTEXT_SUPPORTED)
-        return;
-    RedisModuleUser *user = (RedisModuleUser *)RedisModule_GetContextUser(ctx);
-    if (user) {
-        RedisModule_FreeModuleUser(user);
-        RedisModule_SetContextUser(ctx, NULL);
+    FreeUser(&currentUserCtx);
+    if (currentName) {
+        RedisModule_FreeString(ctx, currentName);
     }
 }
 

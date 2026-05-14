@@ -122,14 +122,32 @@ static void FreeConfigAndStaticCtx(void) {
     }
 }
 
-RedisModuleUser *GetUserFromContext(RedisModuleCtx *ctx) {
-    const RedisModuleUser *ctxUser = NULL;
-    RedisModuleString *userName = NULL;
+User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx) {
+    const User_Ctx_t empty = { .user = NULL, .is_owned = false };
+
     if (!API_USER_CONTEXT_SUPPORTED)
-        return NULL;
-    ctxUser = RedisModule_GetContextUser(ctx);
-    userName = ctxUser ? RedisModule_GetUserUsername(ctxUser) : RedisModule_GetCurrentUserName(ctx);
-    return RedisModule_GetModuleUserFromUserName(userName);
+        return empty;
+
+    /* Fast path: ctx already has a user attached. Return it borrowed (is_owned=false): the ctx
+     * (or whoever attached it via SetContextUser) is responsible for its lifetime, so the caller
+     * MUST NOT free it. const is cast away to match the non-const RedisModuleUser* expected by
+     * the ACL/free APIs; this mirrors the existing pattern in libmr_integration.c. */
+    const RedisModuleUser *ctxUser = RedisModule_GetContextUser(ctx);
+    if (ctxUser) {
+        return (User_Ctx_t){ .user = (RedisModuleUser *)ctxUser, .is_owned = false };
+    }
+
+    /* Slow path: no user on the ctx. Look one up by current username. GetCurrentUserName returns
+     * a string registered on the ctx's auto-memory; we free it explicitly so it doesn't linger
+     * until the ctx is destroyed (effectively a slow leak on long-lived ctxs like rts_staticCtx).
+     * The resulting RedisModuleUser is freshly allocated and owned by the caller. */
+    RedisModuleString *userName = RedisModule_GetCurrentUserName(ctx);
+    if (!userName)
+        return empty;
+
+    RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(userName);
+    RedisModule_FreeString(ctx, userName);
+    return (User_Ctx_t){ .user = user, .is_owned = (user != NULL) };
 }
 
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {

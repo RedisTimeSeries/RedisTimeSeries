@@ -24,7 +24,30 @@
     (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                   \
      RedisModule_GetModuleUserFromUserName && RedisModule_GetUserUsername)
 
-RedisModuleUser *GetUserFromContext(RedisModuleCtx *ctx);
+/* Thin wrapper around RedisModuleUser*. `is_owned` tells the caller whether the user must be
+ * released with RedisModule_FreeModuleUser when done:
+ *   - is_owned == true  : the user was freshly allocated for this call; caller must release.
+ *   - is_owned == false : borrowed reference (e.g. attached to the ctx); caller MUST NOT release.
+ * Always release via FreeUser(), which makes the decision based on the flag. */
+typedef struct {
+    RedisModuleUser *user;
+    bool is_owned;
+} User_Ctx_t;
+
+User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx);
+
+/* Release a User_Ctx_t. Frees the underlying RedisModuleUser iff the wrapper actually owns it
+ * (i.e. user != NULL && is_owned). Always clears the wrapper to a safe empty state afterwards,
+ * making double-FreeUser calls a no-op. */
+static inline void FreeUser(User_Ctx_t *userCtx) {
+    if (userCtx == NULL)
+        return;
+    if (userCtx->user != NULL && userCtx->is_owned) {
+        RedisModule_FreeModuleUser(userCtx->user);
+    }
+    userCtx->user = NULL;
+    userCtx->is_owned = false;
+}
 
 static inline bool is_nan_string(const char *str, size_t len) {
     if (len == 3 && strncasecmp(str, "nan", 3) == 0) {
@@ -73,13 +96,12 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
                                            RedisModuleString *keyName,
                                            const int permissionFlags) {
     bool allowed = true;
-    RedisModuleUser *user = NULL;
     if (ctx != NULL) {
-        if ((user = GetUserFromContext(ctx)) != NULL) {
-            allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags) ==
-                      REDISMODULE_OK;
-
-            RedisModule_FreeModuleUser(user);
+        User_Ctx_t userCtx = GetUserFromContext(ctx);
+        if (userCtx.user) {
+            allowed = RedisModule_ACLCheckKeyPermissions(
+                          userCtx.user, keyName, permissionFlags) == REDISMODULE_OK;
+            FreeUser(&userCtx);
         }
     }
 
@@ -153,15 +175,15 @@ static inline bool IsUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx,
 }
 
 static inline bool IsCurrentUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx) {
-    struct RedisModuleUser *user = GetCurrentUser(ctx);
+    User_Ctx_t userCtx = GetUserFromContext(ctx);
 
-    if (!user) {
+    if (!userCtx.user) {
         return false;
     }
 
-    const bool ret = IsUserAllowedToReadAllTheKeys(ctx, user);
+    const bool ret = IsUserAllowedToReadAllTheKeys(ctx, userCtx.user);
 
-    RedisModule_FreeModuleUser(user);
+    FreeUser(&userCtx);
 
     return ret;
 }
