@@ -436,9 +436,20 @@ Record *ListWithSeriesLastDatapoint(const Series *series, bool latest, bool resp
     }
 }
 
+void FreeContextUser(RedisModuleCtx *ctx) {
+    if (!API_USER_CONTEXT_SUPPORTED)
+        return;
+    RedisModuleUser *user = (RedisModuleUser *)RedisModule_GetContextUser(ctx);
+    if (user) {
+        RedisModule_FreeModuleUser(user);
+        RedisModule_SetContextUser(ctx, NULL);
+    }
+}
+
 // Set the context user for ACL checks. Skips allocation if the context
 // already has the same user set, to avoid redundant alloc+free cycles.
 static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
+    RedisModuleString *currentName = NULL;
     if (!API_USER_CONTEXT_SUPPORTED)
         return;
 
@@ -451,15 +462,10 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     // Check if the requested user is already set on the context
     const RedisModuleUser *currentUser = GetUserFromContext(ctx);
     if (currentUser) {
-        RedisModuleString *currentName = RedisModule_GetUserUsername(ctx, currentUser);
-        if (currentName) {
-            const int cmp = RedisModule_StringCompare(currentName, userName);
-            RedisModule_FreeString(ctx, currentName);
-            if (cmp == 0) {
-                return; // Same user already set, nothing to do
-            }
+        currentName = RedisModule_GetUserUsername(ctx, currentUser);
+        if (currentName && RedisModule_StringCompare(currentName, userName) == 0) {
+            goto _cleanup;
         }
-        RedisModule_FreeModuleUser((RedisModuleUser *)currentUser);
         RedisModule_SetContextUser(ctx, NULL);
     }
 
@@ -468,6 +474,13 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     if (user) {
         RedisModule_SetContextUser(ctx, user);
     }
+_cleanup:
+if(currentUser){
+    RedisModule_FreeModuleUser((RedisModuleUser *)currentUser);
+}
+if(currentName){
+    RedisModule_FreeString(ctx, currentName);
+}
 }
 
 static void ReleaseCtxUser(RedisModuleCtx *ctx) {
