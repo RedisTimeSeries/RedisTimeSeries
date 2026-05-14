@@ -31,13 +31,22 @@ runs:
         export PATH="/usr/local/bin:$PATH"
         if [[ "${{ inputs.use-venv }}" == "1" ]]; then
           echo ::group::Activate virtual environment
-            python3 -m venv venv
+            # venv was created and populated by install_script.sh's
+            # lib/setup-python.sh (uv venv + pinned pip + build_package_requirements.txt
+            # + tests/flow/requirements.txt + gevent). Just activate it here and
+            # write a bash_profile shim so subsequent shell steps pick it up.
+            if [ ! -d venv ]; then
+              echo "::error::venv missing; install_script.sh must run before this action" >&2
+              exit 1
+            fi
             echo "source $PWD/venv/bin/activate" >> ~/.bash_profile
             . venv/bin/activate
           echo ::endgroup::
         fi
         echo ::group::Install python dependencies
-          ./.install/common_installations.sh
+          # Base deps (build_package_requirements.txt, tests/flow/requirements.txt,
+          # gevent) are already installed by install_script.sh → setup-python.sh.
+          # Only add the optional extras + call ./sbin/setup if the caller asked.
           if [[ "${{inputs.extra-packages-to-install}}" != "" ]]; then
             pip install ${{inputs.extra-packages-to-install}}
           fi

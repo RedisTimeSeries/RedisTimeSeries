@@ -2,31 +2,10 @@ FROM amazonlinux:2023
 
 WORKDIR /workspace
 
-# Install dependencies
-# Use --allowerasing to replace curl-minimal with full curl
-RUN dnf -y update && dnf -y install --allowerasing \
-    git \
-    gcc \
-    gcc-c++ \
-    make \
-    cmake \
-    automake \
-    autoconf \
-    libtool \
-    openssl-devel \
-    zlib-devel \
-    bzip2-devel \
-    libffi-devel \
-    wget \
-    curl \
-    which \
-    tar \
-    unzip \
-    jq \
-    clang \
-    && dnf clean all
-
+# Install build/test deps via the per-OSNICK installer
+# (.install/os/amazonlinux2023.sh — default RHEL set, no toolset layering).
 COPY .install /workspace/.install
+RUN bash /workspace/.install/install_script.sh && dnf clean all
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
 ARG REDIS_REF=unstable

@@ -2,42 +2,15 @@ FROM alpine:3
 
 WORKDIR /workspace
 
-# Install dependencies
-RUN apk add --no-cache \
-    bash \
-    make \
-    libtool \
-    tar \
-    cmake \
-    python3 \
-    python3-dev \
-    py3-pip \
-    gcc \
-    git \
-    curl \
-    build-base \
-    autoconf \
-    automake \
-    py3-cryptography \
-    linux-headers \
-    musl-dev \
-    libffi-dev \
-    openssl-dev \
-    openssh \
-    py-virtualenv \
-    clang18-libclang \
-    gcompat \
-    libstdc++ \
-    libgcc \
-    g++ \
-    openblas-dev \
-    xsimd \
-    xz \
-    bsd-compat-headers \
-    clang18 \
-    jq
+# Bootstrap bash so install_script.sh (bash shebang) can run; apk and awk are
+# already provided by busybox.
+RUN apk add --no-cache bash
 
+# Install build/test deps via the per-OSNICK installer (.install/os/alpine.sh
+# installs the apk base set and the musl/openblas extras that don't fit the
+# cross-distro defaults).
 COPY .install /workspace/.install
+RUN bash /workspace/.install/install_script.sh
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
 ARG REDIS_REF=unstable
