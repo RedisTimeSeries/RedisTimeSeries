@@ -407,33 +407,42 @@ exit:
 GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
                                            RedisModuleDict *dict,
                                            const GetSeriesFlags flags) {
+    // Resolve the user once for the whole dict scan; ACL is checked inline
+    // per key below so GetSeries is called without CheckForAcls and doesn't
+    // re-resolve the user per key.
+    const bool checkAcls = flags & GetSeriesFlags_CheckForAcls;
+    User_Ctx_t userCtx = { .user = NULL, .is_owned = false };
+    if (checkAcls) {
+        userCtx = GetUserFromContext(ctx);
+    }
+    const GetSeriesFlags childFlags = flags & ~GetSeriesFlags_CheckForAcls;
+
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
     RedisModuleString *currentKey;
     Series *series;
+    GetSeriesResult ret = GetSeriesResult_Success;
 
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
+        if (checkAcls && !CheckKeyIsAllowedToRead(userCtx.user, currentKey)) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "The user lacks the required permissions for the key, stopping.");
+            RedisModule_FreeString(ctx, currentKey);
+            ret = GetSeriesResult_PermissionError;
+            break;
+        }
         RedisModuleKey *key;
         const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, flags);
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, childFlags);
         RedisModule_FreeString(ctx, currentKey);
-
-        switch (status) {
-            case GetSeriesResult_Success:
-                RedisModule_CloseKey(key);
-                break;
-            case GetSeriesResult_GenericError:
-                break;
-            case GetSeriesResult_PermissionError:
-                RedisModule_Log(ctx,
-                                "warning",
-                                "The user lacks the required permissions for the key, stopping.");
-                RedisModule_DictIteratorStop(iter);
-                return GetSeriesResult_PermissionError;
+        if (status == GetSeriesResult_Success) {
+            RedisModule_CloseKey(key);
         }
     }
 
     RedisModule_DictIteratorStop(iter);
-    return GetSeriesResult_Success;
+    FreeUser(&userCtx);
+    return ret;
 }
 
 int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {
