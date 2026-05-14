@@ -19,12 +19,6 @@
 
 #define SeriesRecordName "SeriesRecord"
 
-/* All four must be present: Apply sets user from name; Release reads and clears via the same API
- * set. */
-#define API_USER_CONTEXT_SUPPORTED                                                                 \
-    (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                   \
-     RedisModule_GetModuleUserFromUserName && RedisModule_GetUserUsername)
-
 static Record NullRecord;
 static MRRecordType *NullRecordType = NULL;
 static MRRecordType *StringRecordType = NULL;
@@ -442,9 +436,21 @@ Record *ListWithSeriesLastDatapoint(const Series *series, bool latest, bool resp
     }
 }
 
+static void ReleaseCtxUser(RedisModuleCtx *ctx) {
+    if (!API_USER_CONTEXT_SUPPORTED)
+        return;
+    RedisModuleUser *user = (RedisModuleUser *)RedisModule_GetContextUser(ctx);
+    if (user) {
+        RedisModule_FreeModuleUser(user);
+        RedisModule_SetContextUser(ctx, NULL);
+    }
+}
+
 // Set the context user for ACL checks. Skips allocation if the context
 // already has the same user set, to avoid redundant alloc+free cycles.
 static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
+    RedisModuleString *currentName = NULL;
+    User_Ctx_t currentUserCtx = { .user = NULL, .is_owned = false };
     if (!API_USER_CONTEXT_SUPPORTED)
         return;
 
@@ -454,19 +460,14 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     RedisModule_StringPtrLen(userName, &len);
     RedisModule_Assert(len > 0);
 
-    // Check if the requested user is already set on the context
-    const RedisModuleUser *currentUser = RedisModule_GetContextUser(ctx);
-    if (currentUser) {
-        RedisModuleString *currentName = RedisModule_GetUserUsername(ctx, currentUser);
-        if (currentName) {
-            const int cmp = RedisModule_StringCompare(currentName, userName);
-            RedisModule_FreeString(ctx, currentName);
-            if (cmp == 0) {
-                return; // Same user already set, nothing to do
-            }
+    // Check if the requested user is already set on the context.
+    currentUserCtx = GetUserFromContext(ctx);
+    if (currentUserCtx.user) {
+        currentName = RedisModule_GetUserUsername(ctx, currentUserCtx.user);
+        if (currentName && RedisModule_StringCompare(currentName, userName) == 0) {
+            goto _cleanup;
         }
-        RedisModule_FreeModuleUser((RedisModuleUser *)currentUser);
-        RedisModule_SetContextUser(ctx, NULL);
+        ReleaseCtxUser(ctx);
     }
 
     // Allocate and set the new user on the context
@@ -474,15 +475,10 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     if (user) {
         RedisModule_SetContextUser(ctx, user);
     }
-}
-
-static void ReleaseCtxUser(RedisModuleCtx *ctx) {
-    if (!API_USER_CONTEXT_SUPPORTED)
-        return;
-    RedisModuleUser *user = (RedisModuleUser *)RedisModule_GetContextUser(ctx);
-    if (user) {
-        RedisModule_FreeModuleUser(user);
-        RedisModule_SetContextUser(ctx, NULL);
+_cleanup:
+    FreeUser(&currentUserCtx);
+    if (currentName) {
+        RedisModule_FreeString(ctx, currentName);
     }
 }
 
