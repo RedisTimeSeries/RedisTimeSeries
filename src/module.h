@@ -18,6 +18,14 @@
 
 #include "fast_double_parser_c/fast_double_parser_c.h"
 
+/* All four must be present: Apply sets user from name; Release reads and clears via the same API
+ * set. */
+#define API_USER_CONTEXT_SUPPORTED                                                                 \
+    (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                   \
+     RedisModule_GetModuleUserFromUserName && RedisModule_GetUserUsername)
+
+RedisModuleUser *GetUserFromContext(RedisModuleCtx *ctx);
+
 static inline bool is_nan_string(const char *str, size_t len) {
     if (len == 3 && strncasecmp(str, "nan", 3) == 0) {
         return true;
@@ -68,9 +76,8 @@ static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
     RedisModuleUser *user = NULL;
     if (ctx != NULL) {
         if ((user = GetUserFromContext(ctx)) != NULL) {
-            allowed = RedisModule_ACLCheckKeyPermissions((RedisModuleUser *)contextUser,
-                                                         keyName,
-                                                         permissionFlags) == REDISMODULE_OK;
+            allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags) ==
+                      REDISMODULE_OK;
 
             RedisModule_FreeModuleUser(user);
         }
@@ -177,7 +184,6 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
                                            const GetSeriesFlags flags);
 
 int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args);
-RedisModuleString *GetUserFromContext(RedisModuleCtx *ctx);
 
 extern int persistence_in_progress;
 

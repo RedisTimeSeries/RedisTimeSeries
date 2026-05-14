@@ -122,13 +122,13 @@ static void FreeConfigAndStaticCtx(void) {
     }
 }
 
-RedisModuleString *GetUserFromContext(RedisModuleCtx *ctx) {
-    RedisModuleUser *user = NULL;
+RedisModuleUser *GetUserFromContext(RedisModuleCtx *ctx) {
+    const RedisModuleUser *ctxUser = NULL;
     RedisModuleString *userName = NULL;
     if (!API_USER_CONTEXT_SUPPORTED)
         return NULL;
-    user = RedisModule_GetContextUser(ctx);
-    userName = user ? RedisModule_GetUserUsername(user) : RedisModule_GetCurrentUserName(ctx);
+    ctxUser = RedisModule_GetContextUser(ctx);
+    userName = ctxUser ? RedisModule_GetUserUsername(ctxUser) : RedisModule_GetCurrentUserName(ctx);
     return RedisModule_GetModuleUserFromUserName(userName);
 }
 
