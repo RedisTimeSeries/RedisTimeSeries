@@ -64,33 +64,19 @@ static inline bool parse_double(const RedisModuleString *valueStr, double *outVa
 static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
                                            RedisModuleString *keyName,
                                            const int permissionFlags) {
+    bool allowed = true;
+    RedisModuleUser *user = NULL;
     if (ctx != NULL) {
-        RedisModuleUser *user = GetCurrentUser(ctx);
+        if ((user = GetUserFromContext(ctx)) != NULL) {
+            allowed = RedisModule_ACLCheckKeyPermissions((RedisModuleUser *)contextUser,
+                                                         keyName,
+                                                         permissionFlags) == REDISMODULE_OK;
 
-        if (!user) {
-            const RedisModuleUser *contextUser =
-                RedisModule_GetContextUser ? RedisModule_GetContextUser(ctx) : NULL;
-            if (contextUser) {
-                return RedisModule_ACLCheckKeyPermissions((RedisModuleUser *)contextUser,
-                                                          keyName,
-                                                          permissionFlags) == REDISMODULE_OK;
-            }
-            return true;
+            RedisModule_FreeModuleUser(user);
         }
-
-        const int allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags);
-
-        RedisModule_FreeModuleUser(user);
-
-        if (allowed != REDISMODULE_OK) {
-            return false;
-        }
-    } else {
-        RedisModule_Log(
-            NULL, "warning", "Can't check for the ACLs: redis module context is not set.");
     }
 
-    return true;
+    return allowed;
 }
 
 /// @brief Check if the key is allowed by the ACLs for the current user.
@@ -191,6 +177,7 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
                                            const GetSeriesFlags flags);
 
 int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args);
+RedisModuleString *GetUserFromContext(RedisModuleCtx *ctx);
 
 extern int persistence_in_progress;
 
