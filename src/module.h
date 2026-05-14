@@ -32,7 +32,8 @@
  *   - is_owned == true  : the user was freshly allocated for this call; caller must release.
  *   - is_owned == false : borrowed reference (e.g. attached to the ctx); caller MUST NOT release.
  * Always release via FreeUser(), which makes the decision based on the flag. */
-typedef struct {
+typedef struct
+{
     RedisModuleUser *user;
     bool is_owned;
 } User_Ctx_t;
@@ -146,8 +147,7 @@ static inline bool CheckKeyIsAllowedToWriteC(RedisModuleCtx *ctx,
     return CheckKeyIsAllowedByAclsC(ctx, user, keyName, keyNameLength, REDISMODULE_CMD_KEY_UPDATE);
 }
 
-static inline bool CheckKeyIsAllowedToReadWrite(RedisModuleUser *user,
-                                                RedisModuleString *keyName) {
+static inline bool CheckKeyIsAllowedToReadWrite(RedisModuleUser *user, RedisModuleString *keyName) {
     return CheckKeyIsAllowedByAcls(
         user, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE);
 }

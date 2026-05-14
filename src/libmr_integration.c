@@ -436,7 +436,6 @@ Record *ListWithSeriesLastDatapoint(const Series *series, bool latest, bool resp
     }
 }
 
-
 static void ReleaseCtxUser(RedisModuleCtx *ctx) {
     if (!API_USER_CONTEXT_SUPPORTED)
         return;

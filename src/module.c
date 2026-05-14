@@ -424,9 +424,8 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
 
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         if (checkAcls && !CheckKeyIsAllowedToRead(userCtx.user, currentKey)) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "The user lacks the required permissions for the key, stopping.");
+            RedisModule_Log(
+                ctx, "warning", "The user lacks the required permissions for the key, stopping.");
             RedisModule_FreeString(ctx, currentKey);
             ret = GetSeriesResult_PermissionError;
             break;
