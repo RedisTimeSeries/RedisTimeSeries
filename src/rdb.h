@@ -24,9 +24,10 @@
 #define TS_LAST_AGGREGATION_EMPTY 7
 #define TS_CREATE_IGNORE_VER 8
 #define TS_NAN_SUPPORT_VER 9
+#define TS_TWA_DROP_REVERSE_VER 10 // drops the dead `reverse` byte from TwaContext
 
 // This flag should be updated whenever a new rdb version is introduced
-#define TS_LATEST_ENCVER TS_NAN_SUPPORT_VER
+#define TS_LATEST_ENCVER TS_TWA_DROP_REVERSE_VER
 
 extern int last_rdb_load_version;
 

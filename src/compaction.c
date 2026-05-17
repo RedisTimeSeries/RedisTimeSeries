@@ -27,12 +27,6 @@
 #include "valgrind/valgrind.h"
 #endif
 
-/* Placeholder written in place of the removed `reverse` field on the TwaContext.
- * Preserves the on-disk RDB layout so older binaries can still parse new RDBs and
- * vice versa without bumping the encoding version. TWA always operates forward now,
- * and the legacy flag was never set for compaction-rule contexts anyway. */
- #define TWA_LEGACY_REVERSE_FLAG 0
- 
 typedef struct FirstValueContext
 {
     double value;
@@ -378,8 +372,6 @@ void TwaReset(void *contextPtr) {
     _TwainitContext(contextPtr);
 }
 
-/* The trailing zero preserves the on-disk layout (TWA always operated forward; the legacy
- * `reverse` field on disk was never set for compaction-rule contexts). */
 void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
     TwaContext *context = (TwaContext *)contextPtr;
     RedisModule_SaveDouble(io, context->res);
@@ -391,7 +383,6 @@ void TwaWriteContext(void *contextPtr, RedisModuleIO *io) {
     RedisModule_SaveUnsigned(io, context->last_ts);
     RedisModule_SaveUnsigned(io, context->is_first_bucket);
     RedisModule_SaveUnsigned(io, context->iteration);
-    RedisModule_SaveUnsigned(io, TWA_LEGACY_REVERSE_FLAG);
 }
 
 int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
@@ -406,7 +397,10 @@ int TwaReadContext(void *contextPtr, RedisModuleIO *io, int encver) {
     context->last_ts = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     context->is_first_bucket = LoadUnsigned_IOError(io, err, TSDB_ERROR);
     context->iteration = LoadUnsigned_IOError(io, err, TSDB_ERROR);
-    (void)LoadUnsigned_IOError(io, err, TSDB_ERROR); /* legacy reverse flag, ignored */
+    if (encver < TS_TWA_DROP_REVERSE_VER) {
+        // Pre-v10 RDBs carry a dead `reverse` byte after `iteration`. Consume and discard.
+        (void)LoadUnsigned_IOError(io, err, TSDB_ERROR);
+    }
     return TSDB_OK;
 }
 
