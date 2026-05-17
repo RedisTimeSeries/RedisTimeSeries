@@ -18,20 +18,19 @@
 
 #include "fast_double_parser_c/fast_double_parser_c.h"
 
-/* A RedisModuleCtx carries the connection's authenticated "client user" plus an
- * optional "attached user" set by the module: SetContextUser attaches one,
- * GetContextUser reads it back (borrowed), GetModuleUserFromUserName allocates
- * one by name (owned), GetUserUsername returns a user's name. GetUserFromContext()
- * below picks the attached user if present, else allocates the client user. */
+/* A RedisModuleCtx has a client user plus an optional attached user; when set,
+ * the attached user shadows the client for ACL on this ctx (used by libmr to
+ * run jobs under the originator's identity). SetContextUser attaches one;
+ * GetContextUser returns an internal pointer — caller MUST NOT free;
+ * GetModuleUserFromUserName allocates one — caller frees via FreeModuleUser;
+ * GetUserUsername returns a user's name. */
 #define API_USER_CONTEXT_SUPPORTED                                                                 \
     (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                   \
      RedisModule_GetModuleUserFromUserName && RedisModule_GetUserUsername)
 
-/* Thin wrapper around RedisModuleUser*. `is_owned` tells the caller whether the user must be
- * released with RedisModule_FreeModuleUser when done:
- *   - is_owned == true  : the user was freshly allocated for this call; caller must release.
- *   - is_owned == false : borrowed reference (e.g. attached to the ctx); caller MUST NOT release.
- * Always release via FreeUser(), which makes the decision based on the flag. */
+/* RedisModuleUser* tagged with whether the caller owns it. If is_owned, the
+ * user was freshly allocated and must be freed; otherwise it's an internal ctx
+ * pointer and MUST NOT be freed. Always release via FreeUser(). */
 typedef struct
 {
     RedisModuleUser *user;
@@ -40,9 +39,8 @@ typedef struct
 
 User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx);
 
-/* Release a User_Ctx_t. Frees the underlying RedisModuleUser iff the wrapper actually owns it
- * (i.e. user != NULL && is_owned). Always clears the wrapper to a safe empty state afterwards,
- * making double-FreeUser calls a no-op. */
+/* Release a User_Ctx_t: frees the underlying user only if owned, then clears
+ * the wrapper so double-FreeUser is a no-op. */
 static inline void FreeUser(User_Ctx_t *userCtx) {
     if (userCtx == NULL)
         return;
@@ -158,37 +156,6 @@ static inline bool CheckKeyIsAllowedToReadWriteC(RedisModuleCtx *ctx,
                                                  const size_t keyNameLength) {
     return CheckKeyIsAllowedByAclsC(
         ctx, user, keyName, keyNameLength, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE);
-}
-
-// Returns true if the user is allowed to read all the keys.
-static inline bool IsUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx,
-                                                 struct RedisModuleUser *user) {
-    struct RedisModuleString *prefix = RedisModule_CreateString(ctx, "*", 1);
-
-    if (!prefix) {
-        return false;
-    }
-
-    const bool ret = RedisModule_ACLCheckKeyPermissions(user, prefix, REDISMODULE_CMD_KEY_ACCESS) ==
-                     REDISMODULE_OK;
-
-    RedisModule_FreeString(ctx, prefix);
-
-    return ret;
-}
-
-static inline bool IsCurrentUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx) {
-    User_Ctx_t userCtx = GetUserFromContext(ctx);
-
-    if (!userCtx.user) {
-        return false;
-    }
-
-    const bool ret = IsUserAllowedToReadAllTheKeys(ctx, userCtx.user);
-
-    FreeUser(&userCtx);
-
-    return ret;
 }
 
 extern RedisModuleType *SeriesType;
