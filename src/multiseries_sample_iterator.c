@@ -18,7 +18,8 @@ typedef struct
     AbstractSampleIterator *iter; // The iterator this sample belongs to
 } MSSample;
 
-// implements min heap (samples are merged in chronological order; the reply layer reverses if needed)
+// implements min heap (samples are merged in chronological order; the reply layer reverses if
+// needed)
 static int heap_cmp_func(const void *sample1, const void *sample2, __unused const void *udata) {
     return (((MSSample *)sample1)->sample.timestamp < ((MSSample *)sample2)->sample.timestamp) ? 1
                                                                                                : -1;

@@ -170,12 +170,8 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
             cap = new_cap;
         }
 
-        memcpy(timestamps + total,
-               enrichedChunk->samples.timestamps,
-               n * sizeof(timestamp_t));
-        memcpy(values + total * vps,
-               enrichedChunk->samples._values,
-               n * vps * sizeof(double));
+        memcpy(timestamps + total, enrichedChunk->samples.timestamps, n * sizeof(timestamp_t));
+        memcpy(values + total * vps, enrichedChunk->samples._values, n * vps * sizeof(double));
         total += n;
 
         if (count_limited && reverse && total > budget) {
