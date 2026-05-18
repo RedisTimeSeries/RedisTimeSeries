@@ -2340,3 +2340,676 @@ def test_mrange_mrevrange_symmetry():
                 f'{key}: per-series mirror failed:\n'
                 f'fwd={_format_redis_cli(f_samples)}\n'
                 f'rev={_format_redis_cli(r_samples)}')
+
+
+# ---------------------------------------------------------------------------
+# TS.RANGE AGGREGATION coverage — keep aligned with the public docs at:
+#   https://redis.io/docs/latest/commands/ts.range/
+#
+# The per-aggregator tests above (test_agg_*, test_ts_range_count{NaN,All})
+# verify exact values for each aggregator on hand-tuned inputs. The four
+# tests below add coverage that scales automatically to every aggregator
+# listed in TS_RANGE_AGGREGATORS:
+#
+#   1. test_ts_range_all_aggregators_exact_values (positive)
+#      Every aggregator returns the CORRECT value for a single bucket with
+#      mixed numeric + NaN samples. Also verifies TS.REVRANGE mirrors
+#      TS.RANGE (parser/aggregator share the path; this catches direction-
+#      specific regressions).
+#
+#   2. test_ts_range_all_aggregators_empty_flag (positive, EMPTY flag)
+#      Asserts the exact value reported for an EMPTY bucket sandwiched
+#      between two samples, for every aggregator. The expected values
+#      come from the public docs (the EMPTY-flag table on
+#      https://redis.io/docs/latest/commands/ts.range/) plus the
+#      standard mathematical definitions for aggregators that the docs
+#      do not list explicitly (variance of an empty set → NaN, etc.).
+#      twa's empty-bucket value is the time-weighted average of the
+#      linear interpolation between the surrounding samples (also docs).
+#
+#   3. test_ts_range_invalid_aggregator_bucket_duration (negative)
+#      Every aggregator rejects malformed `bucketDuration`. Catches new
+#      aggregators that forget the shared validation. Also probes
+#      TS.REVRANGE to make sure both directions agree.
+#
+#   4. test_ts_range_unknown_aggregator (negative)
+#      Unknown / typo aggregator names are rejected. Includes a check for
+#      `AGGREGATION` with no aggregator name and `AGGREGATION x dur EMPTY`
+#      with an unknown name (EMPTY must not mask the unknown-name error).
+# ---------------------------------------------------------------------------
+
+# Full list per https://redis.io/docs/latest/commands/ts.range/ (AGGREGATION
+# block). Adding a new aggregator? Add it here and AGG_SINGLE_BUCKET_EXPECTED
+# + AGG_EMPTY_BUCKET_EXPECTED below, then both the positive and the negative
+# tests will cover it automatically.
+TS_RANGE_AGGREGATORS = [
+    'avg', 'sum', 'min', 'max', 'range', 'count', 'countNaN', 'countAll',
+    'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s', 'twa',
+]
+
+# Expected values for AGGREGATION <agg> 100 over a single bucket [0, 100)
+# containing samples: (10, 10), (20, NaN), (30, 20).
+# Non-NaN values = [10, 20], mean = 15, n = 2.
+#   var_p = ((10-15)^2 + (20-15)^2) / 2 = 25
+#   var_s = ((10-15)^2 + (20-15)^2) / 1 = 50
+# twa is excluded — single-bucket twa depends on extrapolation policy at the
+# bucket edges and is exercised by the dedicated test_agg_twa above.
+AGG_SINGLE_BUCKET_EXPECTED = {
+    'avg':      15.0,
+    'sum':      30.0,
+    'min':      10.0,
+    'max':      20.0,
+    'range':    10.0,                        # max - min (non-NaN)
+    'count':    2.0,                         # non-NaN count
+    'countNaN': 1.0,
+    'countAll': 3.0,
+    'first':    10.0,                        # value at lowest ts (non-NaN)
+    'last':     20.0,                        # value at highest ts (non-NaN)
+    'std.p':    5.0,                         # sqrt(var_p)
+    'std.s':    math.sqrt(50.0),             # sqrt(var_s)
+    'var.p':    25.0,
+    'var.s':    50.0,
+}
+
+# Expected empty-bucket value for an EMPTY bucket sandwiched between two
+# samples (10, 100) and (30, 200), bucketDuration=10, ALIGN 0 → the empty
+# bucket is [20, 30). Values are STRINGS so we can assert 'NaN' literally.
+#
+# These expectations come from the public docs AND from the mathematical
+# definition of each aggregator over the empty set:
+#   - sum, count, countNaN, countAll: aggregator counts/sums over zero
+#     samples → 0 (docs explicitly state this for sum/count; countNaN
+#     and countAll are counts of subsets of an empty set → also 0).
+#   - last:  docs say "value of the last sample BEFORE the bucket's
+#     start" → 100 (the sample at t=10).
+#   - min, max, range, avg, first, std.p, std.s: docs explicitly say NaN.
+#   - var.p, var.s: variance over the empty set is mathematically
+#     undefined → NaN (docs don't list these; the math/sense answer is
+#     NaN, consistent with the std.p/std.s row from the docs).
+#   - twa: docs say "average value over the bucket's timeframe based on
+#     linear interpolation". With surrounding samples (10, 100) and
+#     (30, 200), the line value at t=20 is 150 and at t=30 is 200, so
+#     the time-weighted average over [20, 30) is (150 + 200) / 2 = 175.
+AGG_EMPTY_BUCKET_EXPECTED = {
+    'sum':      '0',
+    'count':    '0',
+    'countNaN': '0',
+    'countAll': '0',
+    'last':     '100',                       # previous sample's value
+    'min':      'NaN',
+    'max':      'NaN',
+    'range':    'NaN',
+    'avg':      'NaN',
+    'first':    'NaN',
+    'std.p':    'NaN',
+    'std.s':    'NaN',
+    'var.p':    'NaN',
+    'var.s':    'NaN',
+    # 'twa' handled separately — expected value 175 derived above.
+}
+
+
+def _agg_value_to_float(val):
+    """Aggregator response value → Python float (handles bytes/str/NaN)."""
+    s = val.decode() if isinstance(val, bytes) else val
+    return float(s)
+
+
+def test_ts_range_all_aggregators_exact_values():
+    """
+    Positive: for every aggregator from the TS.RANGE docs, the value
+    returned over a single bucket containing mixed numeric + NaN samples
+    must match the hand-computed expected value.
+
+    Also verifies TS.REVRANGE returns the same single bucket (direction
+    must not change the per-bucket value).
+
+    Coverage rationale (vs the existing test_agg_* tests):
+      - This is a single source-of-truth table for the per-aggregator
+        contract; new aggregators wire themselves in via the dict.
+      - Adds the NaN dimension to the table — only countNaN / countAll /
+        the dedicated test_ts_range_NaN_values exercise this today.
+    """
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_exact{a}'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.MADD',
+                          key, 10, 10,
+                          key, 20, 'nan',
+                          key, 30, 20)
+
+        # Sanity: every aggregator in the docs list has an expected value
+        # (or, for twa, an explicit exemption documented in the table).
+        covered = set(AGG_SINGLE_BUCKET_EXPECTED.keys()) | {'twa'}
+        missing = set(TS_RANGE_AGGREGATORS) - covered
+        assert not missing, \
+            f'AGG_SINGLE_BUCKET_EXPECTED missing aggregators: {sorted(missing)}'
+
+        TOL = 1e-6
+        for agg, exp in AGG_SINGLE_BUCKET_EXPECTED.items():
+            fwd = r.execute_command(
+                'TS.RANGE', key, 0, '+', 'AGGREGATION', agg, 100)
+            rev = r.execute_command(
+                'TS.REVRANGE', key, 0, '+', 'AGGREGATION', agg, 100)
+            assert len(fwd) == 1, \
+                f'AGGREGATION {agg}: expected 1 bucket fwd, got {fwd!r}'
+            assert len(rev) == 1, \
+                f'AGGREGATION {agg}: expected 1 bucket rev, got {rev!r}'
+            assert fwd[0][0] == 0 == rev[0][0], (
+                f'AGGREGATION {agg}: bucket ts mismatch '
+                f'fwd={fwd[0][0]} rev={rev[0][0]}')
+
+            got_fwd = _agg_value_to_float(fwd[0][1])
+            got_rev = _agg_value_to_float(rev[0][1])
+            assert abs(got_fwd - exp) < TOL, (
+                f'AGGREGATION {agg} TS.RANGE: expected {exp}, got {got_fwd}')
+            assert abs(got_rev - exp) < TOL, (
+                f'AGGREGATION {agg} TS.REVRANGE: expected {exp}, got {got_rev}')
+
+        # twa: single-bucket value depends on the edge-extrapolation policy.
+        # Just assert the call succeeds and returns a finite number for this
+        # input (two non-NaN samples in the same bucket).
+        fwd = r.execute_command(
+            'TS.RANGE', key, 0, '+', 'AGGREGATION', 'twa', 100)
+        assert len(fwd) == 1, \
+            f'AGGREGATION twa: expected 1 bucket, got {fwd!r}'
+        twa = _agg_value_to_float(fwd[0][1])
+        assert math.isfinite(twa), \
+            f'AGGREGATION twa: expected finite value, got {twa}'
+
+
+def test_ts_range_all_aggregators_empty_flag():
+    """
+    Positive (EMPTY flag): for every aggregator from the TS.RANGE docs,
+    assert the exact value reported for an EMPTY bucket sandwiched between
+    two samples.
+
+    Setup: samples at (10, 100) and (30, 200), bucketDuration=10, ALIGN 0.
+    Window [0, 39] yields buckets [10,20), [20,30), [30,40). The bucket at
+    ts=20 is EMPTY (between samples). The bucket at ts=0 is dropped because
+    no sample precedes it (should_skip_empty_gap).
+
+    Also verifies TS.REVRANGE returns the same set of buckets in reverse.
+    """
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_empty{a}'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.MADD',
+                          key, 10, 100,
+                          key, 30, 200)
+
+        # Sanity: every aggregator in the docs list has an expected value
+        # (or, for twa, an explicit exemption documented in the table).
+        covered = set(AGG_EMPTY_BUCKET_EXPECTED.keys()) | {'twa'}
+        missing = set(TS_RANGE_AGGREGATORS) - covered
+        assert not missing, \
+            f'AGG_EMPTY_BUCKET_EXPECTED missing aggregators: {sorted(missing)}'
+
+        for agg, exp_str in AGG_EMPTY_BUCKET_EXPECTED.items():
+            fwd = r.execute_command(
+                'TS.RANGE', key, 0, 39, 'ALIGN', 0,
+                'AGGREGATION', agg, 10, 'EMPTY')
+            rev = r.execute_command(
+                'TS.REVRANGE', key, 0, 39, 'ALIGN', 0,
+                'AGGREGATION', agg, 10, 'EMPTY')
+
+            # Direction symmetry: same buckets, reverse order.
+            assert fwd == list(reversed(rev)), (
+                f'AGGREGATION {agg} EMPTY: TS.RANGE / TS.REVRANGE are not '
+                f'mirror images\n  fwd={fwd!r}\n  rev={rev!r}')
+
+            fwd_by_ts = {row[0]: row[1] for row in fwd}
+            assert set(fwd_by_ts) == {10, 20, 30}, (
+                f'AGGREGATION {agg} EMPTY: expected buckets at 10/20/30, '
+                f'got {sorted(fwd_by_ts)} (full: {fwd!r})')
+            assert fwd_by_ts[20] == exp_str, (
+                f'AGGREGATION {agg} EMPTY bucket: expected {exp_str!r}, '
+                f'got {fwd_by_ts[20]!r}')
+
+        # twa empty bucket: linear interpolation between (10, 100) and
+        # (30, 200). Bucket [20, 30): interp at t=20 = 150, at t=30 = 200,
+        # time-weighted avg over [20, 30) = (150 + 200) / 2 = 175.
+        fwd = r.execute_command(
+            'TS.RANGE', key, 0, 39, 'ALIGN', 0,
+            'AGGREGATION', 'twa', 10, 'EMPTY')
+        twa_by_ts = {row[0]: row[1] for row in fwd}
+        assert 20 in twa_by_ts, \
+            f'AGGREGATION twa EMPTY: bucket ts=20 missing from {fwd!r}'
+        twa_empty = _agg_value_to_float(twa_by_ts[20])
+        assert abs(twa_empty - 175.0) < 1e-6, (
+            f'AGGREGATION twa EMPTY bucket: expected 175.0, got {twa_empty}')
+
+
+def test_ts_range_invalid_aggregator_bucket_duration():
+    """
+    Negative: for every aggregator from the TS.RANGE docs, malformed
+    `bucketDuration` must be rejected with a ResponseError, for BOTH
+    TS.RANGE and TS.REVRANGE (the parser path is shared but worth
+    cross-checking). Covers the full set of parser failure modes:
+      - missing entirely
+      - non-numeric ('foo')
+      - empty string ('')
+      - lone whitespace (' ')
+      - decimal ('1.5')           — bucketDuration is integer-only
+      - NaN / inf string literals
+      - massive overflow that won't fit in a long long
+      - negative integer (-1)
+    """
+    bad_bucket_durations = [
+        'foo',
+        '',
+        ' ',
+        '1.5',
+        'nan',
+        'inf',
+        '99999999999999999999999999999',
+        -1,
+    ]
+
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'agg_neg_bucket{a}'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.ADD', key, 10, 1)
+
+        for cmd in ('TS.RANGE', 'TS.REVRANGE'):
+            for agg in TS_RANGE_AGGREGATORS:
+                # bucketDuration missing entirely
+                with pytest.raises(redis.ResponseError):
+                    r.execute_command(cmd, key, 0, '+', 'AGGREGATION', agg)
+                for bd in bad_bucket_durations:
+                    with pytest.raises(redis.ResponseError):
+                        r.execute_command(
+                            cmd, key, 0, '+', 'AGGREGATION', agg, bd)
+
+
+def test_ts_range_unknown_aggregator():
+    """
+    Negative: unknown aggregator names must be rejected. Includes the empty
+    string, an obvious garbage token, and a typo of a real aggregator —
+    guards against the parser silently accepting close-misses.
+
+    Also exercises a few structural negatives that aren't tied to a name:
+      - `AGGREGATION` with no aggregator and no bucketDuration at all
+      - `AGGREGATION <unknown> 100 EMPTY` — EMPTY must not mask the
+        unknown-name error
+    """
+    bad_names = [
+        '',                          # empty string
+        'foo',                       # never been an aggregator
+        'avgg',                      # typo of 'avg'
+        'aggregation',               # the keyword itself
+        'not_aggregation_function',  # historical placeholder
+    ]
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'agg_unknown{a}'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.ADD', key, 10, 1)
+
+        for name in bad_names:
+            with pytest.raises(redis.ResponseError):
+                r.execute_command(
+                    'TS.RANGE', key, 0, '+', 'AGGREGATION', name, 100)
+            with pytest.raises(redis.ResponseError):
+                r.execute_command(
+                    'TS.REVRANGE', key, 0, '+', 'AGGREGATION', name, 100)
+            # EMPTY must not mask the unknown-aggregator error.
+            with pytest.raises(redis.ResponseError):
+                r.execute_command(
+                    'TS.RANGE', key, 0, '+',
+                    'AGGREGATION', name, 100, 'EMPTY')
+
+        # `AGGREGATION` with nothing after it must fail.
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION')
+
+
+# ---------------------------------------------------------------------------
+# Edge-case tests for TS.RANGE AGGREGATION.
+#
+# Each of these tests targets a corner case that the broader exact-values /
+# EMPTY tests above don't reach. Expected values are derived from the
+# public docs and from standard mathematical definitions. Where the docs
+# leave a corner case undefined (single-sample twa, single-sample sample
+# variance, etc.) the test either asserts the math-correct answer (so a
+# code bug surfaces) or leaves the value unpinned — never silently
+# encodes what the current implementation happens to return.
+# ---------------------------------------------------------------------------
+
+# Bucket [0, 100) with one sample (50, 42). Expectations are derived
+# strictly from per-aggregator docs definitions + standard math:
+#
+#   sum, avg, min, max, first, last over {42}         → 42
+#   range = max - min over {42}                       → 0
+#   count (non-NaN), countAll over {42}               → 1
+#   countNaN over {42}                                → 0
+#   std.p, var.p (population) over {42}:
+#       variance = E[(X-μ)²] with μ=42, X=42          → 0
+#       std      = sqrt(0)                            → 0
+#   std.s, var.s (sample) over {42}:
+#       formal definition is SS / (n-1) = 0 / 0       → NaN (undefined)
+#       (Some implementations special-case n=1 to 0 as a defensive
+#       choice. The docs do not specify; the math/spec answer is NaN.
+#       If this assertion fires, decide whether to update the docs to
+#       call out the n=1 → 0 convention or change the code.)
+#   twa over {(50, 42)} in bucket [0, 100):
+#       docs say "time-weighted average over the bucket's timeframe".
+#       A single sample defines a constant function (→ 42) under one
+#       reading and is undefined (→ NaN) under another. The docs do
+#       not disambiguate, so this test does NOT pin an exact value
+#       for twa — it only asserts the call succeeds and returns a
+#       number (NaN or finite). The dedicated test_agg_twa above
+#       exercises the multi-sample twa math.
+AGG_SINGLE_SAMPLE_BUCKET_EXPECTED = {
+    'avg':      42.0,
+    'sum':      42.0,
+    'min':      42.0,
+    'max':      42.0,
+    'range':    0.0,
+    'count':    1.0,
+    'countNaN': 0.0,
+    'countAll': 1.0,
+    'first':    42.0,
+    'last':     42.0,
+    'std.p':    0.0,
+    'var.p':    0.0,
+    'std.s':    float('nan'),                 # undefined (n=1, SS/(n-1)=0/0)
+    'var.s':    float('nan'),                 # undefined (n=1, SS/(n-1)=0/0)
+}
+
+
+def test_ts_range_all_aggregators_single_sample_bucket():
+    """
+    Edge case (positive): bucket containing a single sample.
+
+    Expected values are derived purely from each aggregator's documented
+    semantics and from standard mathematical definitions — NOT from
+    inspecting the implementation. Specifically:
+      - Population variance/std over {x} is 0 by definition.
+      - Sample variance/std over {x} requires division by (n-1) = 0 and
+        is mathematically undefined → NaN.
+      - twa over a single sample is ambiguous per docs and is therefore
+        only verified to return SOMETHING parseable (not pinned to a
+        specific value).
+
+    If this test fails for std.s / var.s / twa, the right response is
+    either to (a) fix the implementation, or (b) extend the docs to
+    specify the n=1 / single-sample behaviour, and then update this test.
+    """
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_single{a}'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.ADD', key, 50, 42)
+
+        # Coverage guard.
+        covered = set(AGG_SINGLE_SAMPLE_BUCKET_EXPECTED) | {'twa'}
+        missing = set(TS_RANGE_AGGREGATORS) - covered
+        assert not missing, \
+            f'AGG_SINGLE_SAMPLE_BUCKET_EXPECTED missing: {sorted(missing)}'
+
+        TOL = 1e-6
+        for agg, exp in AGG_SINGLE_SAMPLE_BUCKET_EXPECTED.items():
+            fwd = r.execute_command(
+                'TS.RANGE', key, 0, '+', 'AGGREGATION', agg, 100)
+            rev = r.execute_command(
+                'TS.REVRANGE', key, 0, '+', 'AGGREGATION', agg, 100)
+            assert len(fwd) == 1, \
+                f'AGGREGATION {agg} n=1: expected 1 bucket fwd, got {fwd!r}'
+            assert len(rev) == 1, \
+                f'AGGREGATION {agg} n=1: expected 1 bucket rev, got {rev!r}'
+            for label, res in (('TS.RANGE', fwd), ('TS.REVRANGE', rev)):
+                got = _agg_value_to_float(res[0][1])
+                if math.isnan(exp):
+                    assert math.isnan(got), (
+                        f'AGGREGATION {agg} n=1 {label}: expected NaN '
+                        f'(sample variance undefined for n=1), got {got}')
+                else:
+                    assert abs(got - exp) < TOL, (
+                        f'AGGREGATION {agg} n=1 {label}: '
+                        f'expected {exp}, got {got}')
+
+        # twa: docs don't specify single-sample behaviour → only assert
+        # the call succeeds and returns a parseable number.
+        for cmd in ('TS.RANGE', 'TS.REVRANGE'):
+            res = r.execute_command(
+                cmd, key, 0, '+', 'AGGREGATION', 'twa', 100)
+            assert len(res) == 1, \
+                f'AGGREGATION twa n=1 {cmd}: expected 1 bucket, got {res!r}'
+            # Will raise if not parseable; NaN is fine.
+            _agg_value_to_float(res[0][1])
+
+
+def test_ts_range_count_family_on_all_nan_bucket():
+    """
+    Edge case (positive): countNaN and countAll on an all-NaN bucket.
+
+    Fills the gap left by test_ts_range_NaN_values (which covers all
+    non-count aggregators on all-NaN buckets, but only the legacy
+    `count` from the count family). Expectations are derived from the
+    per-aggregator docs definitions:
+      - count    = "Number of non-NaN values"               → 0 (bucket
+                   has zero non-NaN values, so the bucket is "empty"
+                   for count and is dropped without the EMPTY flag).
+      - countNaN = "Number of NaN values"                   → N (the
+                   bucket has N NaN samples, so it is NOT empty for
+                   countNaN and must be reported even without EMPTY).
+      - countAll = "Number of values, including NaN and non-NaN" → N
+                   (same reasoning as countNaN).
+
+    Setup: three NaN samples (10, 20, 30), one non-NaN sample (200, 5)
+    in a different bucket so we can also check that the count family
+    reports the all-NaN bucket distinctly from the populated one.
+    """
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_allnan{a}'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.MADD',
+                          key, 10, 'nan',
+                          key, 20, 'nan',
+                          key, 30, 'nan',
+                          key, 200, 5)
+
+        # All-NaN bucket [0, 100): query just that bucket.
+        # No EMPTY flag. Per docs, countNaN counts the NaN samples and
+        # countAll counts all samples — both see 3 valid items, so the
+        # bucket is NOT empty for them and must be reported even without
+        # the EMPTY flag.
+        for agg, expected in (('countNaN', '3'), ('countAll', '3')):
+            res = r.execute_command(
+                'TS.RANGE', key, 0, 99, 'AGGREGATION', agg, 100)
+            assert res == [[0, expected]], \
+                f'AGGREGATION {agg} all-NaN bucket: got {res!r}'
+
+        # By contrast, `count` is defined per docs as "Number of non-NaN
+        # values" → 0 for an all-NaN bucket → the bucket is empty for
+        # count and must be omitted without the EMPTY flag. This locks
+        # in the per-aggregator asymmetry implied by the docs.
+        res = r.execute_command(
+            'TS.RANGE', key, 0, 99, 'AGGREGATION', 'count', 100)
+        assert res == [], \
+            f'AGGREGATION count all-NaN bucket without EMPTY: expected [], got {res!r}'
+
+        # With EMPTY, count emits the bucket with value 0.
+        res = r.execute_command(
+            'TS.RANGE', key, 0, 99, 'AGGREGATION', 'count', 100, 'EMPTY')
+        assert res == [[0, '0']], \
+            f'AGGREGATION count all-NaN bucket with EMPTY: got {res!r}'
+
+        # Across both buckets, countAll should report 3 NaN + 1 non-NaN.
+        res = r.execute_command(
+            'TS.RANGE', key, 0, 299, 'AGGREGATION', 'countAll', 100)
+        # Bucket [0,100): 3 NaN samples → 3. Bucket [200,300): 1 → 1.
+        # Bucket [100,200) has no samples → dropped (no EMPTY).
+        assert res == [[0, '3'], [200, '1']], \
+            f'AGGREGATION countAll multi-bucket: got {res!r}'
+
+
+def test_ts_range_aggregator_name_case_insensitivity():
+    """
+    Edge case (parser): aggregator names are case-insensitive. For every
+    aggregator from the docs, the lowercase, UPPERCASE and MiXeD-CaSe
+    forms must all produce the same response.
+
+    Catches drift in the parser's keyword table — e.g. if a new aggregator
+    is added with a case-sensitive comparison instead of the shared
+    case-insensitive matcher.
+    """
+    def mixed_case(s):
+        # Toggle case per character; leaves '.' and digits untouched.
+        return ''.join(c.upper() if i % 2 == 0 else c.lower()
+                       for i, c in enumerate(s))
+
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_case{a}'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.MADD',
+                          key, 10, 10,
+                          key, 20, 'nan',
+                          key, 30, 20)
+
+        for agg in TS_RANGE_AGGREGATORS:
+            forms = [agg.lower(), agg.upper(), mixed_case(agg)]
+            results = [
+                r.execute_command(
+                    'TS.RANGE', key, 0, '+', 'AGGREGATION', form, 100)
+                for form in forms
+            ]
+            # All three forms must produce IDENTICAL responses.
+            assert results[0] == results[1] == results[2], (
+                f'AGGREGATION case-insensitivity broken for {agg!r}:\n'
+                f'  lower={forms[0]!r} → {results[0]!r}\n'
+                f'  UPPER={forms[1]!r} → {results[1]!r}\n'
+                f'  Mixed={forms[2]!r} → {results[2]!r}'
+            )
+            # And must not be an empty response (sanity: we set up data).
+            assert len(results[0]) >= 1, \
+                f'AGGREGATION {agg}: empty response for all forms'
+
+
+# Multi-bucket composition: AGGREGATION + ALIGN + FILTER_BY_VALUE + COUNT.
+# Per docs:
+#   - FILTER_BY_VALUE filters samples BEFORE aggregation.
+#   - AGGREGATION buckets the surviving samples.
+#   - COUNT limits the number of REPORTED BUCKETS (not samples).
+#   - TS.RANGE iterates ascending; TS.REVRANGE iterates descending.
+#     "COUNT" in REVRANGE therefore yields the buckets with the LARGEST
+#     timestamps (the first N in reverse-iteration order).
+#
+# Series: ten samples at t=5,15,25,...,95 with values equal to their ts.
+# FILTER_BY_VALUE 20 80 keeps t=25,35,45,55,65,75. bucketDuration=20,
+# ALIGN 0 → surviving buckets after the filter pipeline:
+#   [20,40) holds (25, 35)   ← values [25, 35]
+#   [40,60) holds (45, 55)   ← values [45, 55]
+#   [60,80) holds (65, 75)   ← values [65, 75]
+# Buckets [0,20) and [80,100) have no surviving samples and are dropped.
+#
+# Per-aggregator per-bucket values are computed from the surviving samples
+# of each bucket using the standard definitions cited in the TS.RANGE docs:
+#   sum=Σv, avg=Σv/n, min/max/first/last=obvious, range=max-min,
+#   count=count_all=2 (no NaN), countNaN=0,
+#   var_p=Σ(v-μ)²/n, var_s=Σ(v-μ)²/(n-1), std=√var.
+# Each bucket here has values [x, x+10] with mean=x+5, so SS=50 in every
+# bucket → var.p=25, var.s=50, std.p=5, std.s=√50 across the board.
+AGG_COMPOSITION_BUCKET_VALUES = {
+    'avg':      {20: 30.0, 40: 50.0,  60: 70.0},
+    'sum':      {20: 60.0, 40: 100.0, 60: 140.0},
+    'min':      {20: 25.0, 40: 45.0,  60: 65.0},
+    'max':      {20: 35.0, 40: 55.0,  60: 75.0},
+    'range':    {20: 10.0, 40: 10.0,  60: 10.0},
+    'count':    {20:  2.0, 40:  2.0,  60:  2.0},
+    'countNaN': {20:  0.0, 40:  0.0,  60:  0.0},
+    'countAll': {20:  2.0, 40:  2.0,  60:  2.0},
+    'first':    {20: 25.0, 40: 45.0,  60: 65.0},
+    'last':     {20: 35.0, 40: 55.0,  60: 75.0},
+    'std.p':    {20:  5.0, 40:  5.0,  60:  5.0},
+    'std.s':    {20: math.sqrt(50.0), 40: math.sqrt(50.0), 60: math.sqrt(50.0)},
+    'var.p':    {20: 25.0, 40: 25.0,  60: 25.0},
+    'var.s':    {20: 50.0, 40: 50.0,  60: 50.0},
+}
+
+
+def test_ts_range_aggregator_composition_align_filter_count():
+    """
+    Edge case (composition): AGGREGATION pipelined with ALIGN +
+    FILTER_BY_VALUE + COUNT. Asserts EXACT per-aggregator per-bucket
+    values for both TS.RANGE and TS.REVRANGE.
+
+    Per the docs ("samples are filtered before being aggregated" and
+    "COUNT ... limits the number of reported buckets"):
+      - TS.RANGE with COUNT 2 yields the two SMALLEST-ts surviving
+        buckets, in ascending order: ts=20 then ts=40.
+      - TS.REVRANGE with COUNT 2 yields the two LARGEST-ts surviving
+        buckets, in descending order: ts=60 then ts=40.
+
+    Twa is excluded from the per-value table: the docs say twa
+    interpolates based on "the last sample before the bucket's start"
+    and "the first sample after the bucket's end", and the docs do not
+    specify whether samples removed by FILTER_BY_VALUE remain visible
+    to that interpolation. This test should not pin a value that the
+    docs leave open.
+    """
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_compose{a}'
+        r.execute_command('TS.CREATE', key)
+        for t in range(5, 100, 10):              # 5, 15, 25, ..., 95
+            r.execute_command('TS.ADD', key, t, t)
+
+        # Coverage guard.
+        covered = set(AGG_COMPOSITION_BUCKET_VALUES) | {'twa'}
+        missing = set(TS_RANGE_AGGREGATORS) - covered
+        assert not missing, \
+            f'AGG_COMPOSITION_BUCKET_VALUES missing: {sorted(missing)}'
+
+        TOL = 1e-6
+
+        def _check(label, command, expected_ts_in_order, agg, per_bucket):
+            res = r.execute_command(
+                command, key, 0, '+',
+                'FILTER_BY_VALUE', 20, 80,
+                'COUNT', 2,
+                'ALIGN', 0, 'AGGREGATION', agg, 20)
+            assert len(res) == 2, (
+                f'AGGREGATION {agg} {label}: expected 2 buckets, '
+                f'got {res!r}')
+            for exp_ts, row in zip(expected_ts_in_order, res):
+                assert row[0] == exp_ts, (
+                    f'AGGREGATION {agg} {label}: '
+                    f'bucket ts {row[0]} != {exp_ts}')
+                got = float(row[1])
+                exp_val = per_bucket[exp_ts]
+                assert abs(got - exp_val) < TOL, (
+                    f'AGGREGATION {agg} {label} bucket {exp_ts}: '
+                    f'expected {exp_val}, got {got}')
+
+        for agg, per_bucket in AGG_COMPOSITION_BUCKET_VALUES.items():
+            _check('TS.RANGE',    'TS.RANGE',    [20, 40], agg, per_bucket)
+            _check('TS.REVRANGE', 'TS.REVRANGE', [60, 40], agg, per_bucket)
+
+
+def test_ts_range_aggregator_empty_no_preceding_sample():
+    """
+    Edge case (EMPTY flag): when an EMPTY bucket has no PRECEDING non-NaN
+    sample, LAST and TWA must report NaN per docs ("NaN when no such
+    sample"). This complements test_ts_range_all_aggregators_empty_flag
+    above, where every EMPTY bucket DID have a preceding sample.
+
+    Setup: a NaN sample at t=100 (so the bucket [100, 200) is non-empty
+    from the storage layer's perspective and won't be skipped by
+    should_skip_empty_gap, but LAST/TWA see no valid prior sample),
+    followed by a valid sample at t=200.
+    """
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        for agg in ('last', 'twa'):
+            key = f'agg_emp_no_prev_{agg.replace(".", "_")}{{a}}'
+            r.execute_command('TS.CREATE', key)
+            r.execute_command('TS.ADD', key, 100, 'nan')
+            r.execute_command('TS.ADD', key, 200, 50)
+
+            res = r.execute_command(
+                'TS.RANGE', key, 100, 199,
+                'AGGREGATION', agg, 100, 'EMPTY')
+            assert len(res) == 1, \
+                f'AGGREGATION {agg}: expected 1 bucket, got {res!r}'
+            got = float(res[0][1])
+            assert math.isnan(got), (
+                f'AGGREGATION {agg} EMPTY no-prior-sample: '
+                f'expected NaN, got {got}')
