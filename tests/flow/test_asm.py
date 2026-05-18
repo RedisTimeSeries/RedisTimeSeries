@@ -61,13 +61,23 @@ def test_asm_with_data_and_queries_during_migrations():
     def validate_command_in_a_loop():
         # Note: should be the same as in libmr_commands.c
         SLOT_RANGES_ERROR = "Query requires unavailable slots"
+        # Under valgrind/sanitizer the LibMR per-execution idle timeout (5s, see
+        # EXECUTION_DEFAULT_MAX_IDLE_MS in deps/LibMR/src/mr.c) can be exceeded
+        # while slot migration is in flight, surfacing as the shard-timeout error.
+        SHARD_TIMEOUT_ERROR = (
+            "A multi-keys command failed because at least one shard "
+            "did not reply within the given timeframe."
+        )
+        tolerated_errors = {SLOT_RANGES_ERROR}
+        if VALGRIND or SANITIZER:
+            tolerated_errors.add(SHARD_TIMEOUT_ERROR)
         while not done.is_set():
             try:
                 result = conn.execute_command(command)
             except redis.exceptions.ResponseError as x:
                 error_message = str(x)
-                # An occasional SLOT_RANGES_ERROR is expected
-                assert error_message == SLOT_RANGES_ERROR, error_message
+                # An occasional transient error is expected during migrations
+                assert error_message in tolerated_errors, error_message
                 continue
             validate_result(result)
 
