@@ -18,6 +18,12 @@
 #define DEFAULT_NUM_THREADS 3
 #define NUM_THREADS_MIN 1
 #define NUM_THREADS_MAX 16
+// Per-execution idle ceiling for LibMR (TS.MRANGE/MGET/QUERYINDEX). LibMR's built-in default is
+// 5000ms, suitable for healthy fast shards. Operators can raise it when shards are legitimately
+// slow (heavy AOF rewrite, big RDB transfer during ASM, Valgrind/sanitizer CI, etc.).
+#define DEFAULT_MR_EXECUTION_MAX_IDLE_MS 5000
+#define MR_EXECUTION_MAX_IDLE_MS_MIN 1000
+#define MR_EXECUTION_MAX_IDLE_MS_MAX (10 * 60 * 1000) // 10 minutes
 #define RETENTION_POLICY_MIN 0
 #define RETENTION_POLICY_MAX LLONG_MAX
 #define CHUNK_SIZE_BYTES_MIN 48
@@ -42,6 +48,7 @@ typedef struct
     bool dontAssertOnFailure;    // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample
     double ignoreMaxValDiff;     // Insert filter max value diff with the last sample
+    long long mrExecutionMaxIdleMs; // LibMR per-execution idle ceiling (ms)
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;

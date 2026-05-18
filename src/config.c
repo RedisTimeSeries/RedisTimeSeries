@@ -48,6 +48,7 @@ void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_DEFAULT;
     TSGlobalConfig.password = NULL;
+    TSGlobalConfig.mrExecutionMaxIdleMs = DEFAULT_MR_EXECUTION_MAX_IDLE_MS;
 
     if (getConfigStringCache) {
         RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
@@ -88,7 +89,8 @@ RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx) {
         "NUM_THREADS %lld\n"
         "LIBMR_PROTOCOL %s\n"
         "IGNORE_MAX_VAL_DIFF %lf\n"
-        "IGNORE_MAX_TIME_DIFF %lld\n",
+        "IGNORE_MAX_TIME_DIFF %lld\n"
+        "MR_EXECUTION_MAX_IDLE_MS %lld\n",
         CompactionRulesToString(TSGlobalConfig.compactionRules,
                                 TSGlobalConfig.compactionRulesCount),
         TSGlobalConfig.retentionPolicy,
@@ -98,7 +100,8 @@ RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx) {
         TSGlobalConfig.numThreads,
         LibmrProtocolToString(TSGlobalConfig.libmrProtocol),
         TSGlobalConfig.ignoreMaxValDiff,
-        TSGlobalConfig.ignoreMaxTimeDiff);
+        TSGlobalConfig.ignoreMaxTimeDiff,
+        TSGlobalConfig.mrExecutionMaxIdleMs);
 }
 
 int ParseDuplicatePolicy(RedisModuleCtx *ctx,
@@ -365,6 +368,8 @@ static long long getModernIntegerConfigValue(const char *name, void *privdata) {
         return TSGlobalConfig.chunkSizeBytes;
     } else if (!strcasecmp("ts-ignore-max-time-diff", name)) {
         return TSGlobalConfig.ignoreMaxTimeDiff;
+    } else if (!strcasecmp("ts-mr-execution-max-idle-ms", name)) {
+        return TSGlobalConfig.mrExecutionMaxIdleMs;
     }
 
     return 0;
@@ -407,6 +412,9 @@ static int setModernIntegerConfigValue(const char *name,
 
         TSGlobalConfig.ignoreMaxTimeDiff = value;
 
+        return REDISMODULE_OK;
+    } else if (!strcasecmp("ts-mr-execution-max-idle-ms", name)) {
+        TSGlobalConfig.mrExecutionMaxIdleMs = value;
         return REDISMODULE_OK;
     }
 
@@ -595,6 +603,27 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         RedisModule_Log(
             ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-ignore-max-val-diff", 12, oldValue);
     }
+
+    if (RedisModule_RegisterNumericConfig(ctx,
+                                          "ts-mr-execution-max-idle-ms",
+                                          TSGlobalConfig.mrExecutionMaxIdleMs,
+                                          REDISMODULE_CONFIG_UNPREFIXED,
+                                          MR_EXECUTION_MAX_IDLE_MS_MIN,
+                                          MR_EXECUTION_MAX_IDLE_MS_MAX,
+                                          getModernIntegerConfigValue,
+                                          setModernIntegerConfigValue,
+                                          NULL,
+                                          NULL)) {
+        return false;
+    }
+
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*lld }",
+                    23,
+                    "ts-mr-execution-max-idle-ms",
+                    12,
+                    TSGlobalConfig.mrExecutionMaxIdleMs);
 
     RedisModule_Log(ctx, "notice", "]");
 

@@ -116,6 +116,17 @@ def Env(*args, **kwargs):
             else:
                 if not any(module for module in modules if (module[b'name'] == b'timeseries' or module[b'name'] == 'timeseries')):
                     break
+            # Valgrind/sanitizer slow shards far enough that LibMR's 5s per-execution idle ceiling
+            # is too tight: an INNERCOMMUNICATION sub-execution queued on a shard that's mid-ASM
+            # (or otherwise saturated) can legitimately take longer than 5s round-trip, surfacing
+            # as "did not reply within the given timeframe". Raise the ceiling to a value that
+            # absorbs that slowdown so genuine cluster-state errors (SLOT_RANGES_ERROR, etc.) are
+            # what surfaces to clients/tests, not transport-layer impatience.
+            if VALGRIND or SANITIZER:
+                try:
+                    conn.config_set('ts-mr-execution-max-idle-ms', 60000)
+                except Exception:
+                    pass  # config option absent on old builds; ignore
             conn.execute_command('timeseries.REFRESHCLUSTER')
     return env
 

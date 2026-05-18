@@ -3,6 +3,7 @@
 #include "LibMR/src/utils/arr.h"
 #include "LibMR/src/mr.h"
 #include "LibMR/src/cluster.h"
+#include "config.h"
 #include "consts.h"
 #include "libmr_integration.h"
 #include "query_language.h"
@@ -566,6 +567,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
+    MR_ExecutionSetMaxIdle(exec, TSGlobalConfig.mrExecutionMaxIdleMs);
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
@@ -630,6 +632,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
+    MR_ExecutionSetMaxIdle(exec, TSGlobalConfig.mrExecutionMaxIdleMs);
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MRangeData *data = malloc(sizeof(struct MRangeData)); // freed by mrange_done
@@ -685,6 +688,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
+    MR_ExecutionSetMaxIdle(exec, TSGlobalConfig.mrExecutionMaxIdleMs);
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
