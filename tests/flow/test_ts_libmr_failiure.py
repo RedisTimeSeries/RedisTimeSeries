@@ -65,6 +65,16 @@ def testLibmrFail():
         env.skip()
     env.skipOnSlave() # There can't be 2 rdb save at the same time
     env.skipOnAOF()
+    # This test verifies the LibMR max-idle error message. Under valgrind/sanitizer the global
+    # includes.py setup raises ts-mr-execution-max-idle-ms to a more generous ceiling to absorb
+    # legitimate shard slowness, but here we want the timer to fire FIRST — before the cluster
+    # gossip notices the killed shard and starts replying CLUSTERDOWN. Force a short ceiling
+    # on every shard for the duration of this test.
+    for shard in range(1, env.shardsCount + 1):
+        try:
+            env.getConnection(shard).config_set('ts-mr-execution-max-idle-ms', 5000)
+        except Exception:
+            pass
     start_ts = 1
     samples_count = 10
     with env.getClusterConnectionIfNeeded() as r:
