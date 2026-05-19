@@ -18,6 +18,39 @@
 
 #include "fast_double_parser_c/fast_double_parser_c.h"
 
+/* A RedisModuleCtx has a client user plus an optional attached user; when set,
+ * the attached user shadows the client for ACL on this ctx (used by libmr to
+ * run jobs under the originator's identity). SetContextUser attaches one;
+ * GetContextUser returns an internal pointer — caller MUST NOT free;
+ * GetModuleUserFromUserName allocates one — caller frees via FreeModuleUser;
+ * GetUserUsername returns a user's name. */
+#define API_USER_CONTEXT_SUPPORTED                                                                 \
+    (RedisModule_SetContextUser && RedisModule_GetContextUser &&                                   \
+     RedisModule_GetModuleUserFromUserName && RedisModule_GetUserUsername)
+
+/* RedisModuleUser* tagged with whether the caller owns it. If is_owned, the
+ * user was freshly allocated and must be freed; otherwise it's an internal ctx
+ * pointer and MUST NOT be freed. Always release via FreeUser(). */
+typedef struct
+{
+    RedisModuleUser *user;
+    bool is_owned;
+} User_Ctx_t;
+
+User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx);
+
+/* Release a User_Ctx_t: frees the underlying user only if owned, then clears
+ * the wrapper so double-FreeUser is a no-op. */
+static inline void FreeUser(User_Ctx_t *userCtx) {
+    if (userCtx == NULL)
+        return;
+    if (userCtx->user != NULL && userCtx->is_owned) {
+        RedisModule_FreeModuleUser(userCtx->user);
+    }
+    userCtx->user = NULL;
+    userCtx->is_owned = false;
+}
+
 static inline bool is_nan_string(const char *str, size_t len) {
     if (len == 3 && strncasecmp(str, "nan", 3) == 0) {
         return true;
@@ -56,121 +89,73 @@ static inline bool parse_double(const RedisModuleString *valueStr, double *outVa
     return parse_double_cstr(valueCStr, len, outValue);
 }
 
-/// @brief Check if the key is allowed by the ACLs for the current user.
-/// @param ctx The redis module context.
+/// @brief Check if the key is allowed by the ACLs for the given user.
+/// @param user The user to check against. Callers should hoist
+///             GetUserFromContext() once per request and pass userCtx.user
+///             here so multi-key loops don't pay per-key alloc/free.
+///             user==NULL means "no user resolvable" and default-allows.
 /// @param keyName The name of the key to check the ACLs for.
 /// @param permissionFlags The permissions to check for.
 /// @return true if the key is allowed by the ACLs, false otherwise.
-static inline bool CheckKeyIsAllowedByAcls(RedisModuleCtx *ctx,
+static inline bool CheckKeyIsAllowedByAcls(RedisModuleUser *user,
                                            RedisModuleString *keyName,
                                            const int permissionFlags) {
-    if (ctx != NULL) {
-        RedisModuleUser *user = GetCurrentUser(ctx);
-
-        if (!user) {
-            const RedisModuleUser *contextUser =
-                RedisModule_GetContextUser ? RedisModule_GetContextUser(ctx) : NULL;
-            if (contextUser) {
-                return RedisModule_ACLCheckKeyPermissions((RedisModuleUser *)contextUser,
-                                                          keyName,
-                                                          permissionFlags) == REDISMODULE_OK;
-            }
-            return true;
-        }
-
-        const int allowed = RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags);
-
-        RedisModule_FreeModuleUser(user);
-
-        if (allowed != REDISMODULE_OK) {
-            return false;
-        }
-    } else {
-        RedisModule_Log(
-            NULL, "warning", "Can't check for the ACLs: redis module context is not set.");
+    if (user == NULL) {
+        return true;
     }
-
-    return true;
+    return RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags) == REDISMODULE_OK;
 }
 
-/// @brief Check if the key is allowed by the ACLs for the current user.
-/// @param ctx The redis module context.
-/// @param keyName The name of the key to check the ACLs for (C String).
-/// @param permissionFlags The permissions to check for.
-/// @return true if the key is allowed by the ACLs, false otherwise.
+/// @brief Same as CheckKeyIsAllowedByAcls but with a C-string key. The
+///        RedisModuleString is allocated/freed internally; the user is
+///        taken as-is so loops can hoist it once.
 static inline bool CheckKeyIsAllowedByAclsC(RedisModuleCtx *ctx,
+                                            RedisModuleUser *user,
                                             const char *keyName,
                                             const size_t keyNameLength,
                                             const int permissionFlags) {
+    if (user == NULL) {
+        return true;
+    }
     RedisModuleString *key = RedisModule_CreateString(ctx, keyName, keyNameLength);
-    const bool isAllowed = CheckKeyIsAllowedByAcls(ctx, key, permissionFlags);
-
+    const bool isAllowed = CheckKeyIsAllowedByAcls(user, key, permissionFlags);
     RedisModule_FreeString(ctx, key);
-
     return isAllowed;
 }
 
-static inline bool CheckKeyIsAllowedToRead(RedisModuleCtx *ctx, RedisModuleString *keyName) {
-    return CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_ACCESS);
+static inline bool CheckKeyIsAllowedToRead(RedisModuleUser *user, RedisModuleString *keyName) {
+    return CheckKeyIsAllowedByAcls(user, keyName, REDISMODULE_CMD_KEY_ACCESS);
 }
 
 static inline bool CheckKeyIsAllowedToReadC(RedisModuleCtx *ctx,
+                                            RedisModuleUser *user,
                                             const char *keyName,
                                             const size_t keyNameLength) {
-    return CheckKeyIsAllowedByAclsC(ctx, keyName, keyNameLength, REDISMODULE_CMD_KEY_ACCESS);
+    return CheckKeyIsAllowedByAclsC(ctx, user, keyName, keyNameLength, REDISMODULE_CMD_KEY_ACCESS);
 }
 
-static inline bool CheckKeyIsAllowedToWrite(RedisModuleCtx *ctx, RedisModuleString *keyName) {
-    return CheckKeyIsAllowedByAcls(ctx, keyName, REDISMODULE_CMD_KEY_UPDATE);
+static inline bool CheckKeyIsAllowedToWrite(RedisModuleUser *user, RedisModuleString *keyName) {
+    return CheckKeyIsAllowedByAcls(user, keyName, REDISMODULE_CMD_KEY_UPDATE);
 }
 
 static inline bool CheckKeyIsAllowedToWriteC(RedisModuleCtx *ctx,
+                                             RedisModuleUser *user,
                                              const char *keyName,
                                              const size_t keyNameLength) {
-    return CheckKeyIsAllowedByAclsC(ctx, keyName, keyNameLength, REDISMODULE_CMD_KEY_UPDATE);
+    return CheckKeyIsAllowedByAclsC(ctx, user, keyName, keyNameLength, REDISMODULE_CMD_KEY_UPDATE);
 }
 
-static inline bool CheckKeyIsAllowedToReadWrite(RedisModuleCtx *ctx, RedisModuleString *keyName) {
+static inline bool CheckKeyIsAllowedToReadWrite(RedisModuleUser *user, RedisModuleString *keyName) {
     return CheckKeyIsAllowedByAcls(
-        ctx, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE);
+        user, keyName, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE);
 }
 
 static inline bool CheckKeyIsAllowedToReadWriteC(RedisModuleCtx *ctx,
+                                                 RedisModuleUser *user,
                                                  const char *keyName,
                                                  const size_t keyNameLength) {
     return CheckKeyIsAllowedByAclsC(
-        ctx, keyName, keyNameLength, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE);
-}
-
-// Returns true if the user is allowed to read all the keys.
-static inline bool IsUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx,
-                                                 struct RedisModuleUser *user) {
-    struct RedisModuleString *prefix = RedisModule_CreateString(ctx, "*", 1);
-
-    if (!prefix) {
-        return false;
-    }
-
-    const bool ret = RedisModule_ACLCheckKeyPermissions(user, prefix, REDISMODULE_CMD_KEY_ACCESS) ==
-                     REDISMODULE_OK;
-
-    RedisModule_FreeString(ctx, prefix);
-
-    return ret;
-}
-
-static inline bool IsCurrentUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx) {
-    struct RedisModuleUser *user = GetCurrentUser(ctx);
-
-    if (!user) {
-        return false;
-    }
-
-    const bool ret = IsUserAllowedToReadAllTheKeys(ctx, user);
-
-    RedisModule_FreeModuleUser(user);
-
-    return ret;
+        ctx, user, keyName, keyNameLength, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE);
 }
 
 extern RedisModuleType *SeriesType;

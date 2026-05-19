@@ -122,6 +122,34 @@ static void FreeConfigAndStaticCtx(void) {
     }
 }
 
+User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx) {
+    const User_Ctx_t empty = { .user = NULL, .is_owned = false };
+
+    if (!API_USER_CONTEXT_SUPPORTED)
+        return empty;
+
+    /* Fast path: ctx already has a user attached. Return it borrowed (is_owned=false): the ctx
+     * (or whoever attached it via SetContextUser) is responsible for its lifetime, so the caller
+     * MUST NOT free it. const is cast away to match the non-const RedisModuleUser* expected by
+     * the ACL/free APIs; this mirrors the existing pattern in libmr_integration.c. */
+    const RedisModuleUser *ctxUser = RedisModule_GetContextUser(ctx);
+    if (ctxUser) {
+        return (User_Ctx_t){ .user = (RedisModuleUser *)ctxUser, .is_owned = false };
+    }
+
+    /* Slow path: no user on the ctx. Look one up by current username. GetCurrentUserName returns
+     * a string registered on the ctx's auto-memory; we free it explicitly so it doesn't linger
+     * until the ctx is destroyed (effectively a slow leak on long-lived ctxs like rts_staticCtx).
+     * The resulting RedisModuleUser is freshly allocated and owned by the caller. */
+    RedisModuleString *userName = RedisModule_GetCurrentUserName(ctx);
+    if (!userName)
+        return empty;
+
+    RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(userName);
+    RedisModule_FreeString(ctx, userName);
+    return (User_Ctx_t){ .user = user, .is_owned = (user != NULL) };
+}
+
 int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -379,33 +407,41 @@ exit:
 GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
                                            RedisModuleDict *dict,
                                            const GetSeriesFlags flags) {
+    // Resolve the user once for the whole dict scan; ACL is checked inline
+    // per key below so GetSeries is called without CheckForAcls and doesn't
+    // re-resolve the user per key.
+    const bool checkAcls = flags & GetSeriesFlags_CheckForAcls;
+    User_Ctx_t userCtx = { .user = NULL, .is_owned = false };
+    if (checkAcls) {
+        userCtx = GetUserFromContext(ctx);
+    }
+    const GetSeriesFlags childFlags = flags & ~GetSeriesFlags_CheckForAcls;
+
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(dict, "^", NULL, 0);
     RedisModuleString *currentKey;
     Series *series;
+    GetSeriesResult ret = GetSeriesResult_Success;
 
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
+        if (checkAcls && !CheckKeyIsAllowedToRead(userCtx.user, currentKey)) {
+            RedisModule_Log(
+                ctx, "warning", "The user lacks the required permissions for the key, stopping.");
+            RedisModule_FreeString(ctx, currentKey);
+            ret = GetSeriesResult_PermissionError;
+            break;
+        }
         RedisModuleKey *key;
         const GetSeriesResult status =
-            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, flags);
+            GetSeries(ctx, currentKey, &key, &series, REDISMODULE_READ, childFlags);
         RedisModule_FreeString(ctx, currentKey);
-
-        switch (status) {
-            case GetSeriesResult_Success:
-                RedisModule_CloseKey(key);
-                break;
-            case GetSeriesResult_GenericError:
-                break;
-            case GetSeriesResult_PermissionError:
-                RedisModule_Log(ctx,
-                                "warning",
-                                "The user lacks the required permissions for the key, stopping.");
-                RedisModule_DictIteratorStop(iter);
-                return GetSeriesResult_PermissionError;
+        if (status == GetSeriesResult_Success) {
+            RedisModule_CloseKey(key);
         }
     }
 
     RedisModule_DictIteratorStop(iter);
-    return GetSeriesResult_Success;
+    FreeUser(&userCtx);
+    return ret;
 }
 
 int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args) {

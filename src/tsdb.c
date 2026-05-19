@@ -92,25 +92,31 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
     const char *currentKeyStr = RedisModule_StringPtrLen(keyName, &len);
 
     if (flags & GetSeriesFlags_CheckForAcls) {
-        if ((mode & REDISMODULE_READ) && !CheckKeyIsAllowedToRead(ctx, keyName)) {
+        // Resolve the user once for both Read and Write ACL checks below
+        // (previously each Check* call resolved + freed its own user).
+        User_Ctx_t userCtx = GetUserFromContext(ctx);
+
+        if ((mode & REDISMODULE_READ) && !CheckKeyIsAllowedToRead(userCtx.user, keyName)) {
+            FreeUser(&userCtx);
             if (!isSilent) {
                 RTS_ReplyPermissionError(ctx,
                                          "the current user doesn't have the read permission to "
                                          "one or more keys that match the specified filter");
             }
-
             return GetSeriesResult_PermissionError;
         }
 
-        if ((mode & REDISMODULE_WRITE) && !CheckKeyIsAllowedToWrite(ctx, keyName)) {
+        if ((mode & REDISMODULE_WRITE) && !CheckKeyIsAllowedToWrite(userCtx.user, keyName)) {
+            FreeUser(&userCtx);
             if (!isSilent) {
                 RTS_ReplyPermissionError(ctx,
                                          "the current user doesn't have the write permission "
                                          "to one or more keys that match the specified filter");
             }
-
             return GetSeriesResult_PermissionError;
         }
+
+        FreeUser(&userCtx);
     }
 
     RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
