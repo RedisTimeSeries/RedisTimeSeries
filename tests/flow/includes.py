@@ -124,7 +124,10 @@ def Env(*args, **kwargs):
             # what surfaces to clients/tests, not transport-layer impatience.
             if VALGRIND or SANITIZER:
                 try:
-                    conn.config_set('ts-mr-execution-max-idle-ms', 60000)
+                    # 5 minutes — generous enough to distinguish "just slow under
+                    # valgrind" from "actually hung". If the test still times out
+                    # at this ceiling, the bug is a real hang, not a tight timer.
+                    conn.config_set('ts-mr-execution-max-idle-ms', 300000)
                 except Exception:
                     pass  # config option absent on old builds; ignore
             conn.execute_command('timeseries.REFRESHCLUSTER')
