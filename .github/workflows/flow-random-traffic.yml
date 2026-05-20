@@ -5,7 +5,7 @@ on:
     inputs:
       redis-ref:
         description: 'Redis ref to checkout'
-        default: '8.8'
+        default: 'unstable'
       os:
         description: 'OS to run on (leave empty for random)'
         default: ''
@@ -14,7 +14,7 @@ on:
       redis-ref:
         description: 'Redis ref to checkout'
         type: string
-        default: '8.8'
+        default: 'unstable'
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: redistimeseries-${{ needs.pick-os.outputs.os }}:latest
-      REDIS_REF: ${{ inputs.redis-ref || '8.8' }}
+      REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
