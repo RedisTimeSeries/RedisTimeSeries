@@ -3067,3 +3067,141 @@ def test_ts_range_aggregator_empty_no_preceding_sample():
             assert math.isnan(got), (
                 f'AGGREGATION {agg} EMPTY no-prior-sample: '
                 f'expected NaN, got {got}')
+
+
+# ---------------------------------------------------------------------------
+# Doc-derived per-aggregator value tests.
+#
+# Expected values come from the public TS.RANGE docs and standard math —
+# never from inspecting compaction.c. To add a new aggregator: add one row
+# to AGG_DOC_EXPECTED.
+#
+# Input data: samples (10,1), (20,2), (30,3), (40,4) — 4 non-NaN samples,
+# all in a single bucket [0, 100). NaN handling is intentionally OUT of
+# scope for this suite (covered by test_ts_range_NaN_values /
+# test_ts_range_count_family_on_all_nan_bucket / test_ts_range_all_*).
+# ---------------------------------------------------------------------------
+
+_AGG_DOC_SAMPLES = [(10, 1), (20, 2), (30, 3), (40, 4)]
+
+# Hand-computed from the docs' aggregator definitions and standard math.
+# n = 4, mean μ = (1+2+3+4)/4 = 2.5.
+# Sum of squared deviations: (-1.5)² + (-0.5)² + (0.5)² + (1.5)² = 5.
+AGG_DOC_EXPECTED = {
+    'avg':   2.5,                   # docs: arithmetic mean
+    'sum':   10.0,                  # docs: sum of values
+    'min':   1.0,                   # docs: minimum value
+    'max':   4.0,                   # docs: maximum value
+    'range': 3.0,                   # docs: max - min
+    'count': 4.0,                   # docs: number of values
+    'first': 1.0,                   # docs: value at LOWEST ts in bucket
+    'last':  4.0,                   # docs: value at HIGHEST ts in bucket
+    'var.p': 5.0 / 4,               # docs: population variance = Σ(x-μ)²/n  = 1.25
+    'var.s': 5.0 / 3,               # docs: sample variance     = Σ(x-μ)²/(n-1) = 1.6666...
+    'std.p': math.sqrt(5.0 / 4),    # docs: √var.p
+    'std.s': math.sqrt(5.0 / 3),    # docs: √var.s
+}
+
+_AGG_DOC_TOL = 1e-9
+
+
+def _agg_doc_setup(r, key):
+    """Create the key and load the canonical (10,1)..(40,4) sample set."""
+    r.execute_command('DEL', key)
+    r.execute_command('TS.CREATE', key)
+    for t, v in _AGG_DOC_SAMPLES:
+        r.execute_command('TS.ADD', key, t, v)
+
+
+def test_aggregator_value_matches_docs():
+    """Each aggregator returns the docs-defined value over one full bucket.
+    One subtest per row of AGG_DOC_EXPECTED — failures cite the aggregator."""
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_doc_val{a}'
+        _agg_doc_setup(r, key)
+        for agg, expected in AGG_DOC_EXPECTED.items():
+            res = r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', agg, 100)
+            assert len(res) == 1, f'AGGREGATION {agg}: expected 1 bucket, got {res!r}'
+            got = float(res[0][1])
+            assert abs(got - expected) < _AGG_DOC_TOL, \
+                f'AGGREGATION {agg}: docs expect {expected}, got {got}'
+
+
+def test_aggregator_value_direction_symmetric():
+    """TS.REVRANGE per-bucket value equals TS.RANGE's (direction doesn't change the math).
+    One subtest per row of AGG_DOC_EXPECTED — failures cite the aggregator."""
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_doc_dir{a}'
+        _agg_doc_setup(r, key)
+        for agg in AGG_DOC_EXPECTED:
+            fwd = r.execute_command('TS.RANGE',    key, 0, '+', 'AGGREGATION', agg, 100)
+            rev = r.execute_command('TS.REVRANGE', key, 0, '+', 'AGGREGATION', agg, 100)
+            assert len(fwd) == 1 and len(rev) == 1, \
+                f'AGGREGATION {agg}: expected 1 bucket each; fwd={fwd!r} rev={rev!r}'
+            assert abs(float(fwd[0][1]) - float(rev[0][1])) < _AGG_DOC_TOL, \
+                f'AGGREGATION {agg}: fwd={fwd[0][1]} != rev={rev[0][1]}'
+
+
+def test_aggregator_identity_range_equals_max_minus_min():
+    """Docs identity: range = max - min, regardless of underlying numbers."""
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_doc_id_range{a}'
+        _agg_doc_setup(r, key)
+        mx = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'max',   100)[0][1])
+        mn = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'min',   100)[0][1])
+        rg = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'range', 100)[0][1])
+        assert abs(rg - (mx - mn)) < _AGG_DOC_TOL, \
+            f'docs identity broken: range={rg}, max-min={mx-mn}'
+
+
+def test_aggregator_identity_std_p_equals_sqrt_var_p():
+    """Docs identity: std.p = √var.p."""
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_doc_id_std_p{a}'
+        _agg_doc_setup(r, key)
+        var_p = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'var.p', 100)[0][1])
+        std_p = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'std.p', 100)[0][1])
+        assert abs(std_p - math.sqrt(var_p)) < _AGG_DOC_TOL, \
+            f'docs identity broken: std.p={std_p}, √var.p={math.sqrt(var_p)}'
+
+
+def test_aggregator_identity_std_s_equals_sqrt_var_s():
+    """Docs identity: std.s = √var.s."""
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_doc_id_std_s{a}'
+        _agg_doc_setup(r, key)
+        var_s = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'var.s', 100)[0][1])
+        std_s = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'std.s', 100)[0][1])
+        assert abs(std_s - math.sqrt(var_s)) < _AGG_DOC_TOL, \
+            f'docs identity broken: std.s={std_s}, √var.s={math.sqrt(var_s)}'
+
+
+def test_aggregator_first_last_ordered_by_timestamp():
+    """Docs: 'first' = value at LOWEST ts in bucket; 'last' = value at HIGHEST ts.
+    Insertion order must NOT affect the result — only timestamps do."""
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_doc_first_last{a}'
+        r.execute_command('DEL', key)
+        r.execute_command('TS.CREATE', key)
+        # Insert deliberately out of chronological order.
+        for t, v in [(40, 4), (10, 1), (30, 3), (20, 2)]:
+            r.execute_command('TS.ADD', key, t, v)
+        first = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'first', 100)[0][1])
+        last  = float(r.execute_command('TS.RANGE', key, 0, '+', 'AGGREGATION', 'last',  100)[0][1])
+        assert first == 1.0, f'docs: first must be value at lowest ts (10) = 1, got {first}'
+        assert last  == 4.0, f'docs: last must be value at highest ts (40) = 4, got {last}'
+
+
+def test_aggregator_twa_constant_function_equals_constant():
+    """Docs: TWA = time-weighted average over the bucket's timeframe.
+    A constant series must yield exactly that constant."""
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        key = 'agg_doc_twa_const{a}'
+        r.execute_command('DEL', key)
+        r.execute_command('TS.CREATE', key)
+        for t in range(0, 101, 10):
+            r.execute_command('TS.ADD', key, t, 7)
+        twa = float(r.execute_command('TS.RANGE', key, 0, 100,
+                                      'AGGREGATION', 'twa', 200)[0][1])
+        assert abs(twa - 7.0) < _AGG_DOC_TOL, \
+            f'docs: TWA over constant 7 must be 7, got {twa}'
