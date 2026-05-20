@@ -1934,3 +1934,235 @@ def test_ts_range_countAll():
             assert float(result[2][1]) == 1.0
             assert float(result[3][1]) == 1.0
             assert float(result[4][1]) == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Regression: TS.RANGE / TS.REVRANGE with AGGREGATION ... EMPTY must produce
+# the same set of bucket timestamps in both directions (one is the reverse of
+# the other), and carry the chronologically-correct value for LOCF-style
+# aggregations such as LAST.
+#
+# This guards against two bugs that previously affected reverse iteration:
+#   Bug A) extra empty buckets emitted past the data span.
+#   Bug B) wrong carry-forward value for empty buckets between samples.
+#
+# To extend coverage to a new aggregation, just add it to AGGREGATIONS below.
+# To additionally check exact values for that aggregation, add an entry to
+# PER_AGG_VALUE_CHECKS. Without an entry, only timestamp-symmetry is verified.
+# ---------------------------------------------------------------------------
+
+# Aggregations to validate. Add more here with zero other code changes
+# (provided the aggregation behaves like one of the cases handled by
+# _agg_sample_value / _agg_empty_value below).
+AGGREGATIONS = ['last', 'max', 'count']
+
+
+def _agg_sample_value(agg, v):
+    """Value the aggregation produces for a bucket that contains exactly one sample."""
+    if agg == 'count':
+        return '1'
+    # last, max, min, sum, avg, first, range, ... — single sample → that value
+    return str(v)
+
+
+def _agg_empty_value(agg, prev_v, next_v):
+    """Value the aggregation produces for an empty bucket that lies BETWEEN two samples
+    (i.e. has both a left and a right neighbor — should_skip_empty_gap keeps it)."""
+    if agg == 'last':
+        return str(prev_v)            # LOCF: carry forward chronologically previous value
+    if agg == 'count':
+        return '0'                    # no samples in bucket
+    return 'NaN'                      # max, min, sum, avg, ... default empty fill
+
+
+def _build_expected_forward(samples, bucket_size, window, agg):
+    """
+    Build the expected forward TS.RANGE result for `agg` over `samples`,
+    `window` and `bucket_size`. Each sample at t produces:
+        - bucket t                   → _agg_sample_value(agg, v)
+        - bucket (t + bucket_size)   → _agg_empty_value(agg, v, next_v)
+    The trailing carry bucket is dropped when there is no next sample
+    (matches should_skip_empty_gap).
+    """
+    win_lo, win_hi = window
+    out = []
+    for i, (t, v) in enumerate(samples):
+        if win_lo <= t <= win_hi:
+            out.append((t, _agg_sample_value(agg, v)))
+        carry_t = t + bucket_size
+        if carry_t <= win_hi and i + 1 < len(samples):
+            next_v = samples[i + 1][1]
+            out.append((carry_t, _agg_empty_value(agg, v, next_v)))
+    return out
+
+
+def _decode_pair(row):
+    ts = int(row[0])
+    val = row[1].decode() if isinstance(row[1], bytes) else row[1]
+    return ts, val
+
+
+def _format_redis_cli(pairs):
+    """Format a list of (ts, value) pairs the way redis-cli prints them."""
+    if not pairs:
+        return '(empty array)'
+    lines = []
+    for i, (ts, val) in enumerate(pairs, start=1):
+        lines.append(f'{i}) 1) (integer) {ts}')
+        lines.append(f'   2) {val}')
+    return '\n'.join(lines)
+
+
+def _print_block(title, pairs):
+    print(f'\n--- {title} ---')
+    print(_format_redis_cli(pairs))
+
+
+def _format_samples(samples):
+    """Format input samples like ([t=10, v=100], [t=20, v=110], ...)."""
+    inner = ', '.join(f'[t={t}, v={v}]' for t, v in samples)
+    return f'({inner})'
+
+
+def _print_samples(title, samples):
+    print(f'\n--- {title} ({len(samples)} samples) ---')
+    print(_format_samples(samples))
+
+
+def test_range_revrange_empty_symmetry():
+    """
+    Forward and reverse aggregated EMPTY queries must be mirror images of
+    each other (same bucket timestamps, reversed order). For aggregations
+    listed in PER_AGG_VALUE_CHECKS the bucket values are also asserted.
+    """
+    samples = [(18, 100), (20, 110)]
+    window  = (18, 22)
+    bucket  = 1
+    with Env().getClusterConnectionIfNeeded() as r:
+        for agg in AGGREGATIONS:
+            key = 'ts_sym_' + agg + '{a}'
+            r.execute_command('DEL', key)
+            r.execute_command('TS.CREATE', key)
+            for t, v in samples:
+                r.execute_command('TS.ADD', key, t, v)
+
+            _print_samples(f'{agg} input samples', samples)
+
+            win_lo, win_hi = window
+            fwd = r.execute_command('TS.RANGE',    key, win_lo, win_hi,
+                                    'AGGREGATION', agg, bucket, 'EMPTY')
+            rev = r.execute_command('TS.REVRANGE', key, win_lo, win_hi,
+                                    'AGGREGATION', agg, bucket, 'EMPTY')
+
+            got_fwd = [_decode_pair(row) for row in fwd]
+            got_rev = [_decode_pair(row) for row in rev]
+
+            exp_fwd = _build_expected_forward(samples, bucket, window, agg)
+            exp_rev = list(reversed(exp_fwd))
+
+            _print_block(f'{agg} TS.RANGE actual',      got_fwd)
+            _print_block(f'{agg} TS.REVRANGE actual',   got_rev)
+            _print_block(f'{agg} TS.RANGE expected',    exp_fwd)
+            _print_block(f'{agg} TS.REVRANGE expected', exp_rev)
+
+            assert len(fwd) == len(rev), (
+                f'{agg}: bucket count mismatch; '
+                f'fwd={len(fwd)} ({fwd}), rev={len(rev)} ({rev})')
+
+            fwd_ts = [ts for ts, _ in got_fwd]
+            rev_ts = [ts for ts, _ in got_rev]
+            assert fwd_ts == list(reversed(rev_ts)), (
+                f'{agg}: timestamps not mirrored; '
+                f'fwd={fwd_ts}, rev={rev_ts}')
+
+            assert got_fwd == exp_fwd, (
+                f'{agg} forward values mismatch.\n'
+                f'expected:\n{_format_redis_cli(exp_fwd)}\n'
+                f'actual:\n{_format_redis_cli(got_fwd)}')
+            assert got_rev == exp_rev, (
+                f'{agg} reverse values mismatch.\n'
+                f'expected:\n{_format_redis_cli(exp_rev)}\n'
+                f'actual:\n{_format_redis_cli(got_rev)}')
+
+
+# ---------------------------------------------------------------------------
+# Regression: same EMPTY-aggregation symmetry, but on a series whose samples
+# span MANY chunks. The aggregation iterator's GetNext() loop must walk
+# multiple chunks while still emitting the correct empty buckets in both
+# directions and with correct carry values.
+#
+# We force tiny chunks (CHUNK_SIZE=48 bytes, uncompressed → 3 samples / chunk)
+# and sparse samples so the empty buckets between samples land on chunk
+# boundaries.
+#
+# Generic over AGGREGATIONS like the previous test; LAST also gets exact
+# value-level assertions via MULTICHUNK_VALUE_CHECKS.
+# ---------------------------------------------------------------------------
+
+# Sample layout:  t in {10, 20, 30, ..., 300}, value = ts * 10.
+# 30 samples / 3-per-chunk = 10 chunks.
+_MC_SAMPLE_TS    = list(range(10, 301, 10))
+_MC_SAMPLES      = [(t, t * 10) for t in _MC_SAMPLE_TS]
+_MC_WINDOW       = (10, 300)
+_MC_BUCKET_SIZE  = 5
+_MC_CHUNK_BYTES  = 48     # uncompressed: 16 B/sample → 3 samples / chunk
+
+def test_range_revrange_empty_symmetry_multichunk():
+    """
+    Same forward/reverse EMPTY-aggregation symmetry as the previous test,
+    but the underlying series is split across ~10 chunks so the
+    AggregationIterator GetNext loop is exercised across chunk boundaries.
+    """
+    with Env().getClusterConnectionIfNeeded() as r:
+        for agg in AGGREGATIONS:
+            key = 'ts_sym_mc_' + agg + '{a}'
+            r.execute_command('DEL', key)
+            r.execute_command('TS.CREATE', key,
+                              'ENCODING', 'UNCOMPRESSED',
+                              'CHUNK_SIZE', _MC_CHUNK_BYTES)
+            for t, v in _MC_SAMPLES:
+                r.execute_command('TS.ADD', key, t, v)
+
+            # Sanity-check that we really got multiple chunks.
+            info = r.execute_command('TS.INFO', key)
+            info_dict = {info[i]: info[i + 1] for i in range(0, len(info), 2)}
+            chunk_count_key = b'chunkCount' if b'chunkCount' in info_dict else 'chunkCount'
+            chunk_count = int(info_dict[chunk_count_key])
+            assert chunk_count > 1, (
+                f'expected the series to span multiple chunks, got '
+                f'chunkCount={chunk_count}; sample/chunk math may have changed')
+
+            win_lo, win_hi = _MC_WINDOW
+            fwd = r.execute_command('TS.RANGE',    key, win_lo, win_hi,
+                                    'AGGREGATION', agg, _MC_BUCKET_SIZE, 'EMPTY')
+            rev = r.execute_command('TS.REVRANGE', key, win_lo, win_hi,
+                                    'AGGREGATION', agg, _MC_BUCKET_SIZE, 'EMPTY')
+
+            got_fwd = [_decode_pair(row) for row in fwd]
+            got_rev = [_decode_pair(row) for row in rev]
+
+            exp_fwd = _build_expected_forward(
+                _MC_SAMPLES, _MC_BUCKET_SIZE, _MC_WINDOW, agg)
+            exp_rev = list(reversed(exp_fwd))
+
+            print(f'\n--- {agg} multichunk: chunkCount={chunk_count}, '
+                  f'samples={len(_MC_SAMPLES)}, buckets={len(exp_fwd)} ---')
+
+            assert len(fwd) == len(rev), (
+                f'{agg}: bucket count mismatch; '
+                f'fwd={len(fwd)}, rev={len(rev)}')
+
+            fwd_ts = [ts for ts, _ in got_fwd]
+            rev_ts = [ts for ts, _ in got_rev]
+            assert fwd_ts == list(reversed(rev_ts)), (
+                f'{agg}: timestamps not mirrored across chunks; '
+                f'fwd={fwd_ts}, rev={rev_ts}')
+
+            assert got_fwd == exp_fwd, (
+                f'{agg} forward values mismatch (multichunk).\n'
+                f'expected:\n{_format_redis_cli(exp_fwd)}\n'
+                f'actual:\n{_format_redis_cli(got_fwd)}')
+            assert got_rev == exp_rev, (
+                f'{agg} reverse values mismatch (multichunk).\n'
+                f'expected:\n{_format_redis_cli(exp_rev)}\n'
+                f'actual:\n{_format_redis_cli(got_rev)}')
