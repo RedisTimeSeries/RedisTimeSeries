@@ -99,6 +99,31 @@ def test_asm_with_data_and_queries_during_migrations():
     validate_result(conn.execute_command(command))
 
 
+def test_short_form_clusterset():
+    # We skip the initial timeseries.REFRESHCLUSTER, so even though the nodes
+    # know about the cluster - the modules inside them do not. Yet.
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    number_of_keys = 100
+    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=10, label="test")
+
+    # First try sending the multi-node command without the module being aware of the cluster
+    with env.getConnection(0) as rc:
+        # In this case the command will run locally and only return a subset of the result
+        queryindex = rc.execute_command('TS.QUERYINDEX', 'label=test')
+        assert len(queryindex) < number_of_keys, queryindex
+
+    # Now inform the nodes, using the short form of timeseries.CLUSTERSET
+    env.broadcast('timeseries.CLUSTERSET')
+
+    # and try the same command again
+    with env.getConnection(0) as rc:
+        queryindex = rc.execute_command('TS.QUERYINDEX', 'label=test')
+        assert len(queryindex) == number_of_keys, queryindex
+
+
 # Helper structs and functions
 
 
