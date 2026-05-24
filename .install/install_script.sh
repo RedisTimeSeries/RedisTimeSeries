@@ -44,6 +44,7 @@ echo "==> [redistimeseries] OSNICK=$OSNICK PM=$PM"
 # Allow git operations on the checked-out source even when its uid doesn't
 # match the current user (common in CI containers). Scoped to this repo
 # (--local), not the host's global git config.
+git config --global --add safe.directory '*' || true
 if [ -d "$ROOT/.git" ]; then
     git -C "$ROOT" config --local --add safe.directory '*' || true
 fi
