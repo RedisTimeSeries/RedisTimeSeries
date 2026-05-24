@@ -7,6 +7,16 @@
 #
 # Replaces the legacy `.install/common_installations.sh` (now deleted): all
 # pip work lives here so `make bootstrap` is just install_script.sh + done.
+#
+# Inside a `docker build`, every Dockerfile.<osnick> creates its own dedicated
+# venv at /opt/.venv after this script runs, so the venv we'd build here would
+# just bloat the image layer and double install time. Detect the Docker build
+# environment via /.dockerenv (created by Docker itself; never present on a
+# dev host) and skip the venv + pip work entirely in that case.
+if [ -f /.dockerenv ]; then
+    echo "==> [redistimeseries] /.dockerenv detected; skipping venv + pip setup (Dockerfile builds its own /opt/.venv)"
+    return 0 2>/dev/null || exit 0
+fi
 
 # Required by callers — set by install_script.sh. Fail fast if absent rather
 # than producing a confusing `uv venv ""` failure later.
