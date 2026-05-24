@@ -19,7 +19,7 @@
 apt_install software-properties-common lsb-core binfmt-support zlib1g-dev
 $SUDO add-apt-repository ppa:ubuntu-toolchain-r/test -y
 debian_default_install
-apt_install gcc-10 g++-10
+apt_install gcc-10 g++-10 awscli
 $SUDO update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 60 \
     --slave /usr/bin/g++ g++ /usr/bin/g++-10
 
