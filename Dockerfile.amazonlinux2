@@ -2,10 +2,9 @@ FROM amazonlinux:2
 
 WORKDIR /workspace
 
-# Install build/test deps via the unified abstract installer;
-# quirks/amazonlinux2.sh enables EPEL + the CentOS Vault SCL repo, installs
-# devtoolset-11 (gcc-11) and cmake3, and symlinks cmake3 as cmake.
-COPY dependencies.yaml /workspace/dependencies.yaml
+# Install build/test deps via the per-OSNICK installer
+# (.install/os/amazonlinux2.sh enables EPEL + the CentOS Vault SCL repo,
+# installs devtoolset-11 (gcc-11) and cmake3, and symlinks cmake3 as cmake).
 COPY .install /workspace/.install
 RUN bash /workspace/.install/install_script.sh
 

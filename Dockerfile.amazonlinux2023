@@ -2,10 +2,8 @@ FROM amazonlinux:2023
 
 WORKDIR /workspace
 
-# Install build/test deps via the unified abstract installer (see
-# dependencies.yaml). amazonlinux2023 is in `migrated_osnicks`, so this
-# resolves the abstract list against dnf in a single dnf install.
-COPY dependencies.yaml /workspace/dependencies.yaml
+# Install build/test deps via the per-OSNICK installer
+# (.install/os/amazonlinux2023.sh — default RHEL set, no toolset layering).
 COPY .install /workspace/.install
 RUN bash /workspace/.install/install_script.sh && dnf clean all
 

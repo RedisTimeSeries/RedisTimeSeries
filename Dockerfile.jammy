@@ -8,10 +8,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
     > /etc/apt/apt.conf.d/80-retries
 
-# Install build/test deps via the unified abstract installer (see
-# dependencies.yaml). Ubuntu jammy is in `migrated_osnicks`, so this resolves
-# the abstract list against apt and runs a single apt-get install.
-COPY dependencies.yaml /workspace/dependencies.yaml
+# Install build/test deps via the per-OSNICK installer (.install/os/jammy.sh
+# is the default Debian set — apt's gcc/g++/cmake on 22.04 are recent enough).
 COPY .install /workspace/.install
 RUN bash /workspace/.install/install_script.sh
 

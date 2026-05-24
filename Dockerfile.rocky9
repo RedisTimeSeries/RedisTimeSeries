@@ -2,9 +2,8 @@ FROM rockylinux:9
 
 WORKDIR /workspace
 
-# Install build/test deps via the unified abstract installer; quirks/rocky9.sh
-# pulls gcc-toolset-13.
-COPY dependencies.yaml /workspace/dependencies.yaml
+# Install build/test deps via the per-OSNICK installer (.install/os/rocky9.sh
+# layers gcc-toolset-13 over the RHEL base).
 COPY .install /workspace/.install
 RUN bash /workspace/.install/install_script.sh
 RUN chmod +x /workspace/.install/install_cmake.sh && /workspace/.install/install_cmake.sh

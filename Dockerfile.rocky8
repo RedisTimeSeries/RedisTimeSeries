@@ -2,9 +2,8 @@ FROM rockylinux:8
 
 WORKDIR /workspace
 
-# Install build/test deps via the unified abstract installer; quirks/rocky8.sh
-# is a thin wrapper over alma8.sh that pulls gcc-toolset-11.
-COPY dependencies.yaml /workspace/dependencies.yaml
+# Install build/test deps via the per-OSNICK installer (.install/os/rocky8.sh
+# layers gcc-toolset-11 + powertools/crb over the RHEL base).
 COPY .install /workspace/.install
 RUN bash /workspace/.install/install_script.sh
 RUN chmod +x /workspace/.install/install_cmake.sh && /workspace/.install/install_cmake.sh
