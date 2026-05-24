@@ -445,6 +445,13 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     size_t dicts_size = 0;
     GetPredicateKeysDicts(ctx, &index_predicate[0], &dicts, &dicts_size);
 
+    // Resolve the user once for the whole multi-dict scan so ACL checks
+    // below don't alloc/free a RedisModuleUser per candidate key.
+    User_Ctx_t userCtx = { .user = NULL, .is_owned = false };
+    if (hasPermissionError) {
+        userCtx = GetUserFromContext(ctx);
+    }
+
     for (size_t i = 0; i < dicts_size; i++) {
         RedisModuleDict *dict = dicts[i];
         if (dict == NULL) {
@@ -456,7 +463,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         size_t currentKeyLen = 0;
         while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
             if (hasPermissionError) {
-                if (!CheckKeyIsAllowedToReadC(ctx, currentKey, currentKeyLen)) {
+                if (!CheckKeyIsAllowedToReadC(ctx, userCtx.user, currentKey, currentKeyLen)) {
                     *hasPermissionError = true;
                     continue;
                 }
@@ -469,6 +476,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
         RedisModule_DictIteratorStop(iter);
     }
 
+    FreeUser(&userCtx);
     free(dicts);
 
     if (unlikely(isReshardTrimming || isAsmTrimming || isAsmImporting)) {

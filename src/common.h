@@ -28,20 +28,6 @@ int (*RedisModule_DisablePostponeClients)(void);
                              "TSDB: current user doesn't have read permission to one or more "     \
                              "keys that match the specified filter")
 
-// Returns the current user of the context.
-static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx) {
-    struct RedisModuleString *username = RedisModule_GetCurrentUserName(ctx);
-
-    if (!username) {
-        return NULL;
-    }
-
-    struct RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(username);
-    RedisModule_FreeString(ctx, username);
-
-    return user;
-}
-
 static inline int stringEqualsC(const RedisModuleString *s1, const char *s2) {
     size_t len;
     const char *s1Str = RedisModule_StringPtrLen(s1, &len);

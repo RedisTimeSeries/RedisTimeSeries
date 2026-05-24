@@ -316,9 +316,9 @@ def test_mrange_acl_partial_then_full_3shards(env):
     set_user_on_shard(conns[SHARD_1], user4, pw4, [NO_MATCH_KEY_PATTERN])
     set_user_on_shard(conns[SHARD_2], user4, pw4, [KEY_PATTERN_ALL])
 
-    # Run MRANGE using a connection where the user has full key access (~*), so
-    # IsCurrentUserAllowedToReadAllTheKeys passes on that connection's shard; stricter rules
-    # only apply on other shards (which then return empty).
+    # Run MRANGE using a connection where the user has full key access (~*), so the
+    # per-key ACL check passes on that connection's shard; stricter rules only apply
+    # on other shards (which then return empty).
     def run_mrange(connection, username, password):
         connection.execute_command('AUTH', username, password)
         try:
