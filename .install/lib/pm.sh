@@ -135,8 +135,13 @@ _pm_enable_el8_extras() {
         # shellcheck disable=SC1091
         . /etc/os-release
         if [ "${ID:-}" = "rhel" ] && [ "${VERSION_ID%%.*}" = "8" ]; then
-            local rid
-            rid=$(dnf repolist --all 2>/dev/null \
+            # `local rid=$(...)` (single line) is intentional: the `local`
+            # builtin returns its own exit status (always 0), which masks
+            # the pipeline's pipefail-propagated grep exit when no repo
+            # matches. Splitting into `local rid; rid=$(...)` makes the
+            # assignment a simple command and set -e aborts install_script.sh
+            # before the diagnostic below can run.
+            local rid=$(dnf repolist --all 2>/dev/null \
                 | grep -i 'codeready-builder-for-rhel-8' \
                 | grep -vi source \
                 | head -1 \
