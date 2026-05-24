@@ -6,4 +6,3 @@
 . "$LIB/sets.sh"
 
 tdnf_default_install
-git config --global --add safe.directory '*' || true

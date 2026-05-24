@@ -16,7 +16,7 @@
 # shellcheck source=../lib/sets.sh
 . "$LIB/sets.sh"
 
-apt_install software-properties-common lsb-core binfmt-support cargo zlib1g-dev
+apt_install software-properties-common lsb-core binfmt-support zlib1g-dev
 $SUDO add-apt-repository ppa:ubuntu-toolchain-r/test -y
 debian_default_install
 apt_install gcc-10 g++-10
