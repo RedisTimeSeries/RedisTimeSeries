@@ -30,3 +30,4 @@ compile_commands.json
 .venv
 redis/
 temp-redis-config*
+.prepared

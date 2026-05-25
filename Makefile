@@ -5,9 +5,32 @@ endif
 
 ROOT=.
 
+# Standalone `make bootstrap` on a host with no python3 yet: skip Readies (which
+# errors during Makefile parse) and run install_script.sh first. The
+# installer detects OSNICK, installs system packages via .install/os/<osnick>.sh,
+# then provisions uv + $(ROOT)/venv + pip deps via .install/lib/setup-python.sh.
+ifneq (,$(filter bootstrap,$(MAKECMDGOALS)))
+override ROOT:=$(shell cd $(ROOT) && pwd)
+INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
+
+bootstrap:
+	@rm -rf $(ROOT)/venv
+	@cd $(ROOT)/.install && ./install_script.sh $(INSTALL_SCRIPT_MODE)
+
+.PHONY: bootstrap
+
+else
+
 MK_ALL_TARGETS=bindirs deps build pack
 
 include $(ROOT)/deps/readies/mk/main
+
+# readies `platform.cfg` skips exporting ARCH when __NO_PYTHON=1 (e.g. `make setup`
+# before python3 is installed). Uname keeps build usable in that state.
+ifeq ($(ARCH),)
+ARCH:=$(shell uname -m | tr '[:upper:]' '[:lower:]' | sed -e 's/^x86_64$$/x64/' -e 's/^amd64$$/x64/' -e 's/^aarch64$$/arm64v8/' -e 's/^arm64$$/arm64v8/')
+export ARCH
+endif
 
 # RedisTimeSeries only supports 64-bit architectures
 ifneq ($(ARCH),x64)
@@ -547,3 +570,8 @@ gen-compile-commands:
 endif
 
 .PHONY: pack upload-release upload-artifacts
+
+# `make bootstrap` is defined at the top of this file, inside the ifneq that
+# short-circuits the readies/Python-requiring include path.
+
+endif
