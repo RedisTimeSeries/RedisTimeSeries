@@ -998,8 +998,13 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
             }
             *si = -1;
             self->aux_chunk->samples.num_samples = 0;
-            int err = fillEmptyBuckets(
-                &self->aux_chunk->samples, agg_n_samples, first_bucket, last_bucket, self, si, true);
+            int err = fillEmptyBuckets(&self->aux_chunk->samples,
+                                       agg_n_samples,
+                                       first_bucket,
+                                       last_bucket,
+                                       self,
+                                       si,
+                                       true);
             if (err != 0) {
                 return NULL;
             }
