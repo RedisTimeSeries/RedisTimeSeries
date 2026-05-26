@@ -1311,6 +1311,8 @@ typedef struct BGetCtx
  *   - '-'                          : @p out->cursor = 0 (no lower bound).
  *   - '+'                          : open the series ONCE and snapshot
  *                                    @p out->cursor = lastTimestamp + 1;
+ *                                    saturated (lastTimestamp == UINT64_MAX)
+ *                                    -> UINT64_MAX to avoid wrap-to-0;
  *                                    missing or empty series -> 0; wrong-type
  *                                    key -> reply WRONGTYPE and return ERR.
  *
@@ -1366,9 +1368,13 @@ static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
             return REDISMODULE_ERR;
         } else {
             Series *series = RedisModule_ModuleTypeGetValue(key);
-            cursor = (SeriesGetNumSamples(series) == 0)
-                         ? 0
-                         : (api_timestamp_t)(series->lastTimestamp + 1);
+            // Saturate at UINT64_MAX so `lastTimestamp + 1` cannot wrap to 0
+            // (which would silently flip the cursor's meaning from "future
+            // only" to "every sample"). No timestamp can exceed UINT64_MAX,
+            // so cursor=UINT64_MAX is the correct unreachable upper bound.
+            cursor = (SeriesGetNumSamples(series) == 0)        ? 0
+                     : (series->lastTimestamp == UINT64_MAX)   ? UINT64_MAX
+                                                               : (api_timestamp_t)(series->lastTimestamp + 1);
         }
         if (key) {
             RedisModule_CloseKey(key);
