@@ -1159,6 +1159,37 @@
         "since": "1.0.0",
         "group": "timeseries"
     },
+    "TS.BGET": {
+        "summary": "Blocking GET: wait up to `timeout` milliseconds and retrieve up to `count` samples with timestamp >= `timestamp`. Returns the oldest qualifying samples in ascending timestamp order. When `timeout` is 0 the command does not block and returns whatever is available now (possibly empty or fewer than `count`).",
+        "complexity": "O(log(n)+k) where n is the number of samples in the series and k is the number of returned samples",
+        "arguments": [
+            {
+                "name": "key",
+                "type": "key"
+            },
+            {
+                "name": "timestamp",
+                "type": "string"
+            },
+            {
+                "name": "count",
+                "type": "integer"
+            },
+            {
+                "name": "timeout",
+                "type": "integer"
+            }
+        ],
+        "command_flags": [
+            "readonly",
+            "blocking"
+        ],
+        "acl_categories": [
+            "read"
+        ],
+        "since": "8.10.0",
+        "group": "timeseries"
+    },
     "TS.MGET": {
         "summary": "Get the sample with the highest timestamp from each time series matching a specific filter",
         "complexity": "O(n) where n is the number of time-series that match the filters",

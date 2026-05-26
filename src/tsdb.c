@@ -608,6 +608,10 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
     } else {
         SeriesUpsertSample(destSeries, start, val, DP_LAST);
     }
+    // Wake any TS.BGET waiters parked on the destination key, so a
+    // compaction-rule bucket landing here triggers them just like a direct
+    // write would.
+    RedisModule_SignalKeyAsReady(ctx, rule->destKey);
     RedisModule_CloseKey(key);
 
     return true;
