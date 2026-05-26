@@ -1667,24 +1667,21 @@ int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // (possibly empty / partial). timeout_ms  > 0 uses strict mode; if we
     // don't have args.count yet, fall through and park the client until a
     // SignalKeyAsReady wakes us with enough data, or the timeout fires.
-    const bool require_full_batch = args.timeout_ms > 0;
-    if (TSDB_bget_try_reply(ctx, &args, require_full_batch)) {
+    if (TSDB_bget_try_reply(ctx, &args, args.timeout_ms > 0)) {
         return REDISMODULE_OK;
     }
 
     // Preemptive refusal in MULTI / EVAL / deny-blocking contexts, mirroring
-    // TSDB_mget. Only applies when the caller actually asked to block; a
-    // timeout_ms == 0 request already resolved synchronously above.
-    if (args.timeout_ms > 0) {
-        const int ctxFlags = RedisModule_GetContextFlags(ctx);
-        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
-                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
-            RedisModule_ReplyWithError(
-                ctx,
-                "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
-                "inside MULTI, EVAL, or a deny-blocking context");
-            return REDISMODULE_OK;
-        }
+    // TSDB_mget. A timeout_ms == 0 request already resolved synchronously
+    // above, so reaching here implies the caller asked to block.
+    if (RedisModule_GetContextFlags(ctx) &
+        (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+         REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+        RedisModule_ReplyWithError(
+            ctx,
+            "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
+            "inside MULTI, EVAL, or a deny-blocking context");
+        return REDISMODULE_OK;
     }
 
     if (!TSDB_bget_block(ctx, &args)) {
