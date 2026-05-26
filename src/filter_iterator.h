@@ -18,12 +18,10 @@ typedef struct SeriesFilterTSIterator
     AbstractIterator base;
     FilterByTSArgs ByTsArgs;
     size_t tsFilterIndex; // the index in the TS filter array in ByTsArgs
-    bool reverse;
 } SeriesFilterTSIterator;
 
 SeriesFilterTSIterator *SeriesFilterTSIterator_New(AbstractIterator *input,
-                                                   FilterByTSArgs ByTsArgs,
-                                                   bool rev);
+                                                   FilterByTSArgs ByTsArgs);
 
 EnrichedChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base);
 
@@ -50,7 +48,6 @@ typedef struct AggregationIterator
     timestamp_t timestampAlignment;
     timestamp_t aggregationLastTimestamp;
     bool hasUnFinalizedContext;
-    bool reverse;
     bool initialized;
     bool empty; // should report empty buckets
     BucketTimestamp bucketTS;
@@ -77,7 +74,6 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              AggregationClass **aggregations,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
-                                             bool reverse,
                                              bool empty,
                                              BucketTimestamp bucketTS,
                                              Series *series,

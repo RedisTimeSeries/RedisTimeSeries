@@ -21,7 +21,6 @@ typedef struct MultiSeriesSampleIterator
 } MultiSeriesSampleIterator;
 
 MultiSeriesSampleIterator *MultiSeriesSampleIterator_New(AbstractSampleIterator **iters,
-                                                         size_t n_series,
-                                                         bool reverse);
+                                                         size_t n_series);
 
 #endif // REDISTIMESERIES_MULTISERIES_SAMPLE_ITERATOR_H

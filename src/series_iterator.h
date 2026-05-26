@@ -21,7 +21,6 @@ typedef struct SeriesIterator
     RedisModuleDictIter *dictIter; // iterator over chunks
     Chunk_t *currentChunk;
     EnrichedChunk *enrichedChunk;
-    EnrichedChunk *enrichedChunkAux; // auxiliary chunk to represent reverse chunk
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
     bool reverse;
