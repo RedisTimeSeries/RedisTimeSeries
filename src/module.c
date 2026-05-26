@@ -1512,6 +1512,25 @@ static bool TSDB_bget_try_reply(RedisModuleCtx *ctx,
 }
 
 /**
+ * @brief Close the blocked-time stopwatch opened by RTS_BlockClientOnKey.
+ *
+ * Must be called from a BlockClientOnKeys callback (reply / timeout) on the
+ * unblock path — i.e. right before returning REDISMODULE_OK. Accumulates the
+ * elapsed wait into bc->background_duration so slowlog / commandstats /
+ * latency-history account for blocked TS.BGET time instead of dropping it.
+ *
+ * Safe no-op when the Redis build doesn't expose the MeasureTime APIs.
+ *
+ * @param ctx Module context bound to the blocked client.
+ */
+static void TSDB_bget_account_blocked_time(RedisModuleCtx *ctx) {
+    if (CheckVersionForBlockedClientMeasureTime()) {
+        RedisModule_BlockedClientMeasureTimeEnd(
+            RedisModule_GetBlockedClientHandle(ctx));
+    }
+}
+
+/**
  * @brief BlockClientOnKeys reply callback: strict-mode wake-up handler.
  *
  * Re-invoked on every RedisModule_SignalKeyAsReady() on the watched key
@@ -1529,8 +1548,13 @@ static int TSDB_bget_reply_callback(RedisModuleCtx *ctx,
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     const BGetCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
-    return TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/true) ? REDISMODULE_OK
-                                                                  : REDISMODULE_ERR;
+    if (!TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/true)) {
+        // Stay parked: keep the background timer running so the eventual
+        // unblock (next signal or timeout) accounts for the full wait.
+        return REDISMODULE_ERR;
+    }
+    TSDB_bget_account_blocked_time(ctx);
+    return REDISMODULE_OK;
 }
 
 /**
@@ -1552,6 +1576,7 @@ static int TSDB_bget_timeout_callback(RedisModuleCtx *ctx,
     REDISMODULE_NOT_USED(argc);
     const BGetCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
     (void)TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/false);
+    TSDB_bget_account_blocked_time(ctx);
     return REDISMODULE_OK;
 }
 
@@ -1616,7 +1641,9 @@ static RedisModuleBlockedClient *TSDB_bget_block(RedisModuleCtx *ctx, const BGet
  * (or the key is unusable / `timeout_ms == 0`), replies inline via
  * TSDB_bget_try_reply(); otherwise parks the client via TSDB_bget_block().
  *
- * @todo Refuse blocking in MULTI / Lua / replica contexts.
+ * Blocking refusal in MULTI / EVAL / deny-blocking contexts is handled
+ * reactively: BlockClientOnKeys returns NULL, TSDB_bget_block cleans up the
+ * privdata, and we deliver an explanatory error here.
  *
  * @param ctx   Module context.
  * @param argv  Command argument vector: `TS.BGET key timestamp count timeout`.
@@ -1650,8 +1677,8 @@ int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         // error so the client doesn't hang on an empty pipeline.
         RedisModule_ReplyWithError(
             ctx,
-            "TSDB: blocking TS.BGET is not allowed  "
-            "or in a deny-blocking context");
+            "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
+            "inside MULTI, EVAL, or a deny-blocking context");
     }
     return REDISMODULE_OK;
 }

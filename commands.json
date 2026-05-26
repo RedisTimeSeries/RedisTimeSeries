@@ -1233,6 +1233,30 @@
         "since": "1.0.0",
         "group": "timeseries"
     },
+    "TS.BGET": {
+        "summary": "Blocking GET: wait up to `timeout` milliseconds and retrieve up to `count` samples with timestamp >= `timestamp`. Returns the oldest qualifying samples in ascending timestamp order. When `timeout` is 0 the command does not block and returns whatever is available now (possibly empty or fewer than `count`).",
+        "complexity": "O(log(n)+k) where n is the number of samples in the series and k is the number of returned samples",
+        "arguments": [
+            {
+                "name": "key",
+                "type": "key"
+            },
+            {
+                "name": "timestamp",
+                "type": "string"
+            },
+            {
+                "name": "count",
+                "type": "integer"
+            },
+            {
+                "name": "timeout",
+                "type": "integer"
+            }
+        ],
+        "since": "8.10.0",
+        "group": "timeseries"
+    },
     "TS.INFO": {
         "summary": "Returns information and statistics for a time series",
         "complexity": "O(1)",
