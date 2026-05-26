@@ -38,7 +38,8 @@ typedef struct SingleValueContext
 {
     double value;
     timestamp_t ts;    /* in-memory only; tracks newest sample seen */
-    bool fresh_bucket; /* in-memory only; lets reverse-mode reset across buckets without losing LOCF */
+    bool fresh_bucket; /* in-memory only; lets reverse-mode reset across buckets without losing LOCF
+                        */
 } SingleValueContext;
 
 typedef struct AvgContext

@@ -477,8 +477,7 @@ static void seed_locf_for_reverse_empty_gap(const AggregationIterator *self,
             continue;
         }
         Sample older, older_older;
-        if (twa_get_samples_from_left(
-                lowest_empty_bucket_start, self, &older, &older_older) > 0) {
+        if (twa_get_samples_from_left(lowest_empty_bucket_start, self, &older, &older_older) > 0) {
             LastValueSeedLocf(self->aggregationContexts[a], older.value);
         } else {
             LastValueSeedLocf(self->aggregationContexts[a], NAN);
