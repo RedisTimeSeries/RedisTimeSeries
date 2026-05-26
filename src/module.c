@@ -1512,18 +1512,26 @@ static void TSDB_bget_free_privdata(RedisModuleCtx *ctx, void *privdata) {
 // Redis owns the blocked-client lifecycle through the registered callbacks;
 // the key is retained for the privdata's lifetime and released by
 // TSDB_bget_free_privdata.
+//
+// Returns NULL if Redis refuses to block (e.g. MULTI / Lua / deny-blocking
+// context). In that case the free callback is never installed, so we free
+// `priv` (and the retained `priv->key`) here — otherwise they would leak.
 static RedisModuleBlockedClient *TSDB_bget_block(RedisModuleCtx *ctx, const BGetCtx *args) {
     BGetCtx *priv = malloc(sizeof(*priv));
     *priv = *args;
     RedisModule_RetainString(ctx, priv->key);
 
-    return RTS_BlockClientOnKey(ctx,
-                                TSDB_bget_reply_callback,
-                                TSDB_bget_timeout_callback,
-                                TSDB_bget_free_privdata,
-                                priv->timeout_ms,
-                                priv->key,
-                                priv);
+    RedisModuleBlockedClient *bc = RTS_BlockClientOnKey(ctx,
+                                                        TSDB_bget_reply_callback,
+                                                        TSDB_bget_timeout_callback,
+                                                        TSDB_bget_free_privdata,
+                                                        priv->timeout_ms,
+                                                        priv->key,
+                                                        priv);
+    if (!bc) {
+        TSDB_bget_free_privdata(ctx, priv);
+    }
+    return bc;
 }
 
 // Main command entry point. Parses argv into a BGetCtx; if samples newer
