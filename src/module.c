@@ -1292,7 +1292,8 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  * `key` is borrowed at parse time; TSDB_bget_block() retains it and
  * TSDB_bget_free_privdata() releases it.
  */
-typedef struct BGetCtx {
+typedef struct BGetCtx
+{
     RedisModuleString *key; ///< series key to read from
     api_timestamp_t cursor; ///< inclusive lower bound: only samples with ts >= cursor qualify
     size_t count;           ///< max samples to return in this batch
@@ -1321,10 +1322,7 @@ typedef struct BGetCtx {
  * @param out   Output struct populated on success.
  * @return REDISMODULE_OK on success, REDISMODULE_ERR on any reply written.
  */
-static int parse_bget_args(RedisModuleCtx *ctx,
-                           RedisModuleString **argv,
-                           int argc,
-                           BGetCtx *out) {
+static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, BGetCtx *out) {
     if (argc != 5) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_ERR;
@@ -1377,8 +1375,7 @@ static int parse_bget_args(RedisModuleCtx *ctx,
         }
     } else {
         long long ts_ll = 0;
-        if (RedisModule_StringToLongLong(argv[2], &ts_ll) != REDISMODULE_OK ||
-            ts_ll < 0) {
+        if (RedisModule_StringToLongLong(argv[2], &ts_ll) != REDISMODULE_OK || ts_ll < 0) {
             RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
             return REDISMODULE_ERR;
         }
@@ -1404,9 +1401,7 @@ static int parse_bget_args(RedisModuleCtx *ctx,
  * @param threshold  Early-exit threshold.
  * @return Number of qualifying samples, clamped to @p threshold.
  */
-static size_t TSDB_count_samples_up_to(Series *series,
-                                       const RangeArgs *range,
-                                       size_t threshold) {
+static size_t TSDB_count_samples_up_to(Series *series, const RangeArgs *range, size_t threshold) {
     AbstractIterator *iter =
         SeriesQuery(series, range, /*reverse=*/false, /*check_retention=*/true);
     EnrichedChunk *chunk;
@@ -1449,9 +1444,7 @@ static size_t TSDB_count_samples_up_to(Series *series,
  * @return true if a reply was written, false only in strict mode when caller
  *         should block / stay parked.
  */
-static bool TSDB_bget_try_reply(RedisModuleCtx *ctx,
-                                const BGetCtx *args,
-                                bool require_full_batch) {
+static bool TSDB_bget_try_reply(RedisModuleCtx *ctx, const BGetCtx *args, bool require_full_batch) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, args->key, REDISMODULE_READ);
     const int keyType = key ? RedisModule_KeyType(key) : REDISMODULE_KEYTYPE_EMPTY;
 
@@ -1499,8 +1492,7 @@ static bool TSDB_bget_try_reply(RedisModuleCtx *ctx,
 
     // Strict mode: refuse to commit a reply until we know it will be
     // complete. The pre-count walk reads only chunk metadata.
-    if (require_full_batch &&
-        TSDB_count_samples_up_to(series, &range, args->count) < args->count) {
+    if (require_full_batch && TSDB_count_samples_up_to(series, &range, args->count) < args->count) {
         RedisModule_CloseKey(key);
         return false;
     }
@@ -1526,8 +1518,7 @@ static bool TSDB_bget_try_reply(RedisModuleCtx *ctx,
  */
 static void TSDB_bget_account_blocked_time(RedisModuleCtx *ctx) {
     if (CheckVersionForBlockedClientMeasureTime()) {
-        RedisModule_BlockedClientMeasureTimeEnd(
-            RedisModule_GetBlockedClientHandle(ctx));
+        RedisModule_BlockedClientMeasureTimeEnd(RedisModule_GetBlockedClientHandle(ctx));
     }
 }
 
@@ -1543,9 +1534,7 @@ static void TSDB_bget_account_blocked_time(RedisModuleCtx *ctx) {
  * @return REDISMODULE_OK to unblock and commit the reply, REDISMODULE_ERR to
  *         stay parked until the next signal or the timeout.
  */
-static int TSDB_bget_reply_callback(RedisModuleCtx *ctx,
-                                    RedisModuleString **argv,
-                                    int argc) {
+static int TSDB_bget_reply_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     const BGetCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
@@ -1570,9 +1559,7 @@ static int TSDB_bget_reply_callback(RedisModuleCtx *ctx,
  * @param argc  Unused.
  * @return Always REDISMODULE_OK (the client is unblocked unconditionally).
  */
-static int TSDB_bget_timeout_callback(RedisModuleCtx *ctx,
-                                      RedisModuleString **argv,
-                                      int argc) {
+static int TSDB_bget_timeout_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     const BGetCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
@@ -1677,10 +1664,9 @@ int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RedisModule_GetContextFlags(ctx) &
         (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
          REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
-        RedisModule_ReplyWithError(
-            ctx,
-            "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
-            "inside MULTI, EVAL, or a deny-blocking context");
+        RedisModule_ReplyWithError(ctx,
+                                   "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
+                                   "inside MULTI, EVAL, or a deny-blocking context");
         return REDISMODULE_OK;
     }
 
@@ -1689,10 +1675,9 @@ int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         // though the preemptive context check passed (e.g. a Redis version
         // surfacing a new deny-blocking flag). Reply with an error so the
         // client doesn't hang on an empty pipeline.
-        RedisModule_ReplyWithError(
-            ctx,
-            "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
-            "inside MULTI, EVAL, or a deny-blocking context");
+        RedisModule_ReplyWithError(ctx,
+                                   "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
+                                   "inside MULTI, EVAL, or a deny-blocking context");
     }
     return REDISMODULE_OK;
 }

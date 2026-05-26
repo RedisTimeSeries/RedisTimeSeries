@@ -44,14 +44,8 @@ RedisModuleBlockedClient *RTS_BlockClientOnKey(RedisModuleCtx *ctx,
     assert(ctx != NULL);
     assert(key != NULL);
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClientOnKeys(ctx,
-                                                                 reply_callback,
-                                                                 timeout_callback,
-                                                                 free_privdata,
-                                                                 timeout_ms,
-                                                                 &key,
-                                                                 1,
-                                                                 privdata);
+    RedisModuleBlockedClient *bc = RedisModule_BlockClientOnKeys(
+        ctx, reply_callback, timeout_callback, free_privdata, timeout_ms, &key, 1, privdata);
     if (bc && CheckVersionForBlockedClientMeasureTime()) {
         RedisModule_BlockedClientMeasureTimeStart(bc);
     }
