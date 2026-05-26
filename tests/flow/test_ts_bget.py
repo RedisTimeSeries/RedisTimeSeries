@@ -296,3 +296,178 @@ def test_bget_plus_with_no_new_samples_times_out_empty():
                    message="Expected to wait the full timeout, only %.3fs" % elapsed)
     env.assertTrue(elapsed < 5.0,
                    message="Timeout overshoot too large: %.3fs" % elapsed)
+
+
+# ---------------------------------------------------------------------------
+# 10. Multi-client broadcast: every parked client receives the new sample
+#     (TS.BGET semantics — not BLPOP-style first-waiter-wins dequeue).
+# ---------------------------------------------------------------------------
+
+def test_bget_broadcasts_to_all_blocked_clients():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    workers = [_start_bget(env, "ts", "+", 1, 10_000) for _ in range(4)]
+    time.sleep(0.3)
+    for t, _ in workers:
+        env.assertTrue(t.is_alive(), message="all clients should be parked")
+
+    # One producer ADD must wake every parked client with the same sample.
+    assert r.execute_command("TS.ADD", "ts", 200, "2.0") == 200
+
+    for t, slot in workers:
+        t.join(timeout=2.0)
+        env.assertFalse(t.is_alive(),
+                        message="every parked client should have unblocked")
+        env.assertEqual(slot["error"], None)
+        env.assertEqual(slot["result"], [[200, b"2"]])
+
+
+# ---------------------------------------------------------------------------
+# 11. Compaction wake-up: BGET parked on a compaction destination unblocks
+#     when a bucket commits into it.
+# ---------------------------------------------------------------------------
+
+def test_bget_on_compaction_destination_wakes_on_bucket_commit():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    assert r.execute_command("TS.CREATE", "src")
+    assert r.execute_command("TS.CREATE", "dst")
+    assert r.execute_command(
+        "TS.CREATERULE", "src", "dst", "AGGREGATION", "avg", 10)
+
+    t, slot = _start_bget(env, "dst", "-", 1, 10_000)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(),
+                   message="BGET on empty dst should be parked")
+
+    # Two samples in bucket [0,9], then a sample in [10,19] closes the first
+    # bucket and writes the aggregated point into dst -> SignalKeyAsReady.
+    assert r.execute_command("TS.ADD", "src", 1, "1.0") == 1
+    assert r.execute_command("TS.ADD", "src", 2, "2.0") == 2
+    assert r.execute_command("TS.ADD", "src", 15, "3.0") == 15
+
+    t.join(timeout=2.0)
+    env.assertFalse(t.is_alive(),
+                    message="BGET on dst should wake on bucket commit")
+    env.assertEqual(slot["error"], None)
+    env.assertTrue(len(slot["result"]) >= 1)
+
+
+# ---------------------------------------------------------------------------
+# 12. WRONGTYPE on the literal-cursor path.
+# ---------------------------------------------------------------------------
+
+def test_bget_wrongtype_literal_cursor():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.set("not_a_ts", "hello")
+    with pytest.raises(redis.ResponseError, match="WRONGTYPE"):
+        r.execute_command("TS.BGET", "not_a_ts", 0, 1, 0)
+
+
+# ---------------------------------------------------------------------------
+# 13. Refusal inside MULTI / EVAL when timeout > 0.
+# ---------------------------------------------------------------------------
+
+def _is_deny_blocking_error(err):
+    s = str(err)
+    return "deny" in s.lower() or "MULTI" in s or "EVAL" in s or "BGET" in s
+
+
+def test_bget_inside_multi_refuses_with_clear_error():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.execute_command("FLUSHALL")  # key must not exist so strict try_reply
+                                   # bails and we reach the deny-blocking
+                                   # branch instead of replying synchronously.
+
+    r.execute_command("MULTI")
+    r.execute_command("TS.BGET", "ts", 0, 1, 1000)
+    try:
+        res = r.execute_command("EXEC")
+        env.assertEqual(len(res), 1)
+        env.assertTrue(_is_deny_blocking_error(res[0]),
+                       message="unexpected EXEC reply: %r" % (res[0],))
+    except redis.ResponseError as e:
+        env.assertTrue(_is_deny_blocking_error(e),
+                       message="unexpected error: %r" % (e,))
+
+
+def test_bget_inside_eval_refuses_with_clear_error():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.execute_command("FLUSHALL")  # same reason as the MULTI test above.
+
+    with pytest.raises(redis.ResponseError) as excinfo:
+        r.execute_command(
+            "EVAL", "return redis.call('TS.BGET','ts',0,1,1000)", 1, "ts")
+    env.assertTrue(_is_deny_blocking_error(excinfo.value),
+                   message="unexpected error: %r" % (excinfo.value,))
+
+
+# ---------------------------------------------------------------------------
+# 14. Parse / arity validation — every malformed call must surface an error.
+# ---------------------------------------------------------------------------
+
+def test_bget_parse_errors():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    bad_argv = [
+        ("ts",),                          # wrong arity (too few)
+        ("ts", 0, 1, 0, "extra"),         # wrong arity (too many)
+        ("ts", 0, 0, 1000),               # count == 0
+        ("ts", 0, -1, 1000),              # count < 0
+        ("ts", 0, 1, -1),                 # timeout < 0
+        ("ts", 0, "abc", 1000),           # non-integer count
+        ("ts", 0, "1.5", 1000),           # non-integer count
+        ("ts", 0, 1, "abc"),              # non-integer timeout
+        ("ts", "abc", 1, 1000),           # non-integer / non-sentinel timestamp
+        ("ts", -1, 1, 1000),              # negative literal timestamp
+    ]
+    for argv in bad_argv:
+        with pytest.raises(redis.ResponseError):
+            r.execute_command("TS.BGET", *argv)
+
+
+# ---------------------------------------------------------------------------
+# 15. timeout_ms == 0: return whatever is available immediately, never block.
+# ---------------------------------------------------------------------------
+
+def test_bget_timeout_zero_returns_partial_without_blocking():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0"), (200, "2.0")])
+
+    # count=10, only 2 qualifying samples; timeout=0 must flush immediately.
+    t0 = time.time()
+    res = r.execute_command("TS.BGET", "ts", 0, 10, 0)
+    elapsed = time.time() - t0
+
+    env.assertEqual(res, [[100, b"1"], [200, b"2"]])
+    env.assertTrue(elapsed < 0.3,
+                   message="timeout=0 must not block, took %.3fs" % elapsed)
