@@ -55,4 +55,8 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType);
 const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType);
 void initGlobalCompactionFunctions();
 
+/* LOCF seed for reverse-mode empty-bucket emission of TS_AGG_LAST. The caller must verify the
+ * aggregation is TS_AGG_LAST before calling. */
+void LastValueSeedLocf(void *contextPtr, double value);
+
 #endif

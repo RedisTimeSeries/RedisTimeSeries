@@ -31,11 +31,14 @@ typedef struct FirstValueContext
 {
     double value;
     char isResetted;
+    timestamp_t ts; /* in-memory only; tracks oldest sample seen */
 } FirstValueContext;
 
 typedef struct SingleValueContext
 {
     double value;
+    timestamp_t ts;    /* in-memory only; tracks newest sample seen */
+    bool fresh_bucket; /* in-memory only; lets reverse-mode reset across buckets without losing LOCF */
 } SingleValueContext;
 
 typedef struct AvgContext
@@ -82,6 +85,8 @@ void finalize_empty_last_value(void *contextPtr, double *value) {
 void *SingleValueCreateContext(__unused bool reverse) {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
+    context->ts = 0;
+    context->fresh_bucket = true;
     return context;
 }
 
@@ -94,17 +99,32 @@ void *SingleValueCloneContext(void *contextPtr) {
 void SingleValueReset(void *contextPtr) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = 0;
+    context->ts = 0;
+    context->fresh_bucket = true;
 }
 
 void *LastValueCreateContext(__unused bool reverse) {
     SingleValueContext *context = malloc(sizeof *context);
     context->value = NAN;
+    context->ts = 0;
+    context->fresh_bucket = true;
     return context;
 }
 
 void LastValueReset(void *contextPtr) {
-    // Don't do anything cause with EMPTY flag we would like to use the last value
-    return;
+    /* Don't touch value — EMPTY+LAST wants LOCF carry-over. Mark bucket boundary so the next
+     * appendValue accepts a fresh sample regardless of stored ts (which may linger from a newer
+     * bucket processed earlier when iterating in reverse). */
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    context->fresh_bucket = true;
+}
+
+/* LOCF seed for reverse-mode empty-bucket emission: the empty gap inherits the value of the
+ * older (chronologically previous) sample. In reverse iteration that sample hasn't been seen
+ * yet by the aggregator, so we plant it directly. */
+void LastValueSeedLocf(void *contextPtr, double value) {
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    context->value = value;
 }
 
 int SingleValueFinalize(void *contextPtr, double *val) {
@@ -133,6 +153,7 @@ void *FirstValueCreateContext(__unused bool reverse) {
     FirstValueContext *context = (FirstValueContext *)malloc(sizeof(FirstValueContext));
     context->value = 0;
     context->isResetted = true;
+    context->ts = 0;
     return context;
 }
 
@@ -146,6 +167,7 @@ void FirstValueReset(void *contextPtr) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
     context->value = 0;
     context->isResetted = true;
+    context->ts = 0;
 }
 
 int FirstValueFinalize(void *contextPtr, double *val) {
@@ -750,17 +772,26 @@ int CountFinalize(void *contextPtr, double *val) {
     return TSDB_OK;
 }
 
-void FirstAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
+void FirstAppendValue(void *contextPtr, double value, timestamp_t ts) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
-    if (context->isResetted) {
+    /* Direction-independent: keep the OLDEST sample by timestamp. */
+    if (context->isResetted || ts < context->ts) {
         context->isResetted = false;
         context->value = value;
+        context->ts = ts;
     }
 }
 
-void LastAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
+void LastAppendValue(void *contextPtr, double value, timestamp_t ts) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
-    context->value = value;
+    /* Direction-independent: keep the NEWEST sample by timestamp. `fresh_bucket` lets the first
+     * sample of a new bucket always land — important for reverse mode where a newer-bucket value
+     * still sits in `ts` from the previous iteration. */
+    if (context->fresh_bucket || ts >= context->ts) {
+        context->value = value;
+        context->ts = ts;
+        context->fresh_bucket = false;
+    }
 }
 
 static AggregationClass aggMax = {

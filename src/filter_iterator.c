@@ -466,6 +466,26 @@ static int64_t findLastIndexbeforeTS(const EnrichedChunk *chunk,
     return l;
 }
 
+/* When iterating reverse, empty-bucket LOCF (TS_AGG_LAST + EMPTY) inherits from the older
+ * neighbor of the gap. The aggregator hasn't seen that sample yet (it lives in a bucket the
+ * iterator will visit next), so we look it up directly and plant it into the context. The next
+ * non-empty bucket's appendValue will overwrite it via the fresh_bucket path. */
+static void seed_locf_for_reverse_empty_gap(const AggregationIterator *self,
+                                            timestamp_t lowest_empty_bucket_start) {
+    for (size_t a = 0; a < self->numAggregations; a++) {
+        if (self->aggregations[a].type != TS_AGG_LAST) {
+            continue;
+        }
+        Sample older, older_older;
+        if (twa_get_samples_from_left(
+                lowest_empty_bucket_start, self, &older, &older_older) > 0) {
+            LastValueSeedLocf(self->aggregationContexts[a], older.value);
+        } else {
+            LastValueSeedLocf(self->aggregationContexts[a], NAN);
+        }
+    }
+}
+
 // Empty bucket with no samples from left or right at all.
 static void fillEmptyBucketsWithDefaultVals(size_t *write_index,
                                             timestamp_t cur_ts,
@@ -724,6 +744,11 @@ static int fillEmptyBuckets(Samples *samples,
     if (self->hasTwa) {
         twa_fillEmptyBuckets(write_index, cur_ts, samples, self, n_empty_buckets, reversed);
     } else {
+        /* Reverse iteration loses LOCF carry-over for TS_AGG_LAST: the context still holds the
+         * NEWER bucket's value. Seed from the older neighbor before the gap is emitted. */
+        if (reversed) {
+            seed_locf_for_reverse_empty_gap(self, first_bucket_ts);
+        }
         fillEmptyBucketsWithDefaultVals(
             write_index, cur_ts, samples, self, n_empty_buckets, reversed);
     }
