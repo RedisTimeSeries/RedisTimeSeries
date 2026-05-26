@@ -137,33 +137,41 @@ static bool plan_reverse_agg_window(const Series *series,
                                     timestamp_t *narrowed_start) {
     *budget = 0;
     *narrowed_start = args->startTimestamp;
-    if (series->totalSamples == 0) return false;
+    if (series->totalSamples == 0)
+        return false;
 
-    timestamp_t effEnd = (args->endTimestamp > series->lastTimestamp) ? series->lastTimestamp
-                                                                     : args->endTimestamp;
-    if (effEnd < args->startTimestamp) return false;
+    timestamp_t effEnd =
+        (args->endTimestamp > series->lastTimestamp) ? series->lastTimestamp : args->endTimestamp;
+    if (effEnd < args->startTimestamp)
+        return false;
 
     timestamp_t aln = 0;
     switch (args->alignment) {
-        case StartAlignment: aln = args->startTimestamp; break;
-        case EndAlignment: aln = args->endTimestamp; break;
-        case TimestampAlignment: aln = args->timestampAlignment; break;
-        default: break;
+        case StartAlignment:
+            aln = args->startTimestamp;
+            break;
+        case EndAlignment:
+            aln = args->endTimestamp;
+            break;
+        case TimestampAlignment:
+            aln = args->timestampAlignment;
+            break;
+        default:
+            break;
     }
     const timestamp_t bucketDuration = args->aggregationArgs.timeDelta;
     const timestamp_t lastBucketStart = CalcBucketStart(effEnd, bucketDuration, aln);
 
     if (args->count != -1) {
-        if (args->count == 0) return false;
+        if (args->count == 0)
+            return false;
         *budget = (size_t)args->count;
         timestamp_t windowSize = (timestamp_t)(*budget - 1) * bucketDuration;
-        if (lastBucketStart >= windowSize &&
-            lastBucketStart - windowSize > args->startTimestamp) {
+        if (lastBucketStart >= windowSize && lastBucketStart - windowSize > args->startTimestamp) {
             *narrowed_start = lastBucketStart - windowSize;
         }
     } else {
-        timestamp_t firstBucketStart =
-            CalcBucketStart(args->startTimestamp, bucketDuration, aln);
+        timestamp_t firstBucketStart = CalcBucketStart(args->startTimestamp, bucketDuration, aln);
         *budget = (size_t)((lastBucketStart - firstBucketStart) / bucketDuration) + 1;
         if (!args->aggregationArgs.empty && *budget > series->totalSamples) {
             *budget = series->totalSamples;
@@ -192,7 +200,8 @@ static size_t fill_ring(Series *series,
     size_t written = 0;
     while ((chunk = iter->GetNext(iter))) {
         size_t n = chunk->samples.num_samples;
-        if (n == 0) continue;
+        if (n == 0)
+            continue;
         if (!*val_buf) {
             *vps = chunk->samples.values_per_sample;
             *val_buf = malloc(budget * (*vps) * sizeof(double));
@@ -205,7 +214,8 @@ static size_t fill_ring(Series *series,
                    (*vps) * sizeof(double));
             written++;
         }
-        if (early_stop && written >= budget) break;
+        if (early_stop && written >= budget)
+            break;
     }
     iter->Close(iter);
     return written;
@@ -254,8 +264,8 @@ static int ReplyReverseAgg(RedisModuleCtx *ctx, Series *series, const RangeArgs 
     // than N buckets and the real "last N" lives earlier in time than the narrow window saw.
     // Fall back to a full forward scan and let the ring keep the latest N as iteration advances.
     if (args->count != -1 && written < budget && narrowed_start > args->startTimestamp) {
-        written = fill_ring(series, args, args->startTimestamp, budget, false,
-                            ts_buf, &val_buf, &vps);
+        written =
+            fill_ring(series, args, args->startTimestamp, budget, false, ts_buf, &val_buf, &vps);
     }
 
     reply_ring_reverse(ctx, ts_buf, val_buf, budget, written, vps);
