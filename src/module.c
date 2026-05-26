@@ -727,6 +727,11 @@ static int internalAdd(RedisModuleCtx *ctx,
             handleCompaction(ctx, series, rule, timestamp, value);
         }
     }
+    // Wake any TS.BGET waiters parked on this key. Cheap no-op when no client
+    // is blocked; harmless extra try_reply when the upsert was an in-place
+    // update (the reply_cb will re-check and stay parked if nothing changed).
+    RedisModule_SignalKeyAsReady(ctx, series->keyName);
+
     if (should_reply) {
         RedisModule_ReplyWithLongLong(ctx, timestamp);
     }
