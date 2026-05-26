@@ -57,6 +57,6 @@ void initGlobalCompactionFunctions();
 
 /* LOCF seed for reverse-mode empty-bucket emission of TS_AGG_LAST. The caller must verify the
  * aggregation is TS_AGG_LAST before calling. */
-void LastValueSeedLocf(void *contextPtr, double value);
+void LastValueSeedLocf(void *contextPtr, double value, timestamp_t ts);
 
 #endif

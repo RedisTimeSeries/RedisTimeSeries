@@ -122,10 +122,12 @@ void LastValueReset(void *contextPtr) {
 
 /* LOCF seed for reverse-mode empty-bucket emission: the empty gap inherits the value of the
  * older (chronologically previous) sample. In reverse iteration that sample hasn't been seen
- * yet by the aggregator, so we plant it directly. */
-void LastValueSeedLocf(void *contextPtr, double value) {
+ * yet by the aggregator, so we plant it directly. Sets both value and ts so the context stays
+ * internally consistent — otherwise the stale ts from a newer bucket would linger. */
+void LastValueSeedLocf(void *contextPtr, double value, timestamp_t ts) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = value;
+    context->ts = ts;
 }
 
 int SingleValueFinalize(void *contextPtr, double *val) {

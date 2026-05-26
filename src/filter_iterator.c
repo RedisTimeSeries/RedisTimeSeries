@@ -478,9 +478,12 @@ static void seed_locf_for_reverse_empty_gap(const AggregationIterator *self,
         }
         Sample older, older_older;
         if (twa_get_samples_from_left(lowest_empty_bucket_start, self, &older, &older_older) > 0) {
-            LastValueSeedLocf(self->aggregationContexts[a], older.value);
+            LastValueSeedLocf(self->aggregationContexts[a], older.value, older.timestamp);
         } else {
-            LastValueSeedLocf(self->aggregationContexts[a], NAN);
+            /* No older sample exists. The next non-empty bucket's appendValue will go through the
+             * fresh_bucket path so the planted ts won't matter — pass 0 to keep the context
+             * internally consistent with the NaN value. */
+            LastValueSeedLocf(self->aggregationContexts[a], NAN, 0);
         }
     }
 }
