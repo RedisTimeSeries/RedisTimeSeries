@@ -744,8 +744,12 @@ static void agg_iter_compute_empty_prefix_bounds(const AggregationIterator *self
         CalcBucketStart(self->startTimestamp, aggregationTimeDelta, self->timestampAlignment);
     *out_last_bucket =
         CalcBucketStart(first_sample_ts, aggregationTimeDelta, self->timestampAlignment);
+    // If the bucket containing first_sample_ts is itself bucket 0, the prefix would need a
+    // bucket at a negative timestamp — none exists, no span. Detect the clamp explicitly so we
+    // don't emit a spurious bucket that duplicates the real one.
+    bool clamped = *out_last_bucket < aggregationTimeDelta;
     *out_last_bucket = max(0, (int64_t)((int64_t)*out_last_bucket - (int64_t)aggregationTimeDelta));
-    *out_has_span = (*out_first_bucket <= *out_last_bucket);
+    *out_has_span = !clamped && (*out_first_bucket <= *out_last_bucket);
 }
 
 /**
