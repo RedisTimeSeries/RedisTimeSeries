@@ -1422,10 +1422,11 @@ static size_t TSDB_count_samples_up_to(Series *series,
  * @brief Try to satisfy a TS.BGET request from current series state.
  *
  * Single source of truth for "what should we reply with right now?", shared
- * by the fast path, the wake-up callback, and the timeout callback. Never
- * starts writing samples until it knows they will all go out (the Module
- * API has no "abort reply"); the count pre-walk via
- * TSDB_count_samples_up_to() is what makes that safe.
+ * by the fast path, the wake-up callback, and the timeout callback. In
+ * strict mode we count qualifying samples first (TSDB_count_samples_up_to)
+ * and only start writing once we know the full batch is available — purely
+ * a performance optimization to avoid materializing a partial reply that
+ * the reply_cb would then discard by returning REDISMODULE_ERR.
  *
  * Modes:
  *   - strict (@p require_full_batch == true): only reply when @p args->count
@@ -1671,10 +1672,26 @@ int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_OK;
     }
 
+    // Preemptive refusal in MULTI / EVAL / deny-blocking contexts, mirroring
+    // TSDB_mget. Only applies when the caller actually asked to block; a
+    // timeout_ms == 0 request already resolved synchronously above.
+    if (args.timeout_ms > 0) {
+        const int ctxFlags = RedisModule_GetContextFlags(ctx);
+        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+            RedisModule_ReplyWithError(
+                ctx,
+                "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
+                "inside MULTI, EVAL, or a deny-blocking context");
+            return REDISMODULE_OK;
+        }
+    }
+
     if (!TSDB_bget_block(ctx, &args)) {
-        // BlockClientOnKeys refused to park us (MULTI / Lua / deny-blocking
-        // context). TSDB_bget_block already freed privdata; reply with an
-        // error so the client doesn't hang on an empty pipeline.
+        // Defensive fallback: BlockClientOnKeys refused to park us even
+        // though the preemptive context check passed (e.g. a Redis version
+        // surfacing a new deny-blocking flag). Reply with an error so the
+        // client doesn't hang on an empty pipeline.
         RedisModule_ReplyWithError(
             ctx,
             "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
