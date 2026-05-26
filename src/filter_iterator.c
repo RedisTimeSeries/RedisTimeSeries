@@ -360,18 +360,6 @@ static size_t get_samples_from_side(timestamp_t cur_ts,
     return n;
 }
 
-/** @brief Bucket leading edge clipped to the query window (forward iteration). */
-static timestamp_t get_bucket_start_in_query_window(timestamp_t bucketStartTS,
-                                                    timestamp_t rangeStart) {
-    return max(bucketStartTS, rangeStart);
-}
-
-/** @brief Bucket trailing edge clipped to the query window (forward iteration). */
-static timestamp_t get_bucket_end_in_query_window(timestamp_t bucketEndTS,
-                                                  timestamp_t rangeEnd) {
-    return min(bucketEndTS, rangeEnd);
-}
-
 static void twa_calc_empty_bucket_val(timestamp_t ta,
                                       timestamp_t tb,
                                       const Sample *sample_before,
@@ -433,8 +421,8 @@ static void twa_compute_empty_bucket_value(const AggregationIterator *self,
     Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
     int64_t agg_time_delta = self->aggregationTimeDelta;
 
-    timestamp_t ta = get_bucket_start_in_query_window(bucket_ts, self->startTimestamp);
-    timestamp_t tb = get_bucket_end_in_query_window(bucket_ts + agg_time_delta, self->endTimestamp);
+    timestamp_t ta = max(bucket_ts, self->startTimestamp);
+    timestamp_t tb = min(bucket_ts + agg_time_delta, self->endTimestamp);
 
     size_t n_samples_before =
         get_samples_from_side(ta, true, self, &sample_before, &sample_befBefore);
@@ -563,13 +551,13 @@ static void twa_fillEmptyBuckets(size_t *write_index,
     size_t n_samples_before = 0, n_samples_after = 0;
     timestamp_t ta, tb;
     int64_t agg_time_delta = self->aggregationTimeDelta;
-    ta = get_bucket_start_in_query_window(cur_ts, self->startTimestamp);
+    ta = max(cur_ts, self->startTimestamp);
     n_samples_before = get_samples_from_side(ta, true, self, &sample_before, &sample_befBefore);
     n_samples_after = get_samples_from_side(ta, false, self, &sample_after, &sample_afAfter);
 
     for (size_t i = 0; i < n_empty_buckets; ++i) {
-        ta = get_bucket_start_in_query_window(cur_ts, self->startTimestamp);
-        tb = get_bucket_end_in_query_window(cur_ts + agg_time_delta, self->endTimestamp);
+        ta = max(cur_ts, self->startTimestamp);
+        tb = min(cur_ts + agg_time_delta, self->endTimestamp);
 
         timestamp_t ts = calc_bucket_ts(self->bucketTS, cur_ts, self->aggregationTimeDelta);
         double twa_val = 0;
@@ -615,7 +603,7 @@ static void twa_fillEmptyBuckets(size_t *write_index,
 static bool should_skip_empty_gap(const AggregationIterator *self,
                                   timestamp_t first_bucket_of_gap) {
     Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
-    timestamp_t ta = get_bucket_start_in_query_window(first_bucket_of_gap, self->startTimestamp);
+    timestamp_t ta = max(first_bucket_of_gap, self->startTimestamp);
     size_t n_samples_before =
         get_samples_from_side(ta, true, self, &sample_before, &sample_befBefore);
     size_t n_samples_after =
@@ -1099,8 +1087,8 @@ static void agg_iter_init_if_needed(AggregationIterator *self,
     if (self->hasTwa) {
         timestamp_t bucket_start = BucketStartNormalize(self->aggregationLastTimestamp);
         timestamp_t bucket_end = self->aggregationLastTimestamp + aggregationTimeDelta;
-        timestamp_t ta = get_bucket_start_in_query_window(bucket_start, self->startTimestamp);
-        timestamp_t tb = get_bucket_end_in_query_window(bucket_end, self->endTimestamp);
+        timestamp_t ta = max(bucket_start, self->startTimestamp);
+        timestamp_t tb = min(bucket_end, self->endTimestamp);
         for (size_t a = 0; a < self->numAggregations; a++) {
             if (self->aggregations[a].type == TS_AGG_TWA) {
                 self->aggregations[a].addBucketParams(self->aggregationContexts[a], ta, tb);
@@ -1328,7 +1316,7 @@ static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
     agg_iter_advance_context_scope(self, aggregationTimeDelta, contextScope);
 
     if (self->hasTwa) {
-        timestamp_t tb = get_bucket_end_in_query_window(*contextScope, self->endTimestamp);
+        timestamp_t tb = min(*contextScope, self->endTimestamp);
         for (size_t a = 0; a < self->numAggregations; a++) {
             if (self->aggregations[a].type == TS_AGG_TWA) {
                 if (twaHadValid[a] &&

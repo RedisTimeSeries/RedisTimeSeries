@@ -1954,25 +1954,36 @@ def test_ts_range_countAll():
 # Aggregations to validate. Add more here with zero other code changes
 # (provided the aggregation behaves like one of the cases handled by
 # _agg_sample_value / _agg_empty_value below).
-AGGREGATIONS = ['last', 'max', 'count']
+#
+# Intentionally excluded: 'twa' (bucket-edge interpolation), 'std.p' / 'std.s' /
+# 'var.p' / 'var.s' (single-sample value depends on sample/population denominator).
+AGGREGATIONS = ['last', 'first', 'max', 'min', 'count', 'sum', 'avg', 'range']
 
 
 def _agg_sample_value(agg, v):
     """Value the aggregation produces for a bucket that contains exactly one sample."""
     if agg == 'count':
         return '1'
-    # last, max, min, sum, avg, first, range, ... — single sample → that value
+    if agg == 'range':
+        return '0'                    # max - min over a single sample
+    # last, first, max, min, sum, avg → that single sample's value
     return str(v)
 
 
 def _agg_empty_value(agg, prev_v, next_v):
     """Value the aggregation produces for an empty bucket that lies BETWEEN two samples
-    (i.e. has both a left and a right neighbor — should_skip_empty_gap keeps it)."""
+    (i.e. has both a left and a right neighbor — should_skip_empty_gap keeps it).
+
+    Empty-bucket finalizers in src/compaction.c map as follows:
+      - finalize_empty_last_value  → 'last'
+      - finalize_empty_with_ZERO   → 'count', 'sum'
+      - finalize_empty_with_NAN    → everything else (max, min, avg, range, first, ...)
+    """
     if agg == 'last':
         return str(prev_v)            # LOCF: carry forward chronologically previous value
-    if agg == 'count':
-        return '0'                    # no samples in bucket
-    return 'NaN'                      # max, min, sum, avg, ... default empty fill
+    if agg in ('count', 'sum'):
+        return '0'
+    return 'NaN'                      # max, min, avg, first, range, ...
 
 
 def _build_expected_forward(samples, bucket_size, window, agg):
@@ -2166,3 +2177,163 @@ def test_range_revrange_empty_symmetry_multichunk():
                 f'{agg} reverse values mismatch (multichunk).\n'
                 f'expected:\n{_format_redis_cli(exp_rev)}\n'
                 f'actual:\n{_format_redis_cli(got_rev)}')
+
+
+# ---------------------------------------------------------------------------
+# Regression: plain TS.RANGE / TS.REVRANGE (no AGGREGATION) must be exact
+# mirror images of each other. Exercises the reply-time backward-index walk
+# in ReplySeriesRange (which replaced the in-place buffer reverse).
+# ---------------------------------------------------------------------------
+def test_range_revrange_plain_symmetry():
+    """
+    Without any aggregation, TS.REVRANGE over the same window must return
+    exactly the same samples as TS.RANGE, in reverse order.
+    """
+    samples = [(10, 1), (20, 2), (30, 3), (40, 4), (50, 5)]
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'ts_plain_sym{a}'
+        r.execute_command('DEL', key)
+        r.execute_command('TS.CREATE', key)
+        for t, v in samples:
+            r.execute_command('TS.ADD', key, t, v)
+
+        fwd = r.execute_command('TS.RANGE',    key, 10, 50)
+        rev = r.execute_command('TS.REVRANGE', key, 10, 50)
+
+        got_fwd = [_decode_pair(row) for row in fwd]
+        got_rev = [_decode_pair(row) for row in rev]
+
+        assert len(got_fwd) == len(samples), (
+            f'fwd length wrong: got {got_fwd}')
+        assert got_fwd == list(reversed(got_rev)), (
+            f'plain mirror failed:\n'
+            f'fwd={_format_redis_cli(got_fwd)}\n'
+            f'rev={_format_redis_cli(got_rev)}')
+
+
+# ---------------------------------------------------------------------------
+# Regression: TS.REVRANGE ... COUNT N must return the LATEST N samples in
+# reverse chronological order — i.e. it is the mirror image of TS.RANGE on
+# the LAST N samples, not on the FIRST N. This pins the documented COUNT
+# semantics for the reverse direction.
+# ---------------------------------------------------------------------------
+def test_range_revrange_plain_count_symmetry():
+    """
+    For samples [(10,1), (20,2), ..., (100,10)]:
+      TS.RANGE    ... COUNT N → first N forward         = samples[:N]
+      TS.REVRANGE ... COUNT N → latest N in reverse     = reversed(samples[-N:])
+    """
+    samples = [(t, t) for t in range(10, 101, 10)]
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'ts_plain_cnt{a}'
+        r.execute_command('DEL', key)
+        r.execute_command('TS.CREATE', key)
+        for t, v in samples:
+            r.execute_command('TS.ADD', key, t, v)
+
+        for n in (1, 3, 5, len(samples), len(samples) + 5):
+            fwd = r.execute_command('TS.RANGE',    key, 10, 100, 'COUNT', n)
+            rev = r.execute_command('TS.REVRANGE', key, 10, 100, 'COUNT', n)
+
+            got_fwd = [_decode_pair(row) for row in fwd]
+            got_rev = [_decode_pair(row) for row in rev]
+
+            expected_fwd = [(t, str(v)) for t, v in samples[:n]]
+            expected_rev = list(reversed([(t, str(v)) for t, v in samples[-n:]]))
+
+            assert got_fwd == expected_fwd, (
+                f'COUNT={n} fwd mismatch:\n'
+                f'expected:\n{_format_redis_cli(expected_fwd)}\n'
+                f'actual:\n{_format_redis_cli(got_fwd)}')
+            assert got_rev == expected_rev, (
+                f'COUNT={n} rev mismatch:\n'
+                f'expected:\n{_format_redis_cli(expected_rev)}\n'
+                f'actual:\n{_format_redis_cli(got_rev)}')
+
+
+# ---------------------------------------------------------------------------
+# Regression: aggregated TS.RANGE / TS.REVRANGE WITHOUT the EMPTY flag must
+# still be mirror images of each other (same non-empty buckets, reversed
+# order). Complements the EMPTY-flag tests above.
+# ---------------------------------------------------------------------------
+def test_range_revrange_no_empty_symmetry():
+    """
+    Sparse samples spaced beyond bucket_size so naturally-empty buckets
+    exist; without EMPTY, neither direction should emit them.
+    """
+    samples = [(10, 1), (50, 5), (90, 9)]
+    bucket  = 10
+    with Env().getClusterConnectionIfNeeded() as r:
+        for agg in AGGREGATIONS:
+            key = 'ts_no_empty_' + agg + '{a}'
+            r.execute_command('DEL', key)
+            r.execute_command('TS.CREATE', key)
+            for t, v in samples:
+                r.execute_command('TS.ADD', key, t, v)
+
+            fwd = r.execute_command('TS.RANGE',    key, 0, 100,
+                                    'AGGREGATION', agg, bucket)
+            rev = r.execute_command('TS.REVRANGE', key, 0, 100,
+                                    'AGGREGATION', agg, bucket)
+
+            got_fwd = [_decode_pair(row) for row in fwd]
+            got_rev = [_decode_pair(row) for row in rev]
+
+            assert len(got_fwd) == len(samples), (
+                f'{agg}: expected one bucket per sample (no EMPTY flag), '
+                f'got {got_fwd}')
+            assert got_fwd == list(reversed(got_rev)), (
+                f'{agg} no-EMPTY mirror failed:\n'
+                f'fwd={_format_redis_cli(got_fwd)}\n'
+                f'rev={_format_redis_cli(got_rev)}')
+
+
+# ---------------------------------------------------------------------------
+# Regression: TS.MRANGE / TS.MREVRANGE per-series mirror image. The set of
+# returned series and their labels must be the same; the samples list per
+# series must be reversed between the two directions.
+# ---------------------------------------------------------------------------
+def _decode_mrange_entry(entry):
+    """Return (key_name_str, samples_as_list_of_(ts,val)_pairs) for one MRANGE entry.
+    Tolerates the [key, labels, samples] layout regardless of byte vs str."""
+    key = entry[0].decode() if isinstance(entry[0], bytes) else entry[0]
+    samples = [_decode_pair(row) for row in entry[2]]
+    return key, samples
+
+
+def test_mrange_mrevrange_symmetry():
+    """
+    Two series with a shared label; MRANGE and MREVRANGE filtered on that
+    label must return the same set of keys, each with its samples reversed.
+    """
+    samples = [(10, 1), (20, 2), (30, 3), (40, 4)]
+    with Env().getClusterConnectionIfNeeded() as r:
+        keys = ['ts_m_a{a}', 'ts_m_b{a}']
+        for i, key in enumerate(keys):
+            r.execute_command('DEL', key)
+            r.execute_command('TS.CREATE', key,
+                              'LABELS', 'tag', 'mirror_sym', 'idx', str(i))
+            for t, v in samples:
+                r.execute_command('TS.ADD', key, t, v + i * 100)
+
+        fwd = r.execute_command('TS.MRANGE',    10, 40,
+                                'FILTER', 'tag=mirror_sym')
+        rev = r.execute_command('TS.MREVRANGE', 10, 40,
+                                'FILTER', 'tag=mirror_sym')
+
+        fwd_by_key = dict(_decode_mrange_entry(e) for e in fwd)
+        rev_by_key = dict(_decode_mrange_entry(e) for e in rev)
+
+        assert set(fwd_by_key) == set(rev_by_key) == set(keys), (
+            f'key sets differ: fwd={set(fwd_by_key)}, '
+            f'rev={set(rev_by_key)}, expected={set(keys)}')
+
+        for key in keys:
+            f_samples = fwd_by_key[key]
+            r_samples = rev_by_key[key]
+            assert len(f_samples) == len(samples), (
+                f'{key}: fwd sample count wrong: {f_samples}')
+            assert f_samples == list(reversed(r_samples)), (
+                f'{key}: per-series mirror failed:\n'
+                f'fwd={_format_redis_cli(f_samples)}\n'
+                f'rev={_format_redis_cli(r_samples)}')
