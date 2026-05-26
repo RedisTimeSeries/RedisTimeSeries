@@ -1422,7 +1422,8 @@ AbstractSampleIterator *SeriesCreateSampleIterator(Series *series,
     return (AbstractSampleIterator *)SeriesSampleIterator_New(chain);
 }
 
-// returns sample iterator over multiple series (always chronological; reply layer reverses if needed)
+// returns sample iterator over multiple series (always chronological; reply layer reverses if
+// needed)
 AbstractMultiSeriesSampleIterator *MultiSeriesCreateSampleIterator(Series **series,
                                                                    size_t n_series,
                                                                    const RangeArgs *args,
