@@ -78,7 +78,8 @@ def test_bget_blocks_then_unblocks_when_count_is_reached():
 
     # cursor=101 -> initial qualifying = {200, 300} = 2 < 5, so BGET blocks.
     # NOTE: to reach count=5 with cursor=101 we need THREE more samples,
-    # not two — the sample at ts=100 doesn't qualify (cursor is strict).
+    # not two — the sample at ts=100 doesn't qualify because 100 < 101
+    # (cursor is an inclusive lower bound: only ts >= cursor qualifies).
     # Each TS.ADD fires SignalKeyAsReady -> reply_cb runs; only the third
     # add commits because that's when qualifying becomes 5.
     t, slot = _start_bget(env, "ts", 101, 5, 10_000)
@@ -136,8 +137,10 @@ def test_bget_returns_oldest_count_when_more_qualify():
     res = r.execute_command("TS.BGET", "ts", 101, 2, 1000)
     env.assertEqual(res, [[200, b"2"], [300, b"3"]])
 
-    # The caller pages forward by setting cursor to the last returned ts.
-    res = r.execute_command("TS.BGET", "ts", 300, 2, 1000)
+    # The caller pages forward by setting cursor to last_returned_ts + 1
+    # (cursor is inclusive: ts >= cursor qualifies, so passing 300 would
+    # re-emit the sample we already saw).
+    res = r.execute_command("TS.BGET", "ts", 301, 2, 1000)
     env.assertEqual(res, [[400, b"4"], [500, b"5"]])
 
 
@@ -170,5 +173,126 @@ def test_bget_timeout_flushes_available_samples():
     # The whole timeout should have elapsed (we expected to be blocked).
     env.assertTrue(elapsed >= 0.9,
                    message="Expected to wait ~1s on timeout, only waited %.3fs" % elapsed)
+    env.assertTrue(elapsed < 5.0,
+                   message="Timeout overshoot too large: %.3fs" % elapsed)
+
+
+# ---------------------------------------------------------------------------
+# 5. '-' sentinel: cursor=0, matches every existing sample.
+# ---------------------------------------------------------------------------
+
+def test_bget_dash_returns_all_existing_samples():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
+
+    # '-' resolves statically to cursor=0; with ts >= 0 every sample qualifies,
+    # so count=3 is already met and BGET returns synchronously.
+    res = r.execute_command("TS.BGET", "ts", "-", 3, 5000)
+    env.assertEqual(res, [[100, b"1"], [200, b"2"], [300, b"3"]])
+
+
+# ---------------------------------------------------------------------------
+# 6. '-' on a missing key: cursor=0, blocks until the first qualifying ADD.
+# ---------------------------------------------------------------------------
+
+def test_bget_dash_on_empty_series_blocks_until_first_add():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.execute_command("FLUSHALL")  # key "ts" must not exist for this scenario.
+
+    t, slot = _start_bget(env, "ts", "-", 1, 10_000)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(),
+                   message="BGET '-' on missing key should block until ADD")
+
+    assert r.execute_command("TS.ADD", "ts", 100, "1.0") == 100
+
+    t.join(timeout=2.0)
+    env.assertFalse(t.is_alive(),
+                    message="BGET should have replied once the first sample arrived")
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [[100, b"1"]])
+
+
+# ---------------------------------------------------------------------------
+# 7. '+' sentinel on an empty / missing key: cursor=0, behaves like '-'.
+# ---------------------------------------------------------------------------
+
+def test_bget_plus_on_empty_series_blocks_until_first_add():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.execute_command("FLUSHALL")
+
+    t, slot = _start_bget(env, "ts", "+", 1, 10_000)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(),
+                   message="BGET '+' on missing key should block until ADD")
+
+    assert r.execute_command("TS.ADD", "ts", 100, "1.0") == 100
+
+    t.join(timeout=2.0)
+    env.assertFalse(t.is_alive())
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [[100, b"1"]])
+
+
+# ---------------------------------------------------------------------------
+# 8. '+' sentinel: snapshot lastTs at command time, only NEW samples qualify.
+# ---------------------------------------------------------------------------
+
+def test_bget_plus_only_returns_samples_added_after_command():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
+
+    # '+' resolves now to lastTs + 1 = 301. Existing 100/200/300 must NOT
+    # qualify; only a future ADD with ts >= 301 should wake us.
+    t, slot = _start_bget(env, "ts", "+", 1, 10_000)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(),
+                   message="BGET '+' should ignore pre-existing samples")
+
+    # Producer adds a strictly newer sample -> wake-up.
+    assert r.execute_command("TS.ADD", "ts", 400, "4.0") == 400
+
+    t.join(timeout=2.0)
+    env.assertFalse(t.is_alive())
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [[400, b"4"]])
+
+
+# ---------------------------------------------------------------------------
+# 9. '+' sentinel without producer: existing samples must NEVER be returned;
+#    on timeout we flush an empty array.
+# ---------------------------------------------------------------------------
+
+def test_bget_plus_with_no_new_samples_times_out_empty():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
+
+    t0 = time.time()
+    res = r.execute_command("TS.BGET", "ts", "+", 1, 1000)
+    elapsed = time.time() - t0
+
+    env.assertEqual(res, [])
+    env.assertTrue(elapsed >= 0.9,
+                   message="Expected to wait the full timeout, only %.3fs" % elapsed)
     env.assertTrue(elapsed < 5.0,
                    message="Timeout overshoot too large: %.3fs" % elapsed)

@@ -1268,7 +1268,7 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  *
  *  Syntax:  TS.BGET key timestamp count timeout
  *
- *  Returns up to `count` samples with sample-ts strictly greater than the
+ *  Returns up to `count` samples with sample-ts greater than or equal to the
  *  resolved cursor, sorted ascending. Blocks up to `timeout` ms waiting for
  *  qualifying samples. `timestamp` may be a literal UNIX-ms value or one of
  *  the sentinels `-` (earliest) / `+` (latest at command-receive time; first
@@ -1278,8 +1278,10 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  *  chokepoint of the engine (covers TS.ADD / TS.MADD / TS.INCRBY / TS.DECRBY
  *  on append, plus compaction-rule writes to the destination key).
  *
- *  The functions below are scaffolding only — bodies are intentionally
- *  unimplemented (TODOs) and will be filled in iteratively.
+ *  Sentinel support (all resolved inside parse_bget_args):
+ *    `-` -> cursor=0 (no lower bound).
+ *    `+` -> cursor=series->lastTimestamp+1, snapshotted once at command
+ *           receipt; missing/empty -> 0; wrong-type key -> WRONGTYPE.
  * ============================================================================
  */
 
@@ -1292,22 +1294,32 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  */
 typedef struct BGetCtx {
     RedisModuleString *key; ///< series key to read from
-    api_timestamp_t cursor; ///< strict lower bound: only samples with ts > cursor qualify
+    api_timestamp_t cursor; ///< inclusive lower bound: only samples with ts >= cursor qualify
     size_t count;           ///< max samples to return in this batch
     long long timeout_ms;   ///< 0 = do not block; >0 = max time to wait
 } BGetCtx;
 
 /**
- * @brief Parse TS.BGET argv into @p out and validate it.
+ * @brief Parse TS.BGET argv into @p out, including sentinel resolution.
  *
  * On error, replies to the client with a descriptive error.
  * @p out->key is borrowed from @p argv (not retained).
  *
- * @param ctx   Redis module context (used to reply on error).
+ * Timestamp resolution rules (argv[2]):
+ *   - literal non-negative integer : @p out->cursor = the integer.
+ *   - '-'                          : @p out->cursor = 0 (no lower bound).
+ *   - '+'                          : open the series ONCE and snapshot
+ *                                    @p out->cursor = lastTimestamp + 1;
+ *                                    missing or empty series -> 0; wrong-type
+ *                                    key -> reply WRONGTYPE and return ERR.
+ *
+ * After OK, @p out->cursor is a plain literal for the rest of the lifecycle.
+ *
+ * @param ctx   Redis module context (used to reply on error / WRONGTYPE).
  * @param argv  Command argument vector.
  * @param argc  Number of arguments in @p argv (must be 5).
  * @param out   Output struct populated on success.
- * @return REDISMODULE_OK on success, REDISMODULE_ERR on parse/validation error.
+ * @return REDISMODULE_OK on success, REDISMODULE_ERR on any reply written.
  */
 static int parse_bget_args(RedisModuleCtx *ctx,
                            RedisModuleString **argv,
@@ -1332,24 +1344,46 @@ static int parse_bget_args(RedisModuleCtx *ctx,
         return REDISMODULE_ERR;
     }
 
-    // argv[2] — timestamp: literal non-negative integer. The '-' / '+' sentinels
-    // require resolution against the series' first/last sample timestamps and
-    // are intentionally not yet accepted here; they'll be wired up once we open
-    // the series in TSDB_bget.
+    // argv[2] — timestamp: literal non-negative integer, or a '-' / '+' sentinel.
+    // '-' is a static substitution: cursor=0 matches every sample under our
+    // inclusive ts >= cursor semantic.
+    // '+' must be resolved against the live series exactly once (here) so
+    // the cursor stays stable across wake-ups; if we re-resolved on every
+    // signal, lastTs would chase forward and we'd never reply.
     api_timestamp_t cursor = 0;
     size_t ts_len = 0;
     const char *ts_str = RedisModule_StringPtrLen(argv[2], &ts_len);
-    if (ts_len == 1 && (ts_str[0] == '-' || ts_str[0] == '+')) {
-        RedisModule_ReplyWithError(
-            ctx, "TSDB: '-' / '+' timestamp sentinels are not yet supported");
-        return REDISMODULE_ERR;
+    if (ts_len == 1 && ts_str[0] == '-') {
+        cursor = 0;
+    } else if (ts_len == 1 && ts_str[0] == '+') {
+        RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
+        const int kt = key ? RedisModule_KeyType(key) : REDISMODULE_KEYTYPE_EMPTY;
+
+        if (kt == REDISMODULE_KEYTYPE_EMPTY) {
+            // Missing key: spec says cursor = 0 when empty.
+            cursor = 0;
+        } else if (RedisModule_ModuleTypeGetType(key) != SeriesType) {
+            RedisModule_CloseKey(key);
+            RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+            return REDISMODULE_ERR;
+        } else {
+            Series *series = RedisModule_ModuleTypeGetValue(key);
+            cursor = (SeriesGetNumSamples(series) == 0)
+                         ? 0
+                         : (api_timestamp_t)(series->lastTimestamp + 1);
+        }
+        if (key) {
+            RedisModule_CloseKey(key);
+        }
+    } else {
+        long long ts_ll = 0;
+        if (RedisModule_StringToLongLong(argv[2], &ts_ll) != REDISMODULE_OK ||
+            ts_ll < 0) {
+            RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
+            return REDISMODULE_ERR;
+        }
+        cursor = (api_timestamp_t)ts_ll;
     }
-    long long ts_ll = 0;
-    if (RedisModule_StringToLongLong(argv[2], &ts_ll) != REDISMODULE_OK || ts_ll < 0) {
-        RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
-        return REDISMODULE_ERR;
-    }
-    cursor = (api_timestamp_t)ts_ll;
 
     out->key = argv[1];
     out->cursor = cursor;
@@ -1366,7 +1400,7 @@ static int parse_bget_args(RedisModuleCtx *ctx,
  * irreversible ReplyWith* call.
  *
  * @param series     Time series to scan.
- * @param range      Range query (typically `(cursor, +inf] LIMIT count`).
+ * @param range      Range query (typically `[cursor, +inf] LIMIT count`).
  * @param threshold  Early-exit threshold.
  * @return Number of qualifying samples, clamped to @p threshold.
  */
@@ -1404,7 +1438,7 @@ static size_t TSDB_count_samples_up_to(Series *series,
  * Case breakdown:
  *   1. Missing key      : strict -> false; flush -> empty array.
  *   2. Wrong-type key   : always WRONGTYPE error.
- *   3a. lastTs <= cursor: strict -> false; flush -> empty array.
+ *   3a. lastTs <  cursor: strict -> false; flush -> empty array.
  *   3b. Else            : strict -> false if qualifying < count, else reply;
  *                         flush  -> reply (1..count samples).
  *
@@ -1441,10 +1475,10 @@ static bool TSDB_bget_try_reply(RedisModuleCtx *ctx,
 
     Series *series = RedisModule_ModuleTypeGetValue(key);
 
-    // Case 3a: O(1) shortcut. If the latest sample isn't newer than the
-    // cursor, no qualifying sample can exist (and the cursor + 1 below is
-    // safe — overflow would require lastTimestamp > UINT64_MAX, unreachable).
-    if (series->lastTimestamp <= args->cursor) {
+    // Case 3a: O(1) shortcut. If the latest sample is older than the cursor,
+    // no qualifying sample can exist (ts >= cursor is impossible when
+    // lastTimestamp < cursor).
+    if (series->lastTimestamp < args->cursor) {
         RedisModule_CloseKey(key);
         if (require_full_batch) {
             return false;
@@ -1453,10 +1487,10 @@ static bool TSDB_bget_try_reply(RedisModuleCtx *ctx,
         return true;
     }
 
-    // Case 3b: at least one sample exists. Build the range query equivalent
-    // to TS.RANGE (cursor, +inf] LIMIT count.
+    // Case 3b: at least one sample may qualify. Build the range query
+    // equivalent to TS.RANGE [cursor, +inf] LIMIT count.
     const RangeArgs range = {
-        .startTimestamp = args->cursor + 1,
+        .startTimestamp = args->cursor,
         .endTimestamp = LLONG_MAX,
         .latest = false,
         .count = (long long)args->count,
@@ -1578,26 +1612,27 @@ static RedisModuleBlockedClient *TSDB_bget_block(RedisModuleCtx *ctx, const BGet
 /**
  * @brief TS.BGET command entry point.
  *
- * Parses argv into a BGetCtx. If samples newer than the cursor already exist
+ * Parses argv into a BGetCtx. If samples at-or-after the cursor already exist
  * (or the key is unusable / `timeout_ms == 0`), replies inline via
  * TSDB_bget_try_reply(); otherwise parks the client via TSDB_bget_block().
  *
- * @todo Sentinel resolution ('-' / '+').
  * @todo Refuse blocking in MULTI / Lua / replica contexts.
  *
  * @param ctx   Module context.
  * @param argv  Command argument vector: `TS.BGET key timestamp count timeout`.
  * @param argc  Argument count (expected 5).
- * @return Always REDISMODULE_OK on the public success contract (errors are
- *         delivered via RedisModule_ReplyWithError); REDISMODULE_ERR only on
- *         parse failure where no reply has been written.
+ * @return Always REDISMODULE_OK — errors (parse, WRONGTYPE, blocking refused)
+ *         are delivered through RedisModule_ReplyWithError so the client
+ *         always sees a terminal reply.
  */
 int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
     BGetCtx args = { 0 };
     if (parse_bget_args(ctx, argv, argc, &args) != REDISMODULE_OK) {
-        return REDISMODULE_ERR;
+        // parse_bget_args already wrote a reply (validation error, WRONGTYPE
+        // during '+' resolution, etc.).
+        return REDISMODULE_OK;
     }
 
     // timeout_ms == 0 means "do not block" — flush whatever is available now
