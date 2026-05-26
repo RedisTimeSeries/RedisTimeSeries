@@ -1372,9 +1372,10 @@ static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
             // (which would silently flip the cursor's meaning from "future
             // only" to "every sample"). No timestamp can exceed UINT64_MAX,
             // so cursor=UINT64_MAX is the correct unreachable upper bound.
-            cursor = (SeriesGetNumSamples(series) == 0)        ? 0
-                     : (series->lastTimestamp == UINT64_MAX)   ? UINT64_MAX
-                                                               : (api_timestamp_t)(series->lastTimestamp + 1);
+            cursor = (SeriesGetNumSamples(series) == 0) ? 0
+                     : (series->lastTimestamp == UINT64_MAX)
+                         ? UINT64_MAX
+                         : (api_timestamp_t)(series->lastTimestamp + 1);
         }
         if (key) {
             RedisModule_CloseKey(key);
