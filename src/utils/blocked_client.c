@@ -33,3 +33,27 @@ void RTS_UnblockClient(RedisModuleBlockedClient *bc, void *privdata) {
     }
     RedisModule_UnblockClient(bc, privdata);
 }
+
+RedisModuleBlockedClient *RTS_BlockClientOnKey(RedisModuleCtx *ctx,
+                                               RedisModuleCmdFunc reply_callback,
+                                               RedisModuleCmdFunc timeout_callback,
+                                               void (*free_privdata)(RedisModuleCtx *, void *),
+                                               long long timeout_ms,
+                                               RedisModuleString *key,
+                                               void *privdata) {
+    assert(ctx != NULL);
+    assert(key != NULL);
+
+    RedisModuleBlockedClient *bc = RedisModule_BlockClientOnKeys(ctx,
+                                                                 reply_callback,
+                                                                 timeout_callback,
+                                                                 free_privdata,
+                                                                 timeout_ms,
+                                                                 &key,
+                                                                 1,
+                                                                 privdata);
+    if (bc && CheckVersionForBlockedClientMeasureTime()) {
+        RedisModule_BlockedClientMeasureTimeStart(bc);
+    }
+    return bc;
+}

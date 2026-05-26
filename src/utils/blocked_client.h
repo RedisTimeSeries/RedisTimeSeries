@@ -15,3 +15,15 @@ RedisModuleBlockedClient *RTS_BlockClient(RedisModuleCtx *ctx,
 
 // unblock blocked client and report end time
 void RTS_UnblockClient(RedisModuleBlockedClient *bc, void *privdata);
+
+// Block the client on a single key. The reply_cb is invoked on every
+// RedisModule_SignalKeyAsReady on `key` (and once at setup); the timeout_cb
+// fires after `timeout_ms`. `privdata` is owned by the blocked client and
+// freed via `free_privdata` once the client is unblocked.
+RedisModuleBlockedClient *RTS_BlockClientOnKey(RedisModuleCtx *ctx,
+                                               RedisModuleCmdFunc reply_callback,
+                                               RedisModuleCmdFunc timeout_callback,
+                                               void (*free_privdata)(RedisModuleCtx *, void *),
+                                               long long timeout_ms,
+                                               RedisModuleString *key,
+                                               void *privdata);
