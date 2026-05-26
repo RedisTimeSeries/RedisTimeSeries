@@ -107,21 +107,43 @@ def test_short_form_clusterset():
         env.skip()
 
     number_of_keys = 100
-    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=10, label="test")
+    samples_per_key = 10
+    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key, label="test")
 
     # First try sending the multi-node command without the module being aware of the cluster
     with env.getConnection(0) as rc:
         # In this case the command will run locally and only return a subset of the result
         queryindex = rc.execute_command('TS.QUERYINDEX', 'label=test')
-        assert len(queryindex) < number_of_keys, queryindex
+        assert 0 < len(queryindex) < number_of_keys, queryindex
 
     # Now inform the nodes, using the short form of timeseries.CLUSTERSET
-    env.broadcast('timeseries.CLUSTERSET')
+    replies = env.broadcast('timeseries.CLUSTERSET')
+    for shard_index, reply in enumerate(replies or []):
+        assert reply in ('OK', b'OK'), f'shard {shard_index} replied {reply!r} to timeseries.CLUSTERSET'
 
-    # and try the same command again
+    # Node-list fan-out path: TS.QUERYINDEX dispatches via RedisModule_GetClusterNodesList.
+    # This validates that the module is now aware of every peer node.
     with env.getConnection(0) as rc:
         queryindex = rc.execute_command('TS.QUERYINDEX', 'label=test')
         assert len(queryindex) == number_of_keys, queryindex
+
+    # Slot-routed path: TS.MRANGE GROUPBY shuffles records across shards by the
+    # group-key's hash slot, going through clusterCtx.CurrCluster->slots[] in LibMR
+    # (MR_SendRecordToSlot -> MR_ClusterSendMsgBySlot). This is the exact table that
+    # short-form CLUSTERSET populates from RedisModule_GetClusterNodeSlotRanges, so
+    # any regression in slot-range population (e.g. the first-range-missed bug fixed
+    # in LibMR commit 42ce87e) would surface here as a wrong count or a hang.
+    with env.getConnection(0) as rc:
+        result = rc.execute_command(
+            'TS.MRANGE', '-', '+',
+            'FILTER', 'label=test',
+            'GROUPBY', 'label', 'REDUCE', 'count',
+        )
+        ((filtered_by, withlabels, samples),) = result
+        assert filtered_by == 'label=test'
+        assert withlabels == []  # No WITHLABELS
+        assert len(samples) == samples_per_key, samples
+        assert all(int(sample[1]) == number_of_keys for sample in samples), samples
 
 
 # Helper structs and functions
