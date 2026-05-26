@@ -1283,24 +1283,32 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  * ============================================================================
  */
 
-// Parsed TS.BGET arguments. Populated once in TSDB_bget by parse_bget_args()
-// and then carried as blocked-client privdata so the callbacks never re-parse
-// argv. `key` is a borrowed pointer at parse time; TSDB_bget_block() retains
-// it before handing the struct to Redis, and TSDB_bget_free_privdata releases
-// it once the client is unblocked. `timeout_ms` is only consumed during block
-// setup; storing it here keeps "everything parsed" in a single record.
+/**
+ * @brief Parsed TS.BGET arguments, also used as blocked-client privdata.
+ *
+ * Populated once by parse_bget_args() so callbacks never re-parse argv.
+ * `key` is borrowed at parse time; TSDB_bget_block() retains it and
+ * TSDB_bget_free_privdata() releases it.
+ */
 typedef struct BGetCtx {
-    RedisModuleString *key; // series key to read from
-    api_timestamp_t cursor; // strict lower bound: only samples with ts > cursor qualify
-    size_t count;           // max samples to return in this batch
-    long long timeout_ms;   // 0 = do not block; >0 = max time to wait
+    RedisModuleString *key; ///< series key to read from
+    api_timestamp_t cursor; ///< strict lower bound: only samples with ts > cursor qualify
+    size_t count;           ///< max samples to return in this batch
+    long long timeout_ms;   ///< 0 = do not block; >0 = max time to wait
 } BGetCtx;
 
-// Parse TS.BGET argv into `out`. On error, replies to the client with a
-// descriptive error and returns REDISMODULE_ERR; on success returns
-// REDISMODULE_OK with all fields of `out` populated. `out->key` is borrowed
-// from argv (not retained) — the caller is responsible for retaining it if
-// the struct outlives the command call.
+/**
+ * @brief Parse TS.BGET argv into @p out and validate it.
+ *
+ * On error, replies to the client with a descriptive error.
+ * @p out->key is borrowed from @p argv (not retained).
+ *
+ * @param ctx   Redis module context (used to reply on error).
+ * @param argv  Command argument vector.
+ * @param argc  Number of arguments in @p argv (must be 5).
+ * @param out   Output struct populated on success.
+ * @return REDISMODULE_OK on success, REDISMODULE_ERR on parse/validation error.
+ */
 static int parse_bget_args(RedisModuleCtx *ctx,
                            RedisModuleString **argv,
                            int argc,
@@ -1350,11 +1358,18 @@ static int parse_bget_args(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-// Walk the (cursor, +inf] range and count qualifying samples, stopping the
-// moment `threshold` is reached. Cost is bounded by `threshold` chunks of
-// metadata reads (not by series size). No per-sample work and no reply
-// writes — used purely to gate the strict "do we have >= count?" check
-// before any RedisModule_ReplyWith* call (which can't be undone).
+/**
+ * @brief Count samples matching @p range, stopping once @p threshold is hit.
+ *
+ * Cost is bounded by @p threshold (chunk-metadata reads only, no per-sample
+ * work). Used to gate strict-mode "do we have >= count?" before any
+ * irreversible ReplyWith* call.
+ *
+ * @param series     Time series to scan.
+ * @param range      Range query (typically `(cursor, +inf] LIMIT count`).
+ * @param threshold  Early-exit threshold.
+ * @return Number of qualifying samples, clamped to @p threshold.
+ */
 static size_t TSDB_count_samples_up_to(Series *series,
                                        const RangeArgs *range,
                                        size_t threshold) {
@@ -1369,42 +1384,36 @@ static size_t TSDB_count_samples_up_to(Series *series,
     return total;
 }
 
-// Try to satisfy a TS.BGET request from the current state of `args->key`.
-// Shared by the fast path in TSDB_bget, the wake-up callback, AND the
-// timeout callback so the "what should we reply with right now?" decision
-// lives in exactly one place.
-//
-// `require_full_batch` toggles between two modes:
-//
-//   true  — strict mode (fast path + on-signal wake-up). We will only write
-//           a reply when `args->count` samples are already available; if
-//           fewer exist, return false so the caller can block / stay parked.
-//           This honors the spec rule "return only when timeout OR count is
-//           reached, whichever first" — strict mode never partially flushes.
-//
-//   false — flush mode (timeout deadline + no-block fast path with
-//           `timeout_ms == 0`). Always writes a terminal reply, possibly an
-//           empty array (no samples available), the WRONGTYPE error, or up
-//           to `args->count` samples. Never returns false in this mode.
-//
-// We never start writing samples until we know they'll all go out — the
-// Module API has no "abort reply" once `ReplyWith*` is called. The count
-// pre-walk is what makes that safe.
-//
-// Case breakdown:
-//   1. Key is missing (does not exist yet).
-//        strict:  return false (caller should block — producer may create it).
-//        flush:   reply with an empty array.
-//   2. Key exists but holds the wrong type (not a TimeSeries).
-//        always:  reply WRONGTYPE error (waiting can't fix this).
-//   3. Key is a healthy TimeSeries.
-//      3a. series->lastTimestamp <= cursor: no qualifying sample exists.
-//          strict:  return false.
-//          flush:   reply with an empty array.
-//      3b. Otherwise:
-//          strict:  count (cursor, +inf]; if < count, return false; else
-//                   reply via ReplySeriesRange.
-//          flush:   reply via ReplySeriesRange (1..count samples).
+/**
+ * @brief Try to satisfy a TS.BGET request from current series state.
+ *
+ * Single source of truth for "what should we reply with right now?", shared
+ * by the fast path, the wake-up callback, and the timeout callback. Never
+ * starts writing samples until it knows they will all go out (the Module
+ * API has no "abort reply"); the count pre-walk via
+ * TSDB_count_samples_up_to() is what makes that safe.
+ *
+ * Modes:
+ *   - strict (@p require_full_batch == true): only reply when @p args->count
+ *     samples qualify; otherwise return false so the caller can block / stay
+ *     parked. Used on the fast path and on SignalKeyAsReady wake-ups.
+ *   - flush  (@p require_full_batch == false): always reply (possibly empty
+ *     or partial). Used by the timeout callback and by the no-block fast
+ *     path when `timeout_ms == 0`.
+ *
+ * Case breakdown:
+ *   1. Missing key      : strict -> false; flush -> empty array.
+ *   2. Wrong-type key   : always WRONGTYPE error.
+ *   3a. lastTs <= cursor: strict -> false; flush -> empty array.
+ *   3b. Else            : strict -> false if qualifying < count, else reply;
+ *                         flush  -> reply (1..count samples).
+ *
+ * @param ctx                Module context for OpenKey/Reply* calls.
+ * @param args               Parsed BGET arguments (key, cursor, count).
+ * @param require_full_batch Strict (true) vs flush (false) mode.
+ * @return true if a reply was written, false only in strict mode when caller
+ *         should block / stay parked.
+ */
 static bool TSDB_bget_try_reply(RedisModuleCtx *ctx,
                                 const BGetCtx *args,
                                 bool require_full_batch) {
@@ -1468,10 +1477,18 @@ static bool TSDB_bget_try_reply(RedisModuleCtx *ctx,
     return true;
 }
 
-// Re-invoked on every SignalKeyAsReady() on the watched key (and once at
-// block setup). Strict mode: only unblock when args->count samples are
-// available. Returns REDISMODULE_OK to unblock, REDISMODULE_ERR to stay
-// parked until the next signal or the timeout.
+/**
+ * @brief BlockClientOnKeys reply callback: strict-mode wake-up handler.
+ *
+ * Re-invoked on every RedisModule_SignalKeyAsReady() on the watched key
+ * (and once at block setup).
+ *
+ * @param ctx   Module context bound to the blocked client.
+ * @param argv  Unused (command argv is not forwarded to wake-up callbacks).
+ * @param argc  Unused.
+ * @return REDISMODULE_OK to unblock and commit the reply, REDISMODULE_ERR to
+ *         stay parked until the next signal or the timeout.
+ */
 static int TSDB_bget_reply_callback(RedisModuleCtx *ctx,
                                     RedisModuleString **argv,
                                     int argc) {
@@ -1482,9 +1499,18 @@ static int TSDB_bget_reply_callback(RedisModuleCtx *ctx,
                                                                   : REDISMODULE_ERR;
 }
 
-// Invoked when `timeout_ms` elapses without the client being unblocked.
-// Flush mode: deadline reached, deliver whatever's available (possibly
-// empty or fewer than count, per the spec).
+/**
+ * @brief BlockClientOnKeys timeout callback: flush-mode deadline handler.
+ *
+ * Invoked when `timeout_ms` elapses without the client being unblocked.
+ * Flushes whatever is available (possibly empty or fewer than count) per
+ * the TS.BGET spec.
+ *
+ * @param ctx   Module context bound to the blocked client.
+ * @param argv  Unused.
+ * @param argc  Unused.
+ * @return Always REDISMODULE_OK (the client is unblocked unconditionally).
+ */
 static int TSDB_bget_timeout_callback(RedisModuleCtx *ctx,
                                       RedisModuleString **argv,
                                       int argc) {
@@ -1495,8 +1521,15 @@ static int TSDB_bget_timeout_callback(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
-// Frees the BGetCtx attached to the blocked client. Called by Redis after
-// the client is unblocked (whether via reply, timeout, disconnect, or abort).
+/**
+ * @brief Release the BGetCtx attached to the blocked client.
+ *
+ * Called by Redis once the client is unblocked (via reply, timeout,
+ * disconnect, or abort). Frees the retained key and the heap struct.
+ *
+ * @param ctx       Module context (used for RedisModule_FreeString).
+ * @param privdata  BGetCtx* allocated by TSDB_bget_block(); NULL-safe.
+ */
 static void TSDB_bget_free_privdata(RedisModuleCtx *ctx, void *privdata) {
     if (!privdata) {
         return;
@@ -1508,14 +1541,22 @@ static void TSDB_bget_free_privdata(RedisModuleCtx *ctx, void *privdata) {
     free(priv);
 }
 
-// Allocate the privdata (heap copy of `args`) and park the client on its key.
-// Redis owns the blocked-client lifecycle through the registered callbacks;
-// the key is retained for the privdata's lifetime and released by
-// TSDB_bget_free_privdata.
-//
-// Returns NULL if Redis refuses to block (e.g. MULTI / Lua / deny-blocking
-// context). In that case the free callback is never installed, so we free
-// `priv` (and the retained `priv->key`) here — otherwise they would leak.
+/**
+ * @brief Allocate privdata and park the client on @p args->key.
+ *
+ * Heap-copies @p args, retains the key for the privdata's lifetime, and
+ * registers the BGET reply / timeout / free callbacks. Redis owns the
+ * blocked-client lifecycle thereafter.
+ *
+ * If Redis refuses to block (MULTI / Lua / deny-blocking context),
+ * BlockClientOnKeys returns NULL and the free callback is never installed —
+ * in that case we free `priv` (and the retained `priv->key`) here to avoid
+ * a leak.
+ *
+ * @param ctx   Module context bound to the calling client.
+ * @param args  Parsed BGET arguments to capture into privdata.
+ * @return Handle to the blocked client, or NULL if blocking was refused.
+ */
 static RedisModuleBlockedClient *TSDB_bget_block(RedisModuleCtx *ctx, const BGetCtx *args) {
     BGetCtx *priv = malloc(sizeof(*priv));
     *priv = *args;
@@ -1534,12 +1575,23 @@ static RedisModuleBlockedClient *TSDB_bget_block(RedisModuleCtx *ctx, const BGet
     return bc;
 }
 
-// Main command entry point. Parses argv into a BGetCtx; if samples newer
-// than the cursor already exist (or the key is unusable), replies inline via
-// the shared TSDB_bget_try_reply helper. Otherwise parks the client via
-// TSDB_bget_block (or replies empty when timeout_ms == 0).
-//
-// TODO: sentinel resolution ('-' / '+'), MULTI/Lua/replica refusal.
+/**
+ * @brief TS.BGET command entry point.
+ *
+ * Parses argv into a BGetCtx. If samples newer than the cursor already exist
+ * (or the key is unusable / `timeout_ms == 0`), replies inline via
+ * TSDB_bget_try_reply(); otherwise parks the client via TSDB_bget_block().
+ *
+ * @todo Sentinel resolution ('-' / '+').
+ * @todo Refuse blocking in MULTI / Lua / replica contexts.
+ *
+ * @param ctx   Module context.
+ * @param argv  Command argument vector: `TS.BGET key timestamp count timeout`.
+ * @param argc  Argument count (expected 5).
+ * @return Always REDISMODULE_OK on the public success contract (errors are
+ *         delivered via RedisModule_ReplyWithError); REDISMODULE_ERR only on
+ *         parse failure where no reply has been written.
+ */
 int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
@@ -1557,7 +1609,15 @@ int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_OK;
     }
 
-    TSDB_bget_block(ctx, &args);
+    if (!TSDB_bget_block(ctx, &args)) {
+        // BlockClientOnKeys refused to park us (MULTI / Lua / deny-blocking
+        // context). TSDB_bget_block already freed privdata; reply with an
+        // error so the client doesn't hang on an empty pipeline.
+        RedisModule_ReplyWithError(
+            ctx,
+            "TSDB: blocking TS.BGET is not allowed  "
+            "or in a deny-blocking context");
+    }
     return REDISMODULE_OK;
 }
 
