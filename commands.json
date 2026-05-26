@@ -1187,7 +1187,7 @@
         "acl_categories": [
             "read"
         ],
-        "since": "1.14.0",
+        "since": "8.10.0",
         "group": "timeseries"
     },
     "TS.MGET": {
