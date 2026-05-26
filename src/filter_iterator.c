@@ -620,7 +620,8 @@ static int fillEmptyBuckets(Samples *samples,
                             timestamp_t first_bucket_ts,
                             timestamp_t end_bucket_ts,
                             const AggregationIterator *self,
-                            int64_t *read_index) {
+                            int64_t *read_index,
+                            bool may_be_edge_gap) {
     int64_t agg_time_delta = self->aggregationTimeDelta;
     int64_t _read_index = *read_index + 1; // Cause we already stored the sample in read_index
     size_t vps = samples->values_per_sample;
@@ -644,7 +645,11 @@ static int fillEmptyBuckets(Samples *samples,
 
 #ifndef PREFIX_SUFFIX_IMPL // The PM decided to disable it, as it might cause OOM and complicates
                            // users
-    if (should_skip_empty_gap(self, cur_ts)) {
+    /* should_skip_empty_gap is an edge-detector: it only ever drops the gap when one side is
+     * outside the data span. For interior gaps (bounded by real buckets on both sides) the
+     * check is guaranteed to return false, so we skip the two expensive sample-iterator scans
+     * via may_be_edge_gap. */
+    if (may_be_edge_gap && should_skip_empty_gap(self, cur_ts)) {
         return 0;
     }
 #endif // PREFIX_SUFFIX_IMPL
@@ -732,8 +737,8 @@ static void agg_iter_compute_empty_prefix_bounds(const AggregationIterator *self
         CalcBucketStart(self->startTimestamp, aggregationTimeDelta, self->timestampAlignment);
     *out_last_bucket =
         CalcBucketStart(first_sample_ts, aggregationTimeDelta, self->timestampAlignment);
-    *out_has_span = (*out_first_bucket < *out_last_bucket);
     *out_last_bucket = max(0, (int64_t)((int64_t)*out_last_bucket - (int64_t)aggregationTimeDelta));
+    *out_has_span = (*out_first_bucket <= *out_last_bucket);
 }
 
 /**
@@ -756,11 +761,11 @@ static int agg_iter_append_empty_buckets(AggregationIterator *self,
         prefixSamples->num_samples = *agg_n_samples;
         int64_t read_idx = -1;
         return fillEmptyBuckets(
-            prefixSamples, agg_n_samples, first_bucket, last_bucket, self, &read_idx);
+            prefixSamples, agg_n_samples, first_bucket, last_bucket, self, &read_idx, true);
     }
     *si = -1;
     int err = fillEmptyBuckets(
-        &enrichedChunk->samples, agg_n_samples, first_bucket, last_bucket, self, si);
+        &enrichedChunk->samples, agg_n_samples, first_bucket, last_bucket, self, si, true);
     if (err != 0) {
         return -1;
     }
@@ -785,7 +790,7 @@ static int agg_iter_fill_window_when_empty(AggregationIterator *self,
         CalcBucketStart(self->endTimestamp, aggregationTimeDelta, self->timestampAlignment);
     *si = -1;
     self->aux_chunk->samples.num_samples = 0;
-    return fillEmptyBuckets(&self->aux_chunk->samples, agg_n_samples, fb, lb, self, si);
+    return fillEmptyBuckets(&self->aux_chunk->samples, agg_n_samples, fb, lb, self, si, true);
 }
 
 /**
@@ -994,7 +999,7 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
             *si = -1;
             self->aux_chunk->samples.num_samples = 0;
             int err = fillEmptyBuckets(
-                &self->aux_chunk->samples, agg_n_samples, first_bucket, last_bucket, self, si);
+                &self->aux_chunk->samples, agg_n_samples, first_bucket, last_bucket, self, si, true);
             if (err != 0) {
                 return NULL;
             }
@@ -1173,7 +1178,7 @@ static int agg_iter_max_emit_opening_sample(AggregationIterator *self,
                                               &first_bucket,
                                               &last_bucket)) {
             int err = fillEmptyBuckets(
-                &enrichedChunk->samples, agg_n_samples, first_bucket, last_bucket, self, si);
+                &enrichedChunk->samples, agg_n_samples, first_bucket, last_bucket, self, si, false);
             if (err != 0) {
                 return -1;
             }
@@ -1276,7 +1281,8 @@ static int agg_iter_general_on_bucket_boundary(AggregationIterator *self,
                                        first_bucket,
                                        last_bucket,
                                        self,
-                                       multiAgg ? &read_idx : si);
+                                       multiAgg ? &read_idx : si,
+                                       false);
             if (err != 0) {
                 return -1;
             }
@@ -1478,7 +1484,8 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
                                        first_bucket,
                                        last_bucket,
                                        self,
-                                       &read_index);
+                                       &read_index,
+                                       true);
             if (err != 0) {
                 return NULL;
             }

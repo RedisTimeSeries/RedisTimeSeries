@@ -1370,8 +1370,9 @@ AbstractIterator *SeriesQuery(Series *series,
                 : args->startTimestamp;
     }
 
+    bool should_reverse_chunk = reverse && (!args->filterByTSArgs.hasValue);
     AbstractIterator *chain = SeriesIterator_New(
-        series, startTimestamp, args->endTimestamp, reverse, reverse, args->latest);
+        series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk, args->latest);
 
     if (args->filterByTSArgs.hasValue) {
         chain = (AbstractIterator *)SeriesFilterTSIterator_New(chain, args->filterByTSArgs);
