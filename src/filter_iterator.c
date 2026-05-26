@@ -199,7 +199,12 @@ EnrichedChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base
                               self->ByTsArgs.count - 1);
         if (count > 0) {
             enrichedChunk->samples.num_samples = count;
-            self->tsFilterIndex += count; // at least count samples consumed
+            if (unlikely(self->reverse)) {
+                reverseEnrichedChunk(enrichedChunk);
+                self->ByTsArgs.count -= count;
+            } else {
+                self->tsFilterIndex += count; // at least count samples consumed
+            }
             return enrichedChunk;
         }
     }
@@ -208,13 +213,15 @@ EnrichedChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base
 }
 
 SeriesFilterTSIterator *SeriesFilterTSIterator_New(AbstractIterator *input,
-                                                   FilterByTSArgs ByTsArgs) {
+                                                   FilterByTSArgs ByTsArgs,
+                                                   bool rev) {
     SeriesFilterTSIterator *newIter = malloc(sizeof(SeriesFilterTSIterator));
     newIter->base.input = input;
     newIter->base.GetNext = SeriesFilterTSIterator_GetNextChunk;
     newIter->base.Close = SeriesFilterIterator_Close;
     newIter->ByTsArgs = ByTsArgs;
     newIter->tsFilterIndex = 0;
+    newIter->reverse = rev;
     return newIter;
 }
 

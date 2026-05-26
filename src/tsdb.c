@@ -1375,7 +1375,8 @@ AbstractIterator *SeriesQuery(Series *series,
         series, startTimestamp, args->endTimestamp, reverse, should_reverse_chunk, args->latest);
 
     if (args->filterByTSArgs.hasValue) {
-        chain = (AbstractIterator *)SeriesFilterTSIterator_New(chain, args->filterByTSArgs);
+        chain =
+            (AbstractIterator *)SeriesFilterTSIterator_New(chain, args->filterByTSArgs, reverse);
     }
 
     if (args->filterByValueArgs.hasValue) {

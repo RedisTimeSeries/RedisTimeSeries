@@ -18,10 +18,12 @@ typedef struct SeriesFilterTSIterator
     AbstractIterator base;
     FilterByTSArgs ByTsArgs;
     size_t tsFilterIndex; // the index in the TS filter array in ByTsArgs
+    bool reverse;
 } SeriesFilterTSIterator;
 
 SeriesFilterTSIterator *SeriesFilterTSIterator_New(AbstractIterator *input,
-                                                   FilterByTSArgs ByTsArgs);
+                                                   FilterByTSArgs ByTsArgs,
+                                                   bool rev);
 
 EnrichedChunk *SeriesFilterTSIterator_GetNextChunk(struct AbstractIterator *base);
 

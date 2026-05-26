@@ -3067,3 +3067,69 @@ def test_ts_range_aggregator_empty_no_preceding_sample():
             assert math.isnan(got), (
                 f'AGGREGATION {agg} EMPTY no-prior-sample: '
                 f'expected NaN, got {got}')
+
+
+def test_revrange_empty_count_matches_range_tail():
+    """
+    TS.REVRANGE + EMPTY + COUNT N must return the LAST N emitted buckets in
+    reverse chronological order. The ground truth comes from TS.RANGE without
+    COUNT (untouched, well-established forward path): the expected REVRANGE+COUNT
+    result is the last N entries of that forward result, reversed.
+
+    Covered:
+      - N strictly less than total emitted buckets
+      - N == 1 (smallest meaningful slice)
+      - N exactly equal to total emitted bucket count
+      - N larger than total emitted bucket count (must return all, no padding)
+      - Sparse-leading data: empty buckets at the start of the window are
+        "outside data span" and dropped by the EMPTY rule; the count must apply
+        AFTER that drop so the response always reflects real, emitted buckets.
+      - Mid-series gap: empty buckets that ARE inside the data span are emitted
+        and must be eligible to appear in the COUNT-N tail.
+
+    Every assertion is derived from TS.RANGE on the same key/window, so the
+    test stays a true black-box check of the REVRANGE+EMPTY+COUNT semantics.
+    """
+    SCENARIOS = (
+        # (label, samples, window, bucket_duration)
+        ('dense',         [(t, t) for t in range(0, 100, 10)],   (0, 99),   10),
+        ('sparse-lead',   [(50, 50), (60, 60), (70, 70),
+                           (80, 80), (90, 90)],                  (0, 99),   10),
+        ('mid-gap',       [(0, 0),  (10, 10), (20, 20),
+                           (70, 70), (80, 80), (90, 90)],        (0, 99),   10),
+        ('single-sample', [(42, 42)],                            (0, 99),   10),
+    )
+    AGGS = ('last', 'first', 'max', 'min', 'count', 'sum', 'avg', 'range')
+
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        for label, samples, (win_lo, win_hi), bd in SCENARIOS:
+            key = f'rev_empty_count_{label}{{a}}'
+            r.execute_command('DEL', key)
+            r.execute_command('TS.CREATE', key)
+            for t, v in samples:
+                r.execute_command('TS.ADD', key, t, v)
+
+            for agg in AGGS:
+                fwd_all = r.execute_command(
+                    'TS.RANGE', key, win_lo, win_hi,
+                    'AGGREGATION', agg, bd, 'EMPTY')
+                total = len(fwd_all)
+
+                # Sanity guard: the scenarios are designed so EMPTY emits at
+                # least one bucket. If this ever fires, the scenario is wrong,
+                # not the SUT.
+                assert total >= 1, (
+                    f'[{label}/{agg}] TS.RANGE EMPTY returned no buckets; '
+                    f'scenario invalid')
+
+                counts_to_try = sorted({1, max(1, total // 2), total, total + 5})
+                for n in counts_to_try:
+                    rev = r.execute_command(
+                        'TS.REVRANGE', key, win_lo, win_hi,
+                        'AGGREGATION', agg, bd, 'EMPTY',
+                        'COUNT', n)
+                    expected = list(reversed(fwd_all[-n:]))
+                    assert rev == expected, (
+                        f'[{label}/{agg}] REVRANGE EMPTY COUNT {n}: '
+                        f'expected {expected!r}, got {rev!r}; '
+                        f'(fwd_all={fwd_all!r})')
