@@ -212,7 +212,11 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     free(regChunk->samples);
     regChunk->samples = newSamples;
     regChunk->num_samples = new_count;
-    regChunk->base_timestamp = newSamples[0].timestamp;
+    if (new_count > 0) {
+        regChunk->base_timestamp = newSamples[0].timestamp;
+    } else {
+        regChunk->base_timestamp = 0;
+    }
     return deleted_count;
 }
 
