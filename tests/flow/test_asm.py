@@ -108,7 +108,22 @@ def test_short_form_clusterset():
 
     number_of_keys = 100
     samples_per_key = 10
-    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key, label="test")
+    number_of_groups = 10
+    assert number_of_keys % number_of_groups == 0, "keys must divide evenly into groups"
+    keys_per_group = number_of_keys // number_of_groups
+    # Two labels: `label=test` is a static filter; `group` varies per key so a
+    # later GROUPBY by it produces multiple distinct group values whose hashes
+    # spread across slots[]. With a single group, MR_SendRecordToSlot only ever
+    # reads one slots[] index, so a regression that leaves most entries NULL
+    # (the short-form CLUSTERSET failure mode) would still pass by luck --
+    # widening to multiple groups forces the shuffle to touch many entries.
+    fill_some_data(
+        env,
+        number_of_keys=number_of_keys,
+        samples_per_key=samples_per_key,
+        label="test",
+        group=lambda i: f"g{i % number_of_groups}",
+    )
 
     # First try sending the multi-node command without the module being aware of the cluster
     with env.getConnection(0) as rc:
@@ -146,6 +161,26 @@ def test_short_form_clusterset():
         assert withlabels == []  # No WITHLABELS
         assert len(samples) == samples_per_key, samples
         assert all(int(sample[1]) == number_of_keys for sample in samples), samples
+
+    # Stronger slot-routed check: GROUPBY by `group` produces number_of_groups
+    # distinct group values whose hashes spread across slots[], so the shuffle
+    # touches number_of_groups distinct entries. A regression in slot-range
+    # population that leaves most slots[] entries NULL (the short-form CLUSTERSET
+    # failure mode) would be caught here -- the previous single-group assertion
+    # only reads one slots[] index and can pass by luck.
+    with env.getConnection(0) as rc:
+        result = rc.execute_command(
+            'TS.MRANGE', '-', '+',
+            'FILTER', 'label=test',
+            'GROUPBY', 'group', 'REDUCE', 'count',
+        )
+        assert len(result) == number_of_groups, result
+        for group_block in result:
+            filtered_by, withlabels, samples = group_block
+            assert filtered_by.startswith('group='), filtered_by
+            assert withlabels == [], filtered_by
+            assert len(samples) == samples_per_key, samples
+            assert all(int(sample[1]) == keys_per_group for sample in samples), samples
 
 
 # Helper structs and functions
@@ -207,12 +242,16 @@ class ClusterNode:
 
 
 def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
+    # Label values may be callables: they are invoked with the per-key index
+    # so callers can vary a label across keys (useful for GROUPBY tests that
+    # need multiple distinct group values). Non-callable values are used as-is.
     def generate_commands():
         start_timestamp, jump_timestamps = 1000000000, 100
         for i in range(number_of_keys):
             hslot = i * (2**14 - 1) // (number_of_keys - 1)
             ts_key = f"ts:{{{slot_table[hslot]}}}"
-            yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in lables.items())}"
+            resolved = {k: (v(i) if callable(v) else v) for k, v in lables.items()}
+            yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in resolved.items())}"
             yield "TS.MADD " + " ".join(
                 f"{ts_key} {start_timestamp + j * jump_timestamps} {random.uniform(0, 100)}"
                 for j in range(samples_per_key)
