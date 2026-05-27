@@ -100,8 +100,7 @@ def test_asm_with_data_and_queries_during_migrations():
 
 
 def test_short_form_clusterset():
-    # We skip the initial timeseries.REFRESHCLUSTER, so even though the nodes
-    # know about the cluster - the modules inside them do not. Yet.
+    # Skip the initial REFRESHCLUSTER so the modules start unaware of the cluster.
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     if env.env != "oss-cluster":
         env.skip()
@@ -109,112 +108,54 @@ def test_short_form_clusterset():
     number_of_keys = 100
     samples_per_key = 10
     number_of_groups = 10
-    assert number_of_keys % number_of_groups == 0, "keys must divide evenly into groups"
     keys_per_group = number_of_keys // number_of_groups
-    # Two labels: `label=test` is a static filter; `group` varies per key so a
-    # later GROUPBY by it produces multiple distinct group values whose hashes
-    # spread across slots[]. With a single group, MR_SendRecordToSlot only ever
-    # reads one slots[] index, so a regression that leaves most entries NULL
-    # (the short-form CLUSTERSET failure mode) would still pass by luck --
-    # widening to multiple groups forces the shuffle to touch many entries.
-    fill_some_data(
-        env,
-        number_of_keys=number_of_keys,
-        samples_per_key=samples_per_key,
-        label="test",
-        group=lambda i: f"g{i % number_of_groups}",
-    )
+    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key,
+                   label="test", group=lambda i: f"g{i % number_of_groups}")
 
-    # First try sending the multi-node command without the module being aware of the cluster
-    with env.getConnection(0) as rc:
-        # In this case the command will run locally and only return a subset of the result
-        queryindex = rc.execute_command('TS.QUERYINDEX', 'label=test')
-        assert 0 < len(queryindex) < number_of_keys, queryindex
+    conn = env.getConnection(0)
 
-    # Mirror DMC's production dispatch: send timeseries.CLUSTERSET to ONE
-    # shard. The receiving shard self-configures (via the new
-    # RedisModule_GetClusterNodeSlotRanges API on the short-form path) and
-    # then propagates the topology to peers by sending them
-    # timeseries.CLUSTERSETFROMSHARD on rg.hello / reconnect (see LibMR
-    # cluster.c:991, where InitClusterData stores the command with the name
-    # rewritten to CLUSTERSETFROMSHARD for forwarding).
-    with env.getConnection(0) as rc:
-        reply = rc.execute_command('timeseries.CLUSTERSET')
-        assert reply in ('OK', b'OK'), f'shard 0 replied {reply!r} to timeseries.CLUSTERSET'
+    # Module unaware of the cluster -- QUERYINDEX runs local-only.
+    queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
+    assert 0 < len(queryindex) < number_of_keys, queryindex
 
-    # Wait for the intra-cluster propagation to complete on every shard.
-    # timeseries.INFOCLUSTER returns the simple string "no cluster mode"
-    # (LibMR cluster.c:1472) while clusterCtx.CurrCluster is NULL on a shard,
-    # and a structured array once it's configured. This also exercises the
-    # CLUSTERSETFROMSHARD path -- a production-realistic signal that a single
-    # DMC-style send actually informs every shard.
-    no_cluster_mode_replies = {'no cluster mode', b'no cluster mode'}
-    # Propagation is usually sub-second on a healthy build; under valgrind /
-    # sanitizer every operation slows by ~30x so the reconnect + async send
-    # chain that delivers CLUSTERSETFROMSHARD can comfortably take tens of
-    # seconds. Scale the deadline accordingly to keep the test stable across
-    # the CI matrix (matches the pattern at line 41 of this file).
-    propagation_deadline_s = 60 if (VALGRIND or SANITIZER) else 10
-    poll_connections = [env.getConnection(i) for i in range(env.shardsCount)]
-    deadline = time.time() + propagation_deadline_s
+    # DMC pattern: short-form CLUSTERSET on one shard; LibMR propagates to peers
+    # via CLUSTERSETFROMSHARD on rg.hello / reconnect.
+    assert conn.execute_command('timeseries.CLUSTERSET') in ('OK', b'OK')
+
+    # Wait until every shard's INFOCLUSTER stops returning "no cluster mode".
+    conns = [env.getConnection(i) for i in range(env.shardsCount)]
+    no_cluster_mode = {'no cluster mode', b'no cluster mode'}
+    deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 10)
     while time.time() < deadline:
-        unconfigured_shards = [
-            i for i, rc in enumerate(poll_connections)
-            if rc.execute_command('timeseries.INFOCLUSTER') in no_cluster_mode_replies
-        ]
-        if not unconfigured_shards:
+        unconfigured = [i for i, c in enumerate(conns)
+                        if c.execute_command('timeseries.INFOCLUSTER') in no_cluster_mode]
+        if not unconfigured:
             break
         time.sleep(0.1)
     else:
-        raise AssertionError(
-            f'cluster not propagated to shards {unconfigured_shards} within '
-            f'{propagation_deadline_s}s -- CLUSTERSETFROMSHARD propagation '
-            f'from shard 0 did not reach them'
-        )
+        raise AssertionError(f'CLUSTERSETFROMSHARD did not reach shards {unconfigured}')
 
-    # Node-list fan-out path: TS.QUERYINDEX dispatches via RedisModule_GetClusterNodesList.
-    # This validates that the module is now aware of every peer node.
-    with env.getConnection(0) as rc:
-        queryindex = rc.execute_command('TS.QUERYINDEX', 'label=test')
-        assert len(queryindex) == number_of_keys, queryindex
+    # Node-list fan-out: every key reachable now.
+    queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
+    assert len(queryindex) == number_of_keys, queryindex
 
-    # Slot-routed path: TS.MRANGE GROUPBY shuffles records across shards by the
-    # group-key's hash slot, going through clusterCtx.CurrCluster->slots[] in LibMR
-    # (MR_SendRecordToSlot -> MR_ClusterSendMsgBySlot). This is the exact table that
-    # short-form CLUSTERSET populates from RedisModule_GetClusterNodeSlotRanges, so
-    # any regression in slot-range population (e.g. the first-range-missed bug fixed
-    # in LibMR commit 42ce87e) would surface here as a wrong count or a hang.
-    with env.getConnection(0) as rc:
-        result = rc.execute_command(
-            'TS.MRANGE', '-', '+',
-            'FILTER', 'label=test',
-            'GROUPBY', 'label', 'REDUCE', 'count',
-        )
-        ((filtered_by, withlabels, samples),) = result
-        assert filtered_by == 'label=test'
-        assert withlabels == []  # No WITHLABELS
-        assert len(samples) == samples_per_key, samples
-        assert all(int(sample[1]) == number_of_keys for sample in samples), samples
+    # Slot-routed dispatch via single-group GROUPBY (one slots[] read).
+    ((filtered_by, withlabels, samples),) = conn.execute_command(
+        'TS.MRANGE', '-', '+', 'FILTER', 'label=test', 'GROUPBY', 'label', 'REDUCE', 'count')
+    assert filtered_by == 'label=test'
+    assert withlabels == []
+    assert len(samples) == samples_per_key
+    assert all(int(sample[1]) == number_of_keys for sample in samples)
 
-    # Stronger slot-routed check: GROUPBY by `group` produces number_of_groups
-    # distinct group values whose hashes spread across slots[], so the shuffle
-    # touches number_of_groups distinct entries. A regression in slot-range
-    # population that leaves most slots[] entries NULL (the short-form CLUSTERSET
-    # failure mode) would be caught here -- the previous single-group assertion
-    # only reads one slots[] index and can pass by luck.
-    with env.getConnection(0) as rc:
-        result = rc.execute_command(
-            'TS.MRANGE', '-', '+',
-            'FILTER', 'label=test',
-            'GROUPBY', 'group', 'REDUCE', 'count',
-        )
-        assert len(result) == number_of_groups, result
-        for group_block in result:
-            filtered_by, withlabels, samples = group_block
-            assert filtered_by.startswith('group='), filtered_by
-            assert withlabels == [], withlabels
-            assert len(samples) == samples_per_key, samples
-            assert all(int(sample[1]) == keys_per_group for sample in samples), samples
+    # Multi-group GROUPBY (number_of_groups slots[] reads -- exercises slot-routing breadth).
+    result = conn.execute_command(
+        'TS.MRANGE', '-', '+', 'FILTER', 'label=test', 'GROUPBY', 'group', 'REDUCE', 'count')
+    assert len(result) == number_of_groups, result
+    for filtered_by, withlabels, samples in result:
+        assert filtered_by.startswith('group=')
+        assert withlabels == []
+        assert len(samples) == samples_per_key
+        assert all(int(sample[1]) == keys_per_group for sample in samples)
 
 
 # Helper structs and functions
@@ -276,9 +217,7 @@ class ClusterNode:
 
 
 def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
-    # Label values may be callables: they are invoked with the per-key index
-    # so callers can vary a label across keys (useful for GROUPBY tests that
-    # need multiple distinct group values). Non-callable values are used as-is.
+    # Callable label values are invoked with the per-key index; others used as-is.
     def generate_commands():
         start_timestamp, jump_timestamps = 1000000000, 100
         for i in range(number_of_keys):
