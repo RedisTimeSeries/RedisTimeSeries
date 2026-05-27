@@ -149,21 +149,27 @@ def test_short_form_clusterset():
     # CLUSTERSETFROMSHARD path -- a production-realistic signal that a single
     # DMC-style send actually informs every shard.
     no_cluster_mode_replies = {'no cluster mode', b'no cluster mode'}
-    deadline = time.time() + 10  # propagation is usually sub-second; generous
+    # Propagation is usually sub-second on a healthy build; under valgrind /
+    # sanitizer every operation slows by ~30x so the reconnect + async send
+    # chain that delivers CLUSTERSETFROMSHARD can comfortably take tens of
+    # seconds. Scale the deadline accordingly to keep the test stable across
+    # the CI matrix (matches the pattern at line 41 of this file).
+    propagation_deadline_s = 60 if (VALGRIND or SANITIZER) else 10
+    poll_connections = [env.getConnection(i) for i in range(env.shardsCount)]
+    deadline = time.time() + propagation_deadline_s
     while time.time() < deadline:
-        unconfigured_shards = []
-        for shard_index in range(env.shardsCount):
-            with env.getConnection(shard_index) as rc:
-                info = rc.execute_command('timeseries.INFOCLUSTER')
-            if info in no_cluster_mode_replies:
-                unconfigured_shards.append(shard_index)
+        unconfigured_shards = [
+            i for i, rc in enumerate(poll_connections)
+            if rc.execute_command('timeseries.INFOCLUSTER') in no_cluster_mode_replies
+        ]
         if not unconfigured_shards:
             break
         time.sleep(0.1)
     else:
         raise AssertionError(
-            f'cluster not propagated to shards {unconfigured_shards} within deadline -- '
-            f'CLUSTERSETFROMSHARD propagation from shard 0 did not reach them'
+            f'cluster not propagated to shards {unconfigured_shards} within '
+            f'{propagation_deadline_s}s -- CLUSTERSETFROMSHARD propagation '
+            f'from shard 0 did not reach them'
         )
 
     # Node-list fan-out path: TS.QUERYINDEX dispatches via RedisModule_GetClusterNodesList.
@@ -206,7 +212,7 @@ def test_short_form_clusterset():
         for group_block in result:
             filtered_by, withlabels, samples = group_block
             assert filtered_by.startswith('group='), filtered_by
-            assert withlabels == [], filtered_by
+            assert withlabels == [], withlabels
             assert len(samples) == samples_per_key, samples
             assert all(int(sample[1]) == keys_per_group for sample in samples), samples
 
