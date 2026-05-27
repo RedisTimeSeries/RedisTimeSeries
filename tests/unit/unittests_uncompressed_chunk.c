@@ -143,9 +143,60 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy) {
     Uncompressed_FreeChunk(chunk);
 }
 
+MU_TEST(test_Uncompressed_DelRange_DeleteAll) {
+    // Test for CVE fix: uninitialized heap read when deleting all samples
+    const size_t chunk_size = 4096;
+    Chunk *chunk = Uncompressed_NewChunk(chunk_size);
+    mu_assert(chunk != NULL, "create uncompressed chunk");
+
+    // Add some samples
+    Sample s1 = { .timestamp = 100, .value = 1.0 };
+    Sample s2 = { .timestamp = 200, .value = 2.0 };
+    Sample s3 = { .timestamp = 300, .value = 3.0 };
+    Uncompressed_AddSample(chunk, &s1);
+    Uncompressed_AddSample(chunk, &s2);
+    Uncompressed_AddSample(chunk, &s3);
+    mu_assert_int_eq(3, chunk->num_samples);
+    mu_assert_long_eq(100, chunk->base_timestamp);
+
+    // Delete all samples in range [100, 300]
+    size_t deleted = Uncompressed_DelRange(chunk, 100, 300);
+    mu_assert_int_eq(3, deleted);
+    mu_assert_int_eq(0, chunk->num_samples);
+    // After fix: base_timestamp should be 0 (safe), not uninitialized
+    mu_assert_long_eq(0, chunk->base_timestamp);
+    Uncompressed_FreeChunk(chunk);
+}
+
+MU_TEST(test_Uncompressed_DelRange_DeletePartial) {
+    const size_t chunk_size = 4096;
+    Chunk *chunk = Uncompressed_NewChunk(chunk_size);
+    mu_assert(chunk != NULL, "create uncompressed chunk");
+
+    // Add some samples
+    Sample s1 = { .timestamp = 100, .value = 1.0 };
+    Sample s2 = { .timestamp = 200, .value = 2.0 };
+    Sample s3 = { .timestamp = 300, .value = 3.0 };
+    Uncompressed_AddSample(chunk, &s1);
+    Uncompressed_AddSample(chunk, &s2);
+    Uncompressed_AddSample(chunk, &s3);
+
+    // Delete only middle sample [200, 200]
+    size_t deleted = Uncompressed_DelRange(chunk, 200, 200);
+    mu_assert_int_eq(1, deleted);
+    mu_assert_int_eq(2, chunk->num_samples);
+    // base_timestamp should be from first remaining sample (100)
+    mu_assert_long_eq(100, chunk->base_timestamp);
+    mu_assert_long_eq(100, chunk->samples[0].timestamp);
+    mu_assert_long_eq(300, chunk->samples[1].timestamp);
+    Uncompressed_FreeChunk(chunk);
+}
+
 MU_TEST_SUITE(uncompressed_chunk_test_suite) {
     MU_RUN_TEST(test_Uncompressed_NewChunk);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_AddSample);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy);
+    MU_RUN_TEST(test_Uncompressed_DelRange_DeleteAll);
+    MU_RUN_TEST(test_Uncompressed_DelRange_DeletePartial);
 }
