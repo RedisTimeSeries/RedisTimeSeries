@@ -24,6 +24,11 @@ on:
         required: false
         type: boolean
         default: true
+      bump-enterprise:
+        description: 'Also auto-bump the RedisTimeSeries beta in Redis-Enterprise (open PR + Slack ping). Only needed for testing — the schedule trigger always opts in.'
+        required: false
+        type: boolean
+        default: false
 jobs:
   prepare-values:
     runs-on: ubuntu-latest
@@ -148,6 +153,147 @@ jobs:
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
+
+  bump-redis-enterprise:
+    name: Bump TS beta in Redis-Enterprise
+    runs-on: ubuntu-latest
+    needs: [prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer, random-traffic]
+    # Auto-runs only on the scheduled nightly from master/main when every upstream job is success.
+    # For manual runs, the caller has to explicitly opt in via the `bump-enterprise` input —
+    # this lets us test the job from any branch without accidentally opening Enterprise PRs
+    # on every workflow_dispatch.
+    if: |
+      always() &&
+      needs.linter.result == 'success' &&
+      needs.build-linux-x64.result == 'success' &&
+      needs.build-linux-arm64.result == 'success' &&
+      needs.macos.result == 'success' &&
+      needs.linux-valgrind.result == 'success' &&
+      needs.linux-sanitizer.result == 'success' &&
+      needs.random-traffic.result == 'success' &&
+      (
+        (github.event_name == 'schedule' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) ||
+        (github.event_name == 'workflow_dispatch' && inputs.bump-enterprise == true)
+      )
+    env:
+      ENTERPRISE_REPO: redislabsdev/Redis-Enterprise
+      ENTERPRISE_BASE: master
+      BETA_VERSION: ${{ needs.prepare-values.outputs.beta-version }}
+    steps:
+      - name: Checkout RedisTimeSeries (for helper script)
+        uses: actions/checkout@v4
+        with:
+          path: redistimeseries
+
+      - name: Checkout Redis-Enterprise
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ENTERPRISE_REPO }}
+          token: ${{ secrets.REDIS_ENTERPRISE_PAT }}
+          path: enterprise
+          ref: ${{ env.ENTERPRISE_BASE }}
+
+      - name: Run bump script
+        id: bump
+        run: |
+          set -euo pipefail
+          python3 redistimeseries/.github/scripts/bump_redis_enterprise.py \
+            --repo-root "$GITHUB_WORKSPACE/enterprise" \
+            --new-version "${BETA_VERSION}" \
+            --summary-out "$GITHUB_WORKSPACE/bump-summary.md" \
+            | tee "$GITHUB_WORKSPACE/bump-output.txt"
+          # Surface OLD_VERSION/NEW_VERSION as step outputs
+          grep '^OLD_VERSION=' "$GITHUB_WORKSPACE/bump-output.txt" | sed 's/^/old-version=/; s/OLD_VERSION=//' >> "$GITHUB_OUTPUT"
+          grep '^NEW_VERSION=' "$GITHUB_WORKSPACE/bump-output.txt" | sed 's/^/new-version=/; s/NEW_VERSION=//' >> "$GITHUB_OUTPUT"
+
+      - name: Skip if no change (same beta version already pinned)
+        id: change-check
+        working-directory: enterprise
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No change in Redis-Enterprise tree — beta version already pinned. Skipping PR."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit, push branch, open PR
+        if: steps.change-check.outputs.changed == 'true'
+        id: pr
+        working-directory: enterprise
+        env:
+          GH_TOKEN: ${{ secrets.REDIS_ENTERPRISE_PAT }}
+        run: |
+          set -euo pipefail
+          BRANCH="auto/bump-ts-beta-${BETA_VERSION}"
+          git config user.name  "redis-datatypes-bot"
+          git config user.email "datatypes-bot@redis.com"
+          git checkout -b "$BRANCH"
+          git add modules/modules_99_99.bzl modules/BUILD.bazel modules/modules_build_files_generator.py
+          git commit -m "Auto-bump RedisTimeSeries beta to ${BETA_VERSION}"
+          git push -u origin "$BRANCH"
+
+          NIGHTLY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          BODY_FILE="$GITHUB_WORKSPACE/pr-body.md"
+          {
+            echo "Automated bump of the RedisTimeSeries 99.99 beta to \`${BETA_VERSION}\`."
+            echo
+            echo "Triggered by a fully-green nightly: [${GITHUB_REPOSITORY} run #${GITHUB_RUN_NUMBER}](${NIGHTLY_URL})."
+            echo
+            cat "$GITHUB_WORKSPACE/bump-summary.md"
+            echo
+            echo "---"
+            echo
+            echo "_Opened automatically by \`.github/workflows/event-nightly.yml\` in \`${GITHUB_REPOSITORY}\`._"
+          } > "$BODY_FILE"
+
+          PR_URL=$(gh pr create \
+            --repo "${ENTERPRISE_REPO}" \
+            --base "${ENTERPRISE_BASE}" \
+            --head "$BRANCH" \
+            --title "Auto-bump RedisTimeSeries beta to ${BETA_VERSION}" \
+            --body-file "$BODY_FILE")
+          echo "pr-url=${PR_URL}" >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Slack (#datatypes-dev-nightly)
+        if: steps.change-check.outputs.changed == 'true' && steps.pr.outputs.pr-url != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.DATATYPES_SLACK_WEBHOOK_URL }}
+          PR_URL: ${{ steps.pr.outputs.pr-url }}
+          OLD_VER: ${{ steps.bump.outputs.old-version }}
+          NEW_VER: ${{ steps.bump.outputs.new-version }}
+          NIGHTLY_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SLACK_WEBHOOK}" ]]; then
+            echo "::error::DATATYPES_SLACK_WEBHOOK_URL is not configured"
+            exit 1
+          fi
+          PAYLOAD=$(jq -n \
+            --arg pr "$PR_URL" \
+            --arg old "$OLD_VER" \
+            --arg new "$NEW_VER" \
+            --arg run "$NIGHTLY_RUN" \
+            '{
+               text: "<!channel> RedisTimeSeries beta bump PR ready: \($pr)",
+               blocks: [
+                 {type:"header", text:{type:"plain_text", text:"RedisTimeSeries → Redis-Enterprise beta bump"}},
+                 {type:"section", text:{type:"mrkdwn",
+                   text:"<!channel> Nightly was fully green — auto-opened a PR to bump the TimeSeries 99.99 beta in Redis-Enterprise. Please review & merge."}},
+                 {type:"section", fields:[
+                   {type:"mrkdwn", text:"*From:*\n`\($old)`"},
+                   {type:"mrkdwn", text:"*To:*\n`\($new)`"}
+                 ]},
+                 {type:"actions", elements:[
+                   {type:"button", style:"primary",
+                    text:{type:"plain_text", text:"Open PR"}, url:$pr},
+                   {type:"button",
+                    text:{type:"plain_text", text:"Nightly run"}, url:$run}
+                 ]}
+               ]
+             }')
+          curl -sSf -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$SLACK_WEBHOOK"
 
   notify-results:
     name: Aggregate Results & Notify
