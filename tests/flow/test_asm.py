@@ -118,7 +118,9 @@ def test_short_form_clusterset():
 
     # Now inform the nodes, using the short form of timeseries.CLUSTERSET
     replies = env.broadcast('timeseries.CLUSTERSET')
-    for shard_index, reply in enumerate(replies or []):
+    assert replies is not None and len(replies) == env.shardsCount, \
+        f'expected {env.shardsCount} replies from timeseries.CLUSTERSET, got {replies!r}'
+    for shard_index, reply in enumerate(replies):
         assert reply in ('OK', b'OK'), f'shard {shard_index} replied {reply!r} to timeseries.CLUSTERSET'
 
     # Node-list fan-out path: TS.QUERYINDEX dispatches via RedisModule_GetClusterNodesList.
