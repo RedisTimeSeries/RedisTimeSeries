@@ -256,6 +256,29 @@ jobs:
           echo "pr-url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
 
+          # Close any older still-open auto-bump PRs (branch prefix `auto/bump-ts-beta-`)
+          # so the Enterprise repo doesn't accumulate stale supersedes. We do this AFTER
+          # opening the new PR so the old ones get a clean "Superseded by #N" reference.
+          NEW_PR_NUM=$(gh pr view "${PR_URL}" --repo "${ENTERPRISE_REPO}" --json number -q .number)
+          echo "::group::Closing superseded auto-bump PRs"
+          OLD_PRS=$(gh pr list \
+            --repo "${ENTERPRISE_REPO}" \
+            --state open \
+            --limit 100 \
+            --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("auto/bump-ts-beta-")) | .number')
+          for num in $OLD_PRS; do
+            if [[ "$num" == "$NEW_PR_NUM" ]]; then
+              continue
+            fi
+            echo "  closing superseded PR #${num}"
+            gh pr close "$num" \
+              --repo "${ENTERPRISE_REPO}" \
+              --comment "Superseded by #${NEW_PR_NUM} (newer auto-bump from a more recent green nightly)." \
+              --delete-branch || echo "    (close failed for #${num}, continuing)"
+          done
+          echo "::endgroup::"
+
       - name: Notify Slack (#datatypes-dev-nightly)
         if: steps.change-check.outputs.changed == 'true' && steps.pr.outputs.pr-url != ''
         env:
