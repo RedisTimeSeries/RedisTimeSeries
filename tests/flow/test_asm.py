@@ -131,12 +131,16 @@ def test_short_form_clusterset():
         queryindex = rc.execute_command('TS.QUERYINDEX', 'label=test')
         assert 0 < len(queryindex) < number_of_keys, queryindex
 
-    # Now inform the nodes, using the short form of timeseries.CLUSTERSET
-    replies = env.broadcast('timeseries.CLUSTERSET')
-    assert replies is not None and len(replies) == env.shardsCount, \
-        f'expected {env.shardsCount} replies from timeseries.CLUSTERSET, got {replies!r}'
-    for shard_index, reply in enumerate(replies):
-        assert reply in ('OK', b'OK'), f'shard {shard_index} replied {reply!r} to timeseries.CLUSTERSET'
+    # Inform the nodes using the short form of timeseries.CLUSTERSET.
+    # (env.broadcast() is fire-and-forget and does not return replies, so we
+    # send to each shard explicitly to assert per-shard OK responses --
+    # otherwise a CLUSTERSET error on any shard would only surface later as a
+    # confusing TS.QUERYINDEX count mismatch.)
+    for shard_index in range(env.shardsCount):
+        with env.getConnection(shard_index) as rc:
+            reply = rc.execute_command('timeseries.CLUSTERSET')
+            assert reply in ('OK', b'OK'), \
+                f'shard {shard_index} replied {reply!r} to timeseries.CLUSTERSET'
 
     # Node-list fan-out path: TS.QUERYINDEX dispatches via RedisModule_GetClusterNodesList.
     # This validates that the module is now aware of every peer node.
