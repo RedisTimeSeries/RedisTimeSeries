@@ -133,6 +133,63 @@ def test_asm_multishard_queryindex_is_consistent_or_retryable():
             future.result()
 
 
+def test_short_form_clusterset():
+    # Skip the initial REFRESHCLUSTER so the modules start unaware of the cluster.
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    number_of_keys = 100
+    samples_per_key = 10
+    number_of_groups = 10
+    keys_per_group = number_of_keys // number_of_groups
+    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key,
+                   label="test", group=lambda i: f"g{i % number_of_groups}")
+
+    conn = env.getConnection(0)
+
+    # Module unaware of the cluster -- QUERYINDEX runs local-only.
+    queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
+    assert 0 < len(queryindex) < number_of_keys, queryindex
+
+    # DMC pattern: short-form CLUSTERSET on one shard; LibMR propagates to peers
+    # via CLUSTERSETFROMSHARD on rg.hello / reconnect.
+    assert conn.execute_command('timeseries.CLUSTERSET') in ('OK', b'OK')
+
+    # Poll TS.QUERYINDEX until propagation lands -- fan-out goes from local-only
+    # (~number_of_keys / shardsCount) to the full set once every shard has been
+    # informed via CLUSTERSETFROMSHARD.
+    deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 10)
+    while time.time() < deadline:
+        queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
+        if len(queryindex) == number_of_keys:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(
+            f'after CLUSTERSET, QUERYINDEX returned {len(queryindex)}/{number_of_keys} '
+            f'-- CLUSTERSETFROMSHARD propagation did not converge in time'
+        )
+
+    # Slot-routed dispatch via single-group GROUPBY (one slots[] read).
+    ((filtered_by, withlabels, samples),) = conn.execute_command(
+        'TS.MRANGE', '-', '+', 'FILTER', 'label=test', 'GROUPBY', 'label', 'REDUCE', 'count')
+    assert filtered_by == 'label=test'
+    assert withlabels == []
+    assert len(samples) == samples_per_key
+    assert all(int(sample[1]) == number_of_keys for sample in samples)
+
+    # Multi-group GROUPBY (number_of_groups slots[] reads -- exercises slot-routing breadth).
+    result = conn.execute_command(
+        'TS.MRANGE', '-', '+', 'FILTER', 'label=test', 'GROUPBY', 'group', 'REDUCE', 'count')
+    assert len(result) == number_of_groups, result
+    for filtered_by, withlabels, samples in result:
+        assert filtered_by.startswith('group=')
+        assert withlabels == []
+        assert len(samples) == samples_per_key
+        assert all(int(sample[1]) == keys_per_group for sample in samples)
+
+
 # Helper structs and functions
 
 
@@ -192,12 +249,14 @@ class ClusterNode:
 
 
 def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
+    # Callable label values are invoked with the per-key index; others used as-is.
     def generate_commands():
         start_timestamp, jump_timestamps = 1000000000, 100
         for i in range(number_of_keys):
             hslot = i * (2**14 - 1) // (number_of_keys - 1)
             ts_key = f"ts:{{{slot_table[hslot]}}}"
-            yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in lables.items())}"
+            resolved = {k: (v(i) if callable(v) else v) for k, v in lables.items()}
+            yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in resolved.items())}"
             yield "TS.MADD " + " ".join(
                 f"{ts_key} {start_timestamp + j * jump_timestamps} {random.uniform(0, 100)}"
                 for j in range(samples_per_key)

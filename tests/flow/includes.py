@@ -93,11 +93,13 @@ def Env(*args, **kwargs):
         # Defaults.no_capture_output = True
         del kwargs['noLog']
 
+    skipRefreshCluster = kwargs.pop('skipRefreshCluster', False)
+
     env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
     Defaults.no_log = temp_no_log
     Defaults.no_capture_output = no_capture_output
 
-    if not RLEC_CLUSTER:
+    if not RLEC_CLUSTER and not skipRefreshCluster:
         for shard in range(0, env.shardsCount):
             conn = env.getConnection(shard)
             modules = conn.execute_command('MODULE', 'LIST')
