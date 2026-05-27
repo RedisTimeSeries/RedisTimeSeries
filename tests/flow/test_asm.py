@@ -122,22 +122,20 @@ def test_short_form_clusterset():
     # via CLUSTERSETFROMSHARD on rg.hello / reconnect.
     assert conn.execute_command('timeseries.CLUSTERSET') in ('OK', b'OK')
 
-    # Wait until every shard's INFOCLUSTER stops returning "no cluster mode".
-    conns = [env.getConnection(i) for i in range(env.shardsCount)]
-    no_cluster_mode = {'no cluster mode', b'no cluster mode'}
+    # Poll TS.QUERYINDEX until propagation lands -- fan-out goes from local-only
+    # (~number_of_keys / shardsCount) to the full set once every shard has been
+    # informed via CLUSTERSETFROMSHARD.
     deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 10)
     while time.time() < deadline:
-        unconfigured = [i for i, c in enumerate(conns)
-                        if c.execute_command('timeseries.INFOCLUSTER') in no_cluster_mode]
-        if not unconfigured:
+        queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
+        if len(queryindex) == number_of_keys:
             break
         time.sleep(0.1)
     else:
-        raise AssertionError(f'CLUSTERSETFROMSHARD did not reach shards {unconfigured}')
-
-    # Node-list fan-out: every key reachable now.
-    queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
-    assert len(queryindex) == number_of_keys, queryindex
+        raise AssertionError(
+            f'after CLUSTERSET, QUERYINDEX returned {len(queryindex)}/{number_of_keys} '
+            f'-- CLUSTERSETFROMSHARD propagation did not converge in time'
+        )
 
     # Slot-routed dispatch via single-group GROUPBY (one slots[] read).
     ((filtered_by, withlabels, samples),) = conn.execute_command(
