@@ -627,3 +627,51 @@ def test_ts_delete_with_rule_when_latest_timebucket_deleted(self):
         # Now delete the sample in the latest time-bucket
         r.execute_command("TS.DEL", "samples{tag}", 3000, 3000)
 
+
+# Regression test for the info-leak primitive (HackerOne #3713815 / VDP-4667).
+#
+# Uncompressed_DelRange used to malloc the new samples buffer and only
+# overwrite the surviving samples, leaving the trailing bytes uninitialized.
+# Uncompressed_GenericSerialize ships the full chunk->size buffer to the
+# wire on DUMP / RDB save, so those uninitialized bytes — controllable via
+# heap grooming — leaked to the client.
+#
+# After the fix (calloc), the trailing region is deterministically zero,
+# so the same key, populated identically under different heap states, must
+# produce byte-identical DUMP payloads.
+#
+# Note: fails-before-fix on Linux glibc/jemalloc (the deployment target).
+# macOS libmalloc zeroes blocks on free as a hardening feature, so on a
+# macOS-libc Redis this test passes either way and just documents the
+# required invariant.
+def test_ts_del_no_heap_leak_in_dump():
+    def run_attempt(r, attempt_id):
+        # Per-attempt heap groom: distinct keys so each iteration leaves a
+        # different residue in the size-class free list before the TS chunk
+        # buffer is allocated by TS.DEL.
+        for i in range(64):
+            r.execute_command("SET", "g{x}:%d:%d" % (attempt_id, i), "x" * 64)
+        for i in range(64):
+            r.execute_command("DEL", "g{x}:%d:%d" % (attempt_id, i))
+        # CHUNK_SIZE 64 -> 4-sample chunk buffer; after a partial delete the
+        # trailing region is a full 16B sample slot of (uninitialized) heap.
+        r.execute_command("TS.CREATE", "k{x}", "ENCODING", "UNCOMPRESSED",
+                          "CHUNK_SIZE", "64")
+        r.execute_command("TS.ADD", "k{x}", 100, 1)
+        r.execute_command("TS.ADD", "k{x}", 200, 2)
+        r.execute_command("TS.ADD", "k{x}", 300, 3)
+        r.execute_command("TS.DEL", "k{x}", 200, 200)
+        dump = r.execute_command("DUMP", "k{x}")
+        r.execute_command("DEL", "k{x}")
+        return dump
+
+    with Env().getClusterConnectionIfNeeded() as r:
+        d1 = run_attempt(r, 0)
+        d2 = run_attempt(r, 1)
+        # Same key name + identical commands => identical dumps. The only
+        # way they can differ is if uninitialized heap (which varies by
+        # heap state) is being serialized.
+        assert d1 == d2, (
+            "TS.DEL leaks uninitialized heap into DUMP payload "
+            "(dump bytes differ across runs of identical operations)")
+
