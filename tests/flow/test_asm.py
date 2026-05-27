@@ -131,14 +131,40 @@ def test_short_form_clusterset():
         queryindex = rc.execute_command('TS.QUERYINDEX', 'label=test')
         assert 0 < len(queryindex) < number_of_keys, queryindex
 
-    # Inform the nodes using the short form of timeseries.CLUSTERSET.
-    # We use env.broadcast because that mirrors how the DMC dispatches in
-    # production -- fire-and-forget to every shard. (env.broadcast returns
-    # None and does not expose per-shard replies; if a shard rejects the
-    # command, the downstream TS.QUERYINDEX and GROUPBY assertions below
-    # will fail with the wrong count, which is the actual end-to-end
-    # signal we care about.)
-    env.broadcast('timeseries.CLUSTERSET')
+    # Mirror DMC's production dispatch: send timeseries.CLUSTERSET to ONE
+    # shard. The receiving shard self-configures (via the new
+    # RedisModule_GetClusterNodeSlotRanges API on the short-form path) and
+    # then propagates the topology to peers by sending them
+    # timeseries.CLUSTERSETFROMSHARD on rg.hello / reconnect (see LibMR
+    # cluster.c:991, where InitClusterData stores the command with the name
+    # rewritten to CLUSTERSETFROMSHARD for forwarding).
+    with env.getConnection(0) as rc:
+        reply = rc.execute_command('timeseries.CLUSTERSET')
+        assert reply in ('OK', b'OK'), f'shard 0 replied {reply!r} to timeseries.CLUSTERSET'
+
+    # Wait for the intra-cluster propagation to complete on every shard.
+    # timeseries.INFOCLUSTER returns the simple string "no cluster mode"
+    # (LibMR cluster.c:1472) while clusterCtx.CurrCluster is NULL on a shard,
+    # and a structured array once it's configured. This also exercises the
+    # CLUSTERSETFROMSHARD path -- a production-realistic signal that a single
+    # DMC-style send actually informs every shard.
+    no_cluster_mode_replies = {'no cluster mode', b'no cluster mode'}
+    deadline = time.time() + 10  # propagation is usually sub-second; generous
+    while time.time() < deadline:
+        unconfigured_shards = []
+        for shard_index in range(env.shardsCount):
+            with env.getConnection(shard_index) as rc:
+                info = rc.execute_command('timeseries.INFOCLUSTER')
+            if info in no_cluster_mode_replies:
+                unconfigured_shards.append(shard_index)
+        if not unconfigured_shards:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(
+            f'cluster not propagated to shards {unconfigured_shards} within deadline -- '
+            f'CLUSTERSETFROMSHARD propagation from shard 0 did not reach them'
+        )
 
     # Node-list fan-out path: TS.QUERYINDEX dispatches via RedisModule_GetClusterNodesList.
     # This validates that the module is now aware of every peer node.
