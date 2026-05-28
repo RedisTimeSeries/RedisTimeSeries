@@ -18,10 +18,7 @@ Chunk_t *Uncompressed_NewChunk(size_t size) {
     newChunk->base_timestamp = 0;
     newChunk->num_samples = 0;
     newChunk->size = size;
-    newChunk->samples = (Sample *)malloc(size);
-#ifdef DEBUG
-    memset(newChunk->samples, 0, size);
-#endif
+    newChunk->samples = (Sample *)calloc(1, size);
 
     return newChunk;
 }
@@ -199,7 +196,7 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
 
 size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t endTs) {
     Chunk *regChunk = (Chunk *)chunk;
-    Sample *newSamples = (Sample *)malloc(regChunk->size);
+    Sample *newSamples = (Sample *)calloc(1, regChunk->size);
     size_t i = 0;
     size_t new_count = 0;
     for (; i < regChunk->num_samples; ++i) {
@@ -212,7 +209,7 @@ size_t Uncompressed_DelRange(Chunk_t *chunk, timestamp_t startTs, timestamp_t en
     free(regChunk->samples);
     regChunk->samples = newSamples;
     regChunk->num_samples = new_count;
-    regChunk->base_timestamp = newSamples[0].timestamp;
+    regChunk->base_timestamp = (new_count > 0) ? newSamples[0].timestamp : 0;
     return deleted_count;
 }
 
