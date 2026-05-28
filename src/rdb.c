@@ -89,6 +89,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     errdefer(err, FreeSeries(series));
 
     const uint64_t rulesCount = LoadUnsigned_IOError(io, err, NULL);
+    if (unlikely(rulesCount > TS_MAX_RULES_COUNT)) {
+        RedisModule_LogIOError(io, "error", "rulesCount is too large");
+        err = true;
+        return NULL;
+    }
     for (uint64_t i = 0; i < rulesCount; i++) {
         RedisModuleString *destKey = LoadString_IOError(io, err, NULL);
         // clean if there is a key name which been alloced but not added to series yet
@@ -129,6 +134,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         }
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         const uint64_t numChunks = LoadUnsigned_IOError(io, err, NULL);
+        if (unlikely(numChunks > TS_MAX_CHUNKS_COUNT)) {
+            RedisModule_LogIOError(io, "error", "numChunks is too large");
+            err = true;
+            return NULL;
+        }
         for (uint64_t i = 0; i < numChunks; ++i) {
             if (series->funcs->LoadFromRDB(&chunk, io)) {
                 err = true;
@@ -147,6 +157,12 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         series->ignoreMaxValDiff = ignoreMaxValDiff;
     }
 
+    series->lastTimestamp = lastTimestamp;
+    series->lastValue = lastValue;
+    series->lastChunk = chunk;
+    series->ignoreMaxTimeDiff = ignoreMaxTimeDiff;
+    series->ignoreMaxValDiff = ignoreMaxValDiff;
+    }
     return series;
 }
 
