@@ -157,12 +157,6 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         series->ignoreMaxValDiff = ignoreMaxValDiff;
     }
 
-    series->lastTimestamp = lastTimestamp;
-    series->lastValue = lastValue;
-    series->lastChunk = chunk;
-    series->ignoreMaxTimeDiff = ignoreMaxTimeDiff;
-    series->ignoreMaxValDiff = ignoreMaxValDiff;
-    }
     return series;
 }
 
