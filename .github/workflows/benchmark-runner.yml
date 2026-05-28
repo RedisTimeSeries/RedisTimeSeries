@@ -7,11 +7,32 @@ on:
         type: boolean
         description: 'Run profiler benchmarks'
         default: false
+      benchmark_glob:
+        type: string
+        description: 'Glob to select benchmark YAMLs (e.g. scaling-ts_mrange_*.yml)'
+        default: '*.yml'
+      allowed_envs:
+        type: string
+        description: 'CSV of topologies: oss-standalone,oss-cluster'
+        default: 'oss-standalone'
+      allowed_setups:
+        type: string
+        description: 'CSV of named setups (optional; empty = all). e.g. oss-cluster-05-primaries,oss-cluster-15-primaries'
+        default: ''
   workflow_call:
     inputs:
       run_profiler:
         type: boolean
         default: false
+      benchmark_glob:
+        type: string
+        default: '*.yml'
+      allowed_envs:
+        type: string
+        default: 'oss-standalone'
+      allowed_setups:
+        type: string
+        default: ''
 
 jobs:
   benchmark-timeseries-oss-standalone:
@@ -23,6 +44,9 @@ jobs:
     with:
       benchmark_runner_group_member_id: ${{ matrix.member_id }}
       benchmark_runner_group_total: ${{ strategy.job-total }}
+      benchmark_glob: ${{ inputs.benchmark_glob }}
+      allowed_envs: ${{ inputs.allowed_envs }}
+      allowed_setups: ${{ inputs.allowed_setups }}
 
   benchmark-timeseries-oss-standalone-profiler:
     if: ${{ inputs.run_profiler }}
