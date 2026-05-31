@@ -91,6 +91,15 @@ def Env(*args, **kwargs):
         kwargs['redisConfigFile'] = create_config_file(kwargs['redisConfigFileContent'])
         del kwargs['redisConfigFileContent']
 
+    # Under Valgrind/Sanitizer, LibMR's default 5s multi-shard max-idle is too tight: a single
+    # shard can pause >5s producing output and the execution gets killed with
+    # "multi-shard command failed because at least one shard did not reply within the given
+    # timeframe." Bump the timeout here so all tests inherit it. Tests can still override.
+    if VALGRIND or SANITIZER:
+        existing = kwargs.get('moduleArgs', '') or ''
+        if 'LIBMR_MAX_IDLE_MS' not in existing and 'ts-libmr-max-idle-ms' not in existing:
+            kwargs['moduleArgs'] = ('LIBMR_MAX_IDLE_MS 60000; ' + existing).rstrip('; ').strip()
+
     temp_no_log = Defaults.no_log
     no_capture_output = Defaults.no_capture_output
 

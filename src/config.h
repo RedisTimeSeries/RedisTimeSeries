@@ -26,6 +26,9 @@
 #define IGNORE_MAX_TIME_DIFF_MAX LLONG_MAX
 #define IGNORE_MAX_VAL_DIFF_MIN 0.0
 #define IGNORE_MAX_VAL_DIFF_MAX DBL_MAX
+#define LIBMR_MAX_IDLE_MS_MIN 1
+#define LIBMR_MAX_IDLE_MS_MAX LLONG_MAX
+#define DEFAULT_LIBMR_MAX_IDLE_MS 5000
 
 typedef struct
 {
@@ -42,6 +45,7 @@ typedef struct
     bool dontAssertOnFailure;    // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample
     double ignoreMaxValDiff;     // Insert filter max value diff with the last sample
+    long long libmrMaxIdleMS;    // LibMR multi-shard execution max-idle timeout (milliseconds)
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;

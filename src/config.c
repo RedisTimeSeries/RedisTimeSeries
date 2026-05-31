@@ -48,6 +48,7 @@ void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_DEFAULT;
     TSGlobalConfig.password = NULL;
+    TSGlobalConfig.libmrMaxIdleMS = DEFAULT_LIBMR_MAX_IDLE_MS;
 
     if (getConfigStringCache) {
         RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
@@ -365,6 +366,8 @@ static long long getModernIntegerConfigValue(const char *name, void *privdata) {
         return TSGlobalConfig.chunkSizeBytes;
     } else if (!strcasecmp("ts-ignore-max-time-diff", name)) {
         return TSGlobalConfig.ignoreMaxTimeDiff;
+    } else if (!strcasecmp("ts-libmr-max-idle-ms", name)) {
+        return TSGlobalConfig.libmrMaxIdleMS;
     }
 
     return 0;
@@ -406,6 +409,18 @@ static int setModernIntegerConfigValue(const char *name,
         }
 
         TSGlobalConfig.ignoreMaxTimeDiff = value;
+
+        return REDISMODULE_OK;
+    } else if (!strcasecmp("ts-libmr-max-idle-ms", name)) {
+        if (value < LIBMR_MAX_IDLE_MS_MIN) {
+            *err = RedisModule_CreateStringPrintf(
+                NULL,
+                "Invalid value for `ts-libmr-max-idle-ms`. Value must be >= %d",
+                LIBMR_MAX_IDLE_MS_MIN);
+            return REDISMODULE_ERR;
+        }
+
+        TSGlobalConfig.libmrMaxIdleMS = value;
 
         return REDISMODULE_OK;
     }
@@ -455,6 +470,27 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
 
     RedisModule_Log(
         ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-num-threads", 12, TSGlobalConfig.numThreads);
+
+    if (RedisModule_RegisterNumericConfig(ctx,
+                                          "ts-libmr-max-idle-ms",
+                                          TSGlobalConfig.libmrMaxIdleMS,
+                                          REDISMODULE_CONFIG_UNPREFIXED,
+                                          LIBMR_MAX_IDLE_MS_MIN,
+                                          LIBMR_MAX_IDLE_MS_MAX,
+                                          getModernIntegerConfigValue,
+                                          setModernIntegerConfigValue,
+                                          NULL,
+                                          NULL)) {
+        return false;
+    }
+
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*lld }",
+                    23,
+                    "ts-libmr-max-idle-ms",
+                    12,
+                    TSGlobalConfig.libmrMaxIdleMS);
 
     if (RedisModule_RegisterStringConfig(ctx,
                                          "ts-libmr-protocol",
@@ -900,6 +936,25 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         TSGlobalConfig.ignoreMaxTimeDiff = ignoreMaxTimeDiff;
         LOG_DEPRECATED_OPTION(
             "IGNORE_MAX_TIME_DIFF", "ts-ignore-max-time-diff", showDeprecationWarning);
+        isDeprecated = true;
+    }
+
+    TSGlobalConfig.libmrMaxIdleMS = DEFAULT_LIBMR_MAX_IDLE_MS;
+    if (argc > 1 && RMUtil_ArgIndex("LIBMR_MAX_IDLE_MS", argv, argc) >= 0) {
+        long long libmrMaxIdleMS = 0;
+        if (RMUtil_ParseArgsAfter("LIBMR_MAX_IDLE_MS", argv, argc, "l", &libmrMaxIdleMS) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after LIBMR_MAX_IDLE_MS");
+            return TSDB_ERROR;
+        }
+        if (libmrMaxIdleMS < LIBMR_MAX_IDLE_MS_MIN) {
+            RedisModule_Log(
+                ctx, "warning", "LIBMR_MAX_IDLE_MS must be >= %d", LIBMR_MAX_IDLE_MS_MIN);
+            return TSDB_ERROR;
+        }
+        TSGlobalConfig.libmrMaxIdleMS = libmrMaxIdleMS;
+        LOG_DEPRECATED_OPTION(
+            "LIBMR_MAX_IDLE_MS", "ts-libmr-max-idle-ms", showDeprecationWarning);
         isDeprecated = true;
     }
 
