@@ -94,6 +94,10 @@ def test_short_form_clusterset():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     if env.env != "oss-cluster":
         env.skip()
+    # Short-form CLUSTERSET needs RM_GetClusterNodeSlotRanges (redis/redis#14953),
+    # unavailable in OSS 8.x. The feature ships against RE-private redis; this
+    # branch always skips. The test still exercises master / RE-private paths.
+    env.skip()
 
     number_of_keys = 100
     samples_per_key = 10
