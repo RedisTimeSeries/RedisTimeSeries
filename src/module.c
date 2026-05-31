@@ -7,7 +7,9 @@
  * GNU Affero General Public License v3 (AGPLv3).
  */
 
-#define REDISMODULE_MAIN
+/* REDISMODULE_MAIN is defined by the build (CC_DEFS) so that it is in effect
+ * before the force-included common.h pulls in redismodule.h; defining it here
+ * would be too late to allocate storage for the API function pointers. */
 
 #include "module.h"
 
