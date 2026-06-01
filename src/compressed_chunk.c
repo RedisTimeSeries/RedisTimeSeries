@@ -517,7 +517,7 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
 
     CompressedChunk *compchunk = (CompressedChunk *)rts_try_alloc(sizeof(*compchunk));
     if (compchunk == NULL) {
-        RedisModule_LogIOError(io, "warning", "Failed to allocate chunk while loading from RDB");
+        RedisModule_LogIOError(io, "error", "Failed to allocate chunk while loading from RDB");
         err = true;
         return TSDB_ERROR;
     }

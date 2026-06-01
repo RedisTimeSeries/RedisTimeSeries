@@ -328,7 +328,7 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
 
     Chunk *uncompchunk = (Chunk *)rts_try_calloc(1, sizeof(*uncompchunk));
     if (uncompchunk == NULL) {
-        RedisModule_LogIOError(io, "warning", "Failed to allocate chunk while loading from RDB");
+        RedisModule_LogIOError(io, "error", "Failed to allocate chunk while loading from RDB");
         err = true;
         return TSDB_ERROR;
     }

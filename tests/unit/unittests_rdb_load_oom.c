@@ -19,6 +19,12 @@
  *
  * The allocation is the first thing each loader does, before reading the RDB
  * stream, so the RedisModuleIO argument is never dereferenced and can be NULL.
+ *
+ * NOTE: the test binary also links redistimeseries.so, which defines these same
+ * loaders (compiled WITH REDIS_MODULE_TARGET). We rely on symbol interposition:
+ * the executable's in-TU copies (libc allocators) win, including for the other
+ * chunk suites. If a linker/visibility change ever breaks that, an allocator
+ * crossing would surface here under ASan (run by the sanitizer unit job).
  */
 
 #include "minunit.h"
