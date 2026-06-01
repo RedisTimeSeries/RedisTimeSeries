@@ -29,7 +29,8 @@ RUN dnf -y update && dnf -y install --allowerasing \
 COPY .install /workspace/.install
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
-ARG REDIS_REF=unstable
+# Empty default: install_redis.sh falls back to .install/redis_ref.txt (single source of truth)
+ARG REDIS_REF=
 ARG SANITIZER=
 
 RUN chmod +x .install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} .install/install_redis.sh
