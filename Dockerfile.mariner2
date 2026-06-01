@@ -6,6 +6,9 @@ RUN tdnf makecache
 RUN tdnf install -y git ca-certificates build-essential wget tar openssl-devel cmake which unzip jq \
     gcc g++ curl libffi-devel zlib-devel bzip2-devel
 
+COPY .install /workspace/.install
+
+# Install Redis (SANITIZER can be 'address' for ASAN builds)
 # Empty default: install_redis.sh falls back to .install/redis_ref.txt (single source of truth)
 ARG REDIS_REF=
 ARG SANITIZER=

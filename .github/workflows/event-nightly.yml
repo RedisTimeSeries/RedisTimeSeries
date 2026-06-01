@@ -46,7 +46,6 @@ jobs:
           fi
           echo "redis-ref=${REDIS_REF}" >> $GITHUB_OUTPUT
 
-
           # Generate timestamp at workflow start for consistent beta versioning
           TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
           WORKFLOW_NUM=${{ github.run_number }}

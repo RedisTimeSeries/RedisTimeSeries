@@ -13,6 +13,9 @@ RUN ln -s `which cmake3` /usr/bin/cmake
 ENV PATH="/opt/rh/devtoolset-11/root/usr/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/rh/devtoolset-11/root/usr/lib64:${LD_LIBRARY_PATH}"
 
+COPY .install /workspace/.install
+
+# Install Redis (SANITIZER can be 'address' for ASAN builds)
 # Empty default: install_redis.sh falls back to .install/redis_ref.txt (single source of truth)
 ARG REDIS_REF=
 ARG SANITIZER=

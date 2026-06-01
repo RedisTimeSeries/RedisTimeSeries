@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y build-essential \
 
 COPY .install /workspace/.install
 
+# Install Redis (SANITIZER can be 'address' for ASAN builds)
 # Empty default: install_redis.sh falls back to .install/redis_ref.txt (single source of truth)
 ARG REDIS_REF=
 ARG SANITIZER=

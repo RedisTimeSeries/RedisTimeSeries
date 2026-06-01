@@ -24,6 +24,7 @@ RUN wget https://cmake.org/files/v3.28/cmake-3.28.0.tar.gz \
     && ln -sf /usr/local/bin/cmake /usr/bin/cmake
 COPY .install /workspace/.install
 
+# Install Redis (SANITIZER can be 'address' for ASAN builds)
 # Empty default: install_redis.sh falls back to .install/redis_ref.txt (single source of truth)
 ARG REDIS_REF=
 ARG SANITIZER=
