@@ -102,7 +102,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
         CompactionRule *rule = NewRule(destKey, aggType, bucketDuration, timestampAlignment);
         if (rule == NULL) {
-            RedisModule_LogIOError(io, "warning", "Failed to allocate rule while loading from RDB");
+            RedisModule_LogIOError(io, "warning", "Failed to create rule while loading from RDB");
             err = true;
             return NULL;
         }
