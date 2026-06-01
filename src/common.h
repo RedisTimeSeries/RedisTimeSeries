@@ -14,6 +14,12 @@ int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
 #include <string.h>
 #include "RedisModulesSDK/redismodule.h"
 
+// Non-aborting allocation: use RedisModule_Try* when available (returns NULL on
+// OOM instead of crashing the process), otherwise fall back to the regular allocator.
+#define rts_try_calloc(count, size)                                                                \
+    (RedisModule_TryCalloc ? RedisModule_TryCalloc((count), (size)) : calloc((count), (size)))
+#define rts_try_alloc(size) (RedisModule_TryAlloc ? RedisModule_TryAlloc((size)) : malloc((size)))
+
 #define RTS_ERR "ERR"
 #define RTS_NOPERM "NOPERM"
 #define RTS_ReplyError(ctx, err_type, msg) RedisModule_ReplyWithError(ctx, err_type " " msg)
