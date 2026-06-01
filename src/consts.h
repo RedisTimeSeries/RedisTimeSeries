@@ -132,19 +132,6 @@ typedef enum
 // This is enforced on command parsing and during RDB load.
 #define TS_MAX_LABELS_COUNT 1024
 
-// Max compaction rules per source series. A rule is one (aggType,
-// bucketDuration, alignment) triple; TS_AGG_TYPES_MAX aggregation types
-// × ~78 plausible bucket/alignment configurations per type, rounded up
-// to the nearest power of two. Beyond this, the per-insert rules-list
-// traversal degrades and the count is treated as corrupted on RDB load.
-#define TS_MAX_RULES_COUNT 1024
-
-// Max chunks per series loaded from RDB. At CHUNK_SIZE_BYTES_MIN (48 B)
-// this bounds a single series to ~3 MiB of raw sample data; at the
-// default 4 KiB chunk size, ~256 MiB. Larger counts in a single-series
-// RDB stream indicate corruption or a hostile payload.
-#define TS_MAX_CHUNKS_COUNT 65536
-
 // DC - Don't Care (Arbitrary value)
 #define DC 0
 
