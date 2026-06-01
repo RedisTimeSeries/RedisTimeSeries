@@ -18,7 +18,7 @@ on:
       redis-ref:
         description: 'Redis ref to checkout'
         required: true
-        default: 'unstable'
+        default: '8.8'
       send-slack-message:
         description: 'Send Slack notification on completion'
         required: false
@@ -40,7 +40,7 @@ jobs:
       - name: set env
         id: set-env
         run: |
-          echo "redis-ref=${{ inputs.redis-ref || 'unstable' }}" >> $GITHUB_OUTPUT
+          echo "redis-ref=${{ inputs.redis-ref || '8.8' }}" >> $GITHUB_OUTPUT
           
           # Generate timestamp at workflow start for consistent beta versioning
           TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
