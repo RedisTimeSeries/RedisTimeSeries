@@ -140,14 +140,26 @@ jobs:
         with:
           submodules: 'recursive'
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker Image
-        run: |
-          docker build \
-            -f Dockerfile.${{ matrix.platform.os }} \
-            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
-            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
-            -t ${{ env.DOCKER_IMAGE }} \
-            .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.platform.os }}
+          tags: ${{ env.DOCKER_IMAGE }}
+          load: true
+          build-args: |
+            REDIS_REF=${{ env.REDIS_REF }}
+            SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }}
+          # Scope cache per (OS, arch, redis-ref): different matrix cells
+          # don't share layers (different Dockerfile + base image), and the
+          # redis-ref affects the deepest build args. Partitioning by all
+          # three avoids cache thrashing while keeping per-cell hit rates
+          # high on subsequent pushes.
+          cache-from: type=gha,scope=${{ matrix.platform.os }}-${{ inputs.arch }}-${{ env.REDIS_REF }}
+          cache-to: type=gha,scope=${{ matrix.platform.os }}-${{ inputs.arch }}-${{ env.REDIS_REF }},mode=max
 
       - name: Build module
         run: |
