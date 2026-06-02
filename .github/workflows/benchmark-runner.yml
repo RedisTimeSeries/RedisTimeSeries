@@ -7,6 +7,10 @@ on:
         type: boolean
         description: 'Run profiler benchmarks'
         default: false
+      module_ref:
+        type: string
+        description: 'Git ref (branch, tag or commit SHA) of RedisTimeSeries to benchmark. Empty uses the branch selected for this run (e.g. set "8.6" then "8.8" to compare versions).'
+        default: ""
       run_cluster:
         type: boolean
         description: 'Run OSS cluster (multi-shard) benchmarks. Off by default to avoid recurrent cost; enable on demand (e.g. to measure TS.MRANGE multi-shard speedups).'
@@ -24,6 +28,9 @@ on:
       run_profiler:
         type: boolean
         default: false
+      module_ref:
+        type: string
+        default: ""
       run_cluster:
         type: boolean
         default: false
@@ -42,6 +49,7 @@ jobs:
     uses: ./.github/workflows/benchmark-flow.yml
     secrets: inherit
     with:
+      module_ref: ${{ inputs.module_ref }}
       benchmark_glob: ${{ inputs.benchmark_glob }}
       benchmark_runner_group_member_id: ${{ matrix.member_id }}
       benchmark_runner_group_total: ${{ strategy.job-total }}
@@ -57,6 +65,7 @@ jobs:
       profile_env: 1
       # TODO: change to "github-actions.profilers" when ready on grafana
       triggering_env: "circleci.profilers" # results generated with profilers attached are not mixed with the ones without it
+      module_ref: ${{ inputs.module_ref }}
       benchmark_glob: ${{ inputs.benchmark_glob }}
       benchmark_runner_group_member_id: ${{ matrix.member_id }}
       benchmark_runner_group_total: ${{ strategy.job-total }}
@@ -75,6 +84,7 @@ jobs:
     with:
       allowed_envs: "oss-cluster"
       allowed_setups: ${{ inputs.cluster_allowed_setups }}
+      module_ref: ${{ inputs.module_ref }}
       benchmark_glob: ${{ inputs.benchmark_glob }}
       benchmark_runner_group_member_id: ${{ matrix.member_id }}
       benchmark_runner_group_total: ${{ strategy.job-total }}
