@@ -195,7 +195,13 @@ jobs:
           path: enterprise
           ref: ${{ env.ENTERPRISE_BASE }}
 
-      - name: Run bump script
+      - name: Install Python deps for Redis-Enterprise generator
+        run: |
+          # The generator (modules/modules_build_files_generator.py via common.py)
+          # only needs `requests`. Install it for the system python the bump script uses.
+          python3 -m pip install --quiet --upgrade requests
+
+      - name: Run bump script (edits generator + reruns it for canonical bzl/BUILD)
         id: bump
         run: |
           set -euo pipefail
@@ -212,11 +218,20 @@ jobs:
         id: change-check
         working-directory: enterprise
         run: |
-          if git diff --quiet; then
+          # We only ever commit these three files. If any of them differs, we have a real
+          # bump to push. The generator may also create/refresh `modules/artifacts/` zips
+          # as a cache — those are ignored on purpose.
+          if git diff --quiet -- \
+               modules/modules_build_files_generator.py \
+               modules/modules_99_99.bzl \
+               modules/BUILD.bazel; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No change in Redis-Enterprise tree — beta version already pinned. Skipping PR."
+            echo "No change in the three TS-bump-relevant files — beta version already pinned. Skipping PR."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "::group::Diff summary"
+            git diff --stat -- modules/modules_build_files_generator.py modules/modules_99_99.bzl modules/BUILD.bazel
+            echo "::endgroup::"
           fi
 
       - name: Commit, push branch, open PR
