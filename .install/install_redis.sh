@@ -3,9 +3,9 @@ set -e
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
-# If REDIS_REF was not provided explicitly, fall back to the single
-# source-of-truth field (redis_ref in pack/ramp.yml) via the shared reader that
-# ships in this same directory (.install/get-redis-ref.sh). Both this script and
+# If REDIS_REF was not provided explicitly, derive it from the manifest's
+# compatible_redis_version (pack/ramp.yml) via the shared reader that ships in
+# this same directory (.install/get-redis-ref.sh). Both this script and
 # pack/ramp.yml are copied into the Docker build context, so the reader works
 # here exactly as it does in CI.
 if [ -z "${REDIS_REF}" ]; then

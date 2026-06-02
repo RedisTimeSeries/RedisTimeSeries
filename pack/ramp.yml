@@ -9,11 +9,6 @@ command_line_args: ""
 compatible_redis_version: "99.99"
 min_redis_version: "99.99"
 min_redis_pack_version: "7.2.0"
-# Single source of truth for the Redis git ref (branch/tag/commit) that
-# redistimeseries is built and tested against in CI and Docker images.
-# Update this value to change the Redis version everywhere at once. Read it
-# via .install/get-redis-ref.sh (CI) or .install/install_redis.sh (Docker builds).
-redis_ref: "unstable"
 capabilities:
     - types
     - replica_of
