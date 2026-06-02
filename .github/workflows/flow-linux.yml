@@ -95,7 +95,7 @@ jobs:
         id: set-runner
         run: |
           if [ "${{ inputs.arch }}" == "arm64" ]; then
-            echo "runner=ubuntu24-arm64-4-16" >> $GITHUB_OUTPUT
+            echo "runner=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
           else
             echo "runner=ubuntu-latest" >> $GITHUB_OUTPUT
           fi
