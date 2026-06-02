@@ -39,8 +39,10 @@ jobs:
 
       - name: set env
         id: set-env
+        env:
+          INPUT_REDIS_REF: ${{ inputs.redis-ref }}
         run: |
-          REDIS_REF="${{ inputs.redis-ref }}"
+          REDIS_REF="${INPUT_REDIS_REF}"
           if [ -z "$REDIS_REF" ]; then
             REDIS_REF="$(sbin/get-redis-ref.sh)"
           fi
