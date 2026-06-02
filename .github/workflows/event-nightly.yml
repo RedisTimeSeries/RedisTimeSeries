@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       redis-ref:
-        description: 'Redis ref to checkout (leave empty to use .install/redis_ref.txt)'
+        description: 'Redis ref to checkout (leave empty to use redis_ref from pack/ramp.yml)'
         required: false
         default: ''
       send-slack-message:
