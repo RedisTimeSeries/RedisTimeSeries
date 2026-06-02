@@ -6,11 +6,15 @@
 # Dockerfiles and CI workflows. The value may be quoted or unquoted; an inline
 # '#' comment, if any, is stripped.
 #
+# It lives under .install/ (not sbin/) so it is copied into the Docker build
+# context together with the rest of .install/, letting install_redis.sh reuse
+# the very same reader instead of re-implementing the parse.
+#
 # Usage:
-#   sbin/get-redis-ref.sh            # prints the ref, e.g. "8.8"
+#   .install/get-redis-ref.sh        # prints the ref, e.g. "8.8"
 #
 # In a GitHub Actions step:
-#   echo "redis-ref=$(sbin/get-redis-ref.sh)" >> "$GITHUB_OUTPUT"
+#   echo "redis-ref=$(.install/get-redis-ref.sh)" >> "$GITHUB_OUTPUT"
 
 set -euo pipefail
 

@@ -4,18 +4,16 @@ set -e
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
 # If REDIS_REF was not provided explicitly, fall back to the single
-# source-of-truth field (`redis_ref`) in the RAMP manifest pack/ramp.yml, which
-# is copied into the Docker build context next to this script's parent dir.
+# source-of-truth field (redis_ref in pack/ramp.yml) via the shared reader that
+# ships in this same directory (.install/get-redis-ref.sh). Both this script and
+# pack/ramp.yml are copied into the Docker build context, so the reader works
+# here exactly as it does in CI.
 if [ -z "${REDIS_REF}" ]; then
-    RAMP_FILE="$HERE/../pack/ramp.yml"
-    if [ -f "$RAMP_FILE" ]; then
-        REDIS_REF="$(sed -nE 's/^redis_ref:[[:space:]]*(.*)$/\1/p' "$RAMP_FILE" | head -n1 \
-            | sed -E 's/[[:space:]]*#.*$//; s/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'\''(.*)'\''$/\1/')"
-    fi
+    REDIS_REF="$(bash "$HERE/get-redis-ref.sh")"
 fi
 
 if [ -z "${REDIS_REF}" ]; then
-    echo "Error: REDIS_REF is not set and 'redis_ref' not found in $HERE/../pack/ramp.yml"
+    echo "Error: REDIS_REF is not set and could not be derived from pack/ramp.yml"
     exit 1
 fi
 

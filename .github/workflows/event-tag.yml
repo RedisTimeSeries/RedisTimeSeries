@@ -30,7 +30,7 @@ jobs:
         run: |
           REDIS_REF="${INPUT_REDIS_REF}"
           if [ -z "$REDIS_REF" ]; then
-            REDIS_REF="$(sbin/get-redis-ref.sh)"
+            REDIS_REF="$(.install/get-redis-ref.sh)"
           fi
           echo "redis-ref=${REDIS_REF}" >> $GITHUB_OUTPUT
   linter:
