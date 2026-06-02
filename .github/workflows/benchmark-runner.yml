@@ -7,11 +7,32 @@ on:
         type: boolean
         description: 'Run profiler benchmarks'
         default: false
+      run_cluster:
+        type: boolean
+        description: 'Run OSS cluster (multi-shard) benchmarks. Off by default to avoid recurrent cost; enable on demand (e.g. to measure TS.MRANGE multi-shard speedups).'
+        default: false
+      benchmark_glob:
+        type: string
+        description: 'Glob of benchmark definitions to run (e.g. "*mrange*.yml" to focus the multi-shard comparison).'
+        default: "*.yml"
+      cluster_allowed_setups:
+        type: string
+        description: 'Optional comma-separated cluster setups to limit cost (e.g. "oss-cluster-03-primaries"). Empty runs every cluster topology, including the 15/30-primary ones, which is expensive.'
+        default: ""
   workflow_call:
     inputs:
       run_profiler:
         type: boolean
         default: false
+      run_cluster:
+        type: boolean
+        default: false
+      benchmark_glob:
+        type: string
+        default: "*.yml"
+      cluster_allowed_setups:
+        type: string
+        default: ""
 
 jobs:
   benchmark-timeseries-oss-standalone:
@@ -21,6 +42,7 @@ jobs:
     uses: ./.github/workflows/benchmark-flow.yml
     secrets: inherit
     with:
+      benchmark_glob: ${{ inputs.benchmark_glob }}
       benchmark_runner_group_member_id: ${{ matrix.member_id }}
       benchmark_runner_group_total: ${{ strategy.job-total }}
 
@@ -35,6 +57,24 @@ jobs:
       profile_env: 1
       # TODO: change to "github-actions.profilers" when ready on grafana
       triggering_env: "circleci.profilers" # results generated with profilers attached are not mixed with the ones without it
+      benchmark_glob: ${{ inputs.benchmark_glob }}
       benchmark_runner_group_member_id: ${{ matrix.member_id }}
       benchmark_runner_group_total: ${{ strategy.job-total }}
 
+  # Multi-shard OSS cluster benchmarks. Disabled on the recurrent push trigger
+  # (run_cluster defaults to false) so there is no recurring cost; trigger it
+  # on demand from the Actions tab to capture cluster results, e.g. to show the
+  # TS.MRANGE multi-shard performance boost across versions.
+  benchmark-timeseries-oss-cluster:
+    if: ${{ inputs.run_cluster }}
+    strategy:
+      matrix:
+        member_id: [1, 2, 3]
+    uses: ./.github/workflows/benchmark-flow.yml
+    secrets: inherit
+    with:
+      allowed_envs: "oss-cluster"
+      allowed_setups: ${{ inputs.cluster_allowed_setups }}
+      benchmark_glob: ${{ inputs.benchmark_glob }}
+      benchmark_runner_group_member_id: ${{ matrix.member_id }}
+      benchmark_runner_group_total: ${{ strategy.job-total }}
