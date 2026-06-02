@@ -1,0 +1,8 @@
+# Single source of truth for the Redis git ref (branch/tag/commit) that
+# redistimeseries is built and tested against in CI and Docker images.
+#
+# Update the value below to change the Redis version everywhere at once.
+# Lines starting with '#' and blank lines are ignored; the first remaining
+# line is used as the ref. Read it via sbin/get-redis-ref.sh (CI) or it is
+# consumed directly by .install/install_redis.sh when building Docker images.
+unstable

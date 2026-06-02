@@ -7,7 +7,8 @@ WORKDIR /workspace
 COPY .install /workspace/.install
 RUN bash /workspace/.install/install_script.sh
 
-ARG REDIS_REF=unstable
+# Empty default: install_redis.sh falls back to .install/redis_ref.txt (single source of truth)
+ARG REDIS_REF=
 ARG SANITIZER=
 RUN chmod +x /workspace/.install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} /workspace/.install/install_redis.sh
 

@@ -12,7 +12,8 @@ RUN bash /workspace/.install/install_script.sh
 ENV PATH="/opt/rh/devtoolset-11/root/usr/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/rh/devtoolset-11/root/usr/lib64:${LD_LIBRARY_PATH}"
 
-ARG REDIS_REF=unstable
+# Empty default: install_redis.sh falls back to .install/redis_ref.txt (single source of truth)
+ARG REDIS_REF=
 ARG SANITIZER=
 RUN chmod +x /workspace/.install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} /workspace/.install/install_redis.sh
 
