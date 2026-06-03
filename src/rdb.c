@@ -8,6 +8,7 @@
  */
 #include "rdb.h"
 
+#include "common.h"
 #include "consts.h"
 #include "endianconv.h"
 #include "load_io_error_macros.h"
@@ -60,8 +61,13 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         Load_IOError_OrDefault(io, err, NULL, encver >= TS_CREATE_IGNORE_VER, 0.0);
 
     cCtx.labelsCount = LoadUnsigned_IOError(io, err, NULL);
-    cCtx.labels = calloc(cCtx.labelsCount, sizeof *cCtx.labels);
-    errdefer(err, if (!series) FreeLabels(cCtx.labels, cCtx.labelsCount));
+    cCtx.labels = rts_try_calloc(cCtx.labelsCount, sizeof *cCtx.labels);
+    errdefer(err, if (!series && cCtx.labels) FreeLabels(cCtx.labels, cCtx.labelsCount));
+    if (unlikely(cCtx.labelsCount > 0 && cCtx.labels == NULL)) {
+        RedisModule_LogIOError(io, "error", "OOM allocating labels");
+        err = true;
+        return NULL;
+    }
     for (int i = 0; i < cCtx.labelsCount; i++) {
         cCtx.labels[i].key = LoadString_IOError(io, err, NULL);
         cCtx.labels[i].value = LoadString_IOError(io, err, NULL);
