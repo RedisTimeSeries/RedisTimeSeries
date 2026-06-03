@@ -334,7 +334,12 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     bool err = false;
     errdefer(err, *chunk = NULL);
 
-    Chunk *uncompchunk = (Chunk *)calloc(1, sizeof(*uncompchunk));
+    Chunk *uncompchunk = (Chunk *)rts_try_calloc(1, sizeof(*uncompchunk));
+    if (uncompchunk == NULL) {
+        RedisModule_LogIOError(io, "error", "Failed to allocate chunk while loading from RDB");
+        err = true;
+        return TSDB_ERROR;
+    }
     errdefer(err, Uncompressed_FreeChunk(uncompchunk));
 
     uncompchunk->base_timestamp = LoadUnsigned_IOError(io, err, TSDB_ERROR);

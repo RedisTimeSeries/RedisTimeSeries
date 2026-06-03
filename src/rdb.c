@@ -85,6 +85,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         const timestamp_t startCurrentTimeBucket = LoadUnsigned_IOError(io, err, NULL);
 
         CompactionRule *rule = NewRule(destKey, aggType, bucketDuration, timestampAlignment);
+        if (rule == NULL) {
+            RedisModule_LogIOError(io, "error", "Failed to create rule while loading from RDB");
+            err = true;
+            return NULL;
+        }
         destKey = NULL;
 
         rule->startCurrentTimeBucket = startCurrentTimeBucket;

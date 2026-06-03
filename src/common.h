@@ -4,6 +4,14 @@
 #include <string.h>
 #include "RedisModulesSDK/redismodule.h"
 
+// Non-aborting allocation: RedisModule_Calloc aborts the process on OOM (VDP-4658),
+// so prefer RedisModule_Try* (returns NULL). Falls back to the default allocator
+// when Try* isn't bound (libc in unit builds; the aborting RedisModule_Calloc/Alloc
+// in the module build, where Try* is always bound on Redis >= 7.0).
+#define rts_try_calloc(count, size)                                                                \
+    (RedisModule_TryCalloc ? RedisModule_TryCalloc((count), (size)) : calloc((count), (size)))
+#define rts_try_alloc(size) (RedisModule_TryAlloc ? RedisModule_TryAlloc((size)) : malloc((size)))
+
 #define RTS_ERR "ERR"
 #define RTS_NOPERM "NOPERM"
 #define RTS_ReplyError(ctx, err_type, msg) RedisModule_ReplyWithError(ctx, err_type " " msg)

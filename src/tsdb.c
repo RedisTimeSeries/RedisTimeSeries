@@ -1197,7 +1197,10 @@ CompactionRule *NewRule(RedisModuleString *destKey,
         return NULL;
     }
 
-    CompactionRule *rule = malloc(sizeof *rule);
+    CompactionRule *rule = rts_try_alloc(sizeof *rule);
+    if (rule == NULL) {
+        return NULL;
+    }
     rule->aggClass = GetAggClass(aggType);
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext(false);
