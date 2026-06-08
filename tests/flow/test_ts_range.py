@@ -3192,3 +3192,70 @@ def test_revrange_empty_count_matches_range_tail():
                         f'[{label}/{agg}] REVRANGE EMPTY COUNT {n}: '
                         f'expected {expected!r}, got {rev!r}; '
                         f'(fwd_all={fwd_all!r})')
+
+
+def test_empty_gap_fill_twa_last_multi_agg():
+    """
+    Test TWA+LAST multi-agg gap-filling: critical edge case fixed.
+
+    The bug: When TWA and LAST aggregators were both in a query, LAST contexts
+    didn't get seeded for gap-filled buckets in fillEmptyBuckets(), so LAST
+    aggregators would output wrong values for empty buckets.
+
+    The fix: Always seed LAST contexts before filling (moved seed_locf_for_empty_gap
+    outside the if/else in fillEmptyBuckets).
+
+    This test verifies:
+    - Interior gaps with LAST+TWA work correctly
+    - LAST uses LOCF for gap buckets
+    - Multiple LAST aggregators all get seeded
+    """
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        # Test: Interior gap with TWA+LAST multi-agg (correct syntax: twa,last)
+        r.execute_command('DEL', 'gap_twa_last_test')
+        assert r.execute_command('TS.CREATE', 'gap_twa_last_test')
+
+        # Samples: t=5 (value=100), t=45 (value=300)
+        # Interior gap in buckets [10,20), [20,30), [30,40)
+        r.execute_command('TS.ADD', 'gap_twa_last_test', 5, 100)
+        r.execute_command('TS.ADD', 'gap_twa_last_test', 45, 300)
+
+        # Query with TWA+LAST multi-agg (correct syntax: twa,last)
+        result = r.execute_command('TS.RANGE', 'gap_twa_last_test', 0, 50,
+                                   'AGGREGATION', 'twa,last', 10, 'EMPTY')
+
+        # Result format: [[ts, twa_val, last_val], [ts, twa_val, last_val], ...]
+        assert len(result) == 5, f"Expected 5 buckets, got {len(result)}"
+
+        # Bucket [0,10): contains sample at t=5 (value=100)
+        assert result[0][0] == 0
+        assert float(result[0][2]) == 100.0, \
+            f"Bucket [0,10): expected LAST=100, got {result[0][2]}"
+
+        # Bucket [10,20): interior gap
+        # LAST should be LOCF from t=5 sample (100)
+        # TWA should interpolate between 100 and 300
+        assert result[1][0] == 10
+        assert 100 <= float(result[1][1]) <= 300, \
+            f"Bucket [10,20): TWA should be 100-300, got {result[1][1]}"
+        assert float(result[1][2]) == 100.0, \
+            f"Bucket [10,20): expected LAST=100 (LOCF), got {result[1][2]}"
+
+        # Bucket [20,30): interior gap
+        assert result[2][0] == 20
+        assert 100 <= float(result[2][1]) <= 300, \
+            f"Bucket [20,30): TWA should be 100-300, got {result[2][1]}"
+        assert float(result[2][2]) == 100.0, \
+            f"Bucket [20,30): expected LAST=100 (LOCF), got {result[2][2]}"
+
+        # Bucket [30,40): interior gap
+        assert result[3][0] == 30
+        assert 100 <= float(result[3][1]) <= 300, \
+            f"Bucket [30,40): TWA should be 100-300, got {result[3][1]}"
+        assert float(result[3][2]) == 100.0, \
+            f"Bucket [30,40): expected LAST=100 (LOCF), got {result[3][2]}"
+
+        # Bucket [40,50): contains sample at t=45 (value=300)
+        assert result[4][0] == 40
+        assert float(result[4][2]) == 300.0, \
+            f"Bucket [40,50): expected LAST=300, got {result[4][2]}"

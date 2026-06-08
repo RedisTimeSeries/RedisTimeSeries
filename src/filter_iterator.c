@@ -755,13 +755,14 @@ static int fillEmptyBuckets(Samples *samples,
         samples->num_samples = _read_index + n_read_samples_left;
     }
 
+    /* Seed TS_AGG_LAST contexts from older neighbor for LOCF semantics (applies to all paths).
+     * In TWA+LAST multi-agg, twa_fillEmptyBuckets() calls finalizeEmpty() for non-TWA aggs
+     * without seeding, so we must seed here first. */
+    seed_locf_for_empty_gap(self, first_bucket_ts, reversed);
+
     if (self->hasTwa) {
         twa_fillEmptyBuckets(write_index, cur_ts, samples, self, n_empty_buckets, reversed);
     } else {
-        /* TS_AGG_LAST + EMPTY repeats the last value (LOCF). Seed the context from the older
-         * neighbor before the gap is emitted (always in reverse, where the context holds the
-         * newer neighbor; only for unseeded prefix/whole-range gaps in forward). */
-        seed_locf_for_empty_gap(self, first_bucket_ts, reversed);
         fillEmptyBucketsWithDefaultVals(
             write_index, cur_ts, samples, self, n_empty_buckets, reversed);
     }
