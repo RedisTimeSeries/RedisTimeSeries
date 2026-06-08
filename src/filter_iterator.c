@@ -466,14 +466,23 @@ static int64_t findLastIndexbeforeTS(const EnrichedChunk *chunk,
     return l;
 }
 
-/* When iterating reverse, empty-bucket LOCF (TS_AGG_LAST + EMPTY) inherits from the older
- * neighbor of the gap. The aggregator hasn't seen that sample yet (it lives in a bucket the
- * iterator will visit next), so we look it up directly and plant it into the context. The next
- * non-empty bucket's appendValue will overwrite it via the fresh_bucket path. */
-static void seed_locf_for_reverse_empty_gap(const AggregationIterator *self,
-                                            timestamp_t lowest_empty_bucket_start) {
+/* Empty-bucket LOCF (TS_AGG_LAST + EMPTY) inherits from the older (chronologically previous)
+ * neighbor of the gap. We look that sample up directly and plant it into the context; the next
+ * non-empty bucket's appendValue overwrites it via the fresh_bucket path.
+ *
+ * Reverse iteration: the aggregator holds the NEWER neighbor's value (the gap's older neighbor
+ * lives in a bucket the iterator visits next), so we must always overwrite it.
+ * Forward iteration: an interior gap already carries the correct LOCF value from the preceding
+ * in-range sample, so we only seed prefix / whole-range gaps where the context is still unseeded
+ * (no in-range sample observed yet) — this also avoids an extra series scan on the common path. */
+static void seed_locf_for_empty_gap(const AggregationIterator *self,
+                                    timestamp_t lowest_empty_bucket_start,
+                                    bool reversed) {
     for (size_t a = 0; a < self->numAggregations; a++) {
         if (self->aggregations[a].type != TS_AGG_LAST) {
+            continue;
+        }
+        if (!reversed && !LastValueIsUnseeded(self->aggregationContexts[a])) {
             continue;
         }
         Sample older, older_older;
@@ -691,7 +700,10 @@ static int fillEmptyBuckets(Samples *samples,
 
 #ifndef PREFIX_SUFFIX_IMPL // The PM decided to disable it, as it might cause OOM and complicates
                            // users
-    if (self->hasTwa) {
+    // Edge gaps (no sample on one side) are dropped for every aggregator, not just TWA: empty
+    // buckets before the first-ever sample or after the last-ever sample are not emitted (the PM
+    // canceled cases 6 and 7). Reached only when self->empty, so this applies whenever we fill.
+    {
         Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
         timestamp_t ta;
         int64_t agg_time_delta = self->aggregationTimeDelta;
@@ -701,7 +713,7 @@ static int fillEmptyBuckets(Samples *samples,
             twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
         size_t n_samples_after =
             twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter);
-        if (n_samples_before == 0 || n_samples_after == 0) { // the PM canceled cases 6 and 7
+        if (n_samples_before == 0 || n_samples_after == 0) {
             return 0;
         }
     }
@@ -746,19 +758,16 @@ static int fillEmptyBuckets(Samples *samples,
     if (self->hasTwa) {
         twa_fillEmptyBuckets(write_index, cur_ts, samples, self, n_empty_buckets, reversed);
     } else {
-        /* Reverse iteration loses LOCF carry-over for TS_AGG_LAST: the context still holds the
-         * NEWER bucket's value. Seed from the older neighbor before the gap is emitted. */
-        if (reversed) {
-            seed_locf_for_reverse_empty_gap(self, first_bucket_ts);
-        }
+        /* TS_AGG_LAST + EMPTY repeats the last value (LOCF). Seed the context from the older
+         * neighbor before the gap is emitted (always in reverse, where the context holds the
+         * newer neighbor; only for unseeded prefix/whole-range gaps in forward). */
+        seed_locf_for_empty_gap(self, first_bucket_ts, reversed);
         fillEmptyBucketsWithDefaultVals(
             write_index, cur_ts, samples, self, n_empty_buckets, reversed);
     }
 
     return 0;
 }
-
-#define TWA_EMPTY_RANGE(iter) (((iter)->empty) && ((iter)->hasTwa))
 
 static inline Samples *ensureOutputSamples(AggregationIterator *self,
                                            EnrichedChunk *enrichedChunk,
@@ -772,7 +781,7 @@ static inline Samples *ensureOutputSamples(AggregationIterator *self,
     return &enrichedChunk->samples;
 }
 
-// No samples from upstream: finalize, TWA-only empty range, or end stream.
+// No samples from upstream: finalize, EMPTY-range gap fill, or end stream.
 // Sets *enter_finalize when caller must run agg_iter_finalize().
 static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
                                               uint64_t aggregationTimeDelta,
@@ -785,7 +794,7 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
         *enter_finalize = true;
         return NULL;
     }
-    if (TWA_EMPTY_RANGE(self)) {
+    if (self->empty) {
         if (!self->handled_twa_empty_prefix) {
             self->handled_twa_empty_prefix = true;
             self->handled_twa_empty_suffix = true; // The prefix in this case is also the suffix
@@ -853,7 +862,8 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
     return NULL;
 }
 
-// TWA empty range: fill buckets from query start to first raw sample. Returns 0 or -1 on error.
+// EMPTY range: fill empty buckets from query start to the first raw sample. Returns 0 or -1 on
+// error. Edge gaps with no older neighbor are dropped inside fillEmptyBuckets.
 static int agg_iter_apply_twa_empty_prefix(AggregationIterator *self,
                                            EnrichedChunk *enrichedChunk,
                                            uint64_t aggregationTimeDelta,
@@ -861,7 +871,7 @@ static int agg_iter_apply_twa_empty_prefix(AggregationIterator *self,
                                            bool multiAgg,
                                            size_t *agg_n_samples,
                                            int64_t *si) {
-    if (!TWA_EMPTY_RANGE(self) || self->handled_twa_empty_prefix) {
+    if (!self->empty || self->handled_twa_empty_prefix) {
         return 0;
     }
     self->handled_twa_empty_prefix = true;
@@ -1389,7 +1399,7 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
     self->aux_chunk->samples.timestamps[0] =
         calc_bucket_ts(self->bucketTS, self->aggregationLastTimestamp, self->aggregationTimeDelta);
     size_t n_samples = 1;
-    if (TWA_EMPTY_RANGE(self) && !self->handled_twa_empty_suffix) {
+    if (self->empty && !self->handled_twa_empty_suffix) {
         self->handled_twa_empty_suffix = true;
         timestamp_t last_bucket =
             CalcBucketStart(is_reversed ? self->startTimestamp : self->endTimestamp,

@@ -130,6 +130,13 @@ void LastValueSeedLocf(void *contextPtr, double value, timestamp_t ts) {
     context->ts = ts;
 }
 
+/* True when a TS_AGG_LAST context holds no carry-over value yet (created but no sample appended).
+ * Used to decide whether a forward empty gap needs LOCF seeding from the older neighbor. */
+bool LastValueIsUnseeded(void *contextPtr) {
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    return isnan(context->value);
+}
+
 int SingleValueFinalize(void *contextPtr, double *val) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     *val = context->value;

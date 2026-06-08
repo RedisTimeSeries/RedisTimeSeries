@@ -1362,6 +1362,65 @@ def test_empty():
         decode_if_needed(r.execute_command('TS.revrange', 't2', '0', '30', 'ALIGN', '0', 'AGGREGATION', 'max', agg_size, 'EMPTY'))
 
 
+# MOD-8187: EMPTY gap filling must work for every aggregator, not only TWA, when the empty buckets
+# are a prefix, a suffix, or the whole queried range (cases 3, 4 and 5 of PM-1229). Before the fix
+# only TWA emitted those buckets, so LAST (and the rest) returned a truncated / empty result.
+# The existing test_empty only exercised *interior* gaps (first/last bucket hold real samples),
+# which is why these cases were never caught.
+def test_empty_gap_fill_prefix_suffix_whole_range():
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 'a')
+        assert r.execute_command('TS.MADD', 'a', 10, 100, 'a', 20, 110) == [10, 20]
+
+        def rng(start, end, agg):
+            return decode_if_needed(
+                r.execute_command('TS.range', 'a', start, end, 'ALIGN', '0', 'AGGREGATION', agg, 1, 'EMPTY'))
+
+        def revrng(start, end, agg):
+            return decode_if_needed(
+                r.execute_command('TS.revrange', 'a', start, end, 'ALIGN', '0', 'AGGREGATION', agg, 1, 'EMPTY'))
+
+        # --- LAST: repeats the previous value (LOCF) for the gap-filled buckets ---
+        # Case 3: whole range is a gap between sample 10 and sample 20 -> all carry 100.
+        case3 = [[ts, '100'] for ts in range(11, 17)]
+        assert rng(11, 16, 'last') == case3
+        assert revrng(11, 16, 'last') == list(reversed(case3))
+
+        # Case 4: sample 10 is in range; trailing buckets 11,12 are an interior gap (sample 20
+        # follows) -> LOCF 100. Buckets 8,9 (before the first-ever sample) are dropped.
+        case4 = [[10, '100'], [11, '100'], [12, '100']]
+        assert rng(8, 12, 'last') == case4
+        assert revrng(8, 12, 'last') == list(reversed(case4))
+
+        # Case 5: leading buckets 18,19 are an interior gap -> LOCF 100; bucket 20 holds 110.
+        # Buckets 21,22 (after the last-ever sample) are dropped.
+        case5 = [[18, '100'], [19, '100'], [20, '110']]
+        assert rng(18, 22, 'last') == case5
+        assert revrng(18, 22, 'last') == list(reversed(case5))
+
+        # Edge gaps with no neighbor on one side are dropped for every aggregator (PM canceled
+        # cases 6 and 7): a range entirely before the first / after the last sample is empty.
+        for agg in ('last', 'twa', 'avg', 'max', 'min', 'sum', 'first', 'count'):
+            assert rng(2, 5, agg) == []
+            assert rng(25, 30, agg) == []
+            assert revrng(2, 5, agg) == []
+            assert revrng(25, 30, agg) == []
+
+        # Non-LOCF aggregators report the documented empty-bucket value in interior gaps.
+        nan6 = [[ts, 'NaN'] for ts in range(11, 17)]
+        for agg in ('avg', 'max', 'min', 'first', 'range', 'std.p', 'var.p'):
+            assert rng(11, 16, agg) == nan6
+        zero6 = [[ts, '0'] for ts in range(11, 17)]
+        for agg in ('sum', 'count'):
+            assert rng(11, 16, agg) == zero6
+
+        # TWA was already correct - guard against regressions in the shared code path.
+        twa3 = [[11, '101.5'], [12, '102.5'], [13, '103.5'], [14, '104.5'], [15, '105.5'], [16, '106']]
+        assert rng(11, 16, 'twa') == twa3
+        assert revrng(11, 16, 'twa') == list(reversed(twa3))
+
+
 def test_bucket_timestamp():
     agg_size = 10
     env = Env(decodeResponses=True)
