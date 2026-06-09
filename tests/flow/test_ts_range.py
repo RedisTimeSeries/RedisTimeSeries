@@ -1420,6 +1420,37 @@ def test_empty_gap_fill_prefix_suffix_whole_range():
         assert rng(11, 16, 'twa') == twa3
         assert revrng(11, 16, 'twa') == list(reversed(twa3))
 
+        # --- bucket size > 1 and non-zero ALIGN: exercises the CalcBucketStart / +-delta edge math
+        # in the prefix & suffix helpers (the bucket-1/ALIGN-0 cases above keep every ts in its own
+        # bucket and never hit it). Samples 12 (=100) and 42 (=200); bucket size 5, ALIGN 2 -> bucket
+        # starts at 2,7,12,...  [12,17) and [42,47) are real; [17..42) is an interior gap; buckets
+        # before 12 and after 47 are edge gaps and must be dropped. ---
+        assert r.execute_command('TS.CREATE', 'b')
+        assert r.execute_command('TS.MADD', 'b', 12, 100, 'b', 42, 200) == [12, 42]
+
+        def brng(start, end, agg):
+            return decode_if_needed(
+                r.execute_command('TS.range', 'b', start, end, 'ALIGN', '2', 'AGGREGATION', agg, 5, 'EMPTY'))
+
+        def brevrng(start, end, agg):
+            return decode_if_needed(
+                r.execute_command('TS.revrange', 'b', start, end, 'ALIGN', '2', 'AGGREGATION', agg, 5, 'EMPTY'))
+
+        last_aligned = [[12, '100'], [17, '100'], [22, '100'], [27, '100'], [32, '100'], [37, '100'], [42, '200']]
+        assert brng(0, 60, 'last') == last_aligned
+        assert brevrng(0, 60, 'last') == list(reversed(last_aligned))
+
+        sum_aligned = [[12, '100'], [17, '0'], [22, '0'], [27, '0'], [32, '0'], [37, '0'], [42, '200']]
+        assert brng(0, 60, 'sum') == sum_aligned
+
+        max_aligned = [[12, '100'], [17, 'NaN'], [22, 'NaN'], [27, 'NaN'], [32, 'NaN'], [37, 'NaN'], [42, '200']]
+        assert brng(0, 60, 'max') == max_aligned
+
+        # Edge-only ranges (before first / after last real bucket) stay empty under alignment too.
+        for agg in ('last', 'twa', 'sum', 'max'):
+            assert brng(0, 11, agg) == []
+            assert brng(47, 60, agg) == []
+
 
 def test_bucket_timestamp():
     agg_size = 10
@@ -3196,66 +3227,130 @@ def test_revrange_empty_count_matches_range_tail():
 
 def test_empty_gap_fill_twa_last_multi_agg():
     """
-    Test TWA+LAST multi-agg gap-filling: critical edge case fixed.
+    TWA+LAST multi-agg gap-filling.
 
-    The bug: When TWA and LAST aggregators were both in a query, LAST contexts
-    didn't get seeded for gap-filled buckets in fillEmptyBuckets(), so LAST
-    aggregators would output wrong values for empty buckets.
-
-    The fix: Always seed LAST contexts before filling (moved seed_locf_for_empty_gap
+    Bug: with TWA and LAST in the same query, LAST contexts were not seeded for
+    gap-filled buckets in fillEmptyBuckets(), so LAST produced wrong values for
+    empty buckets.
+    Fix: always seed LAST contexts before filling (seed_locf_for_empty_gap moved
     outside the if/else in fillEmptyBuckets).
 
-    This test verifies:
-    - Interior gaps with LAST+TWA work correctly
-    - LAST uses LOCF for gap buckets
-    - Multiple LAST aggregators all get seeded
+    Verifies an interior gap with TWA+LAST: LAST carries LOCF while TWA
+    interpolates, asserting exact deterministic values in both directions
+    (reverse exercises the always-overwrite seeding branch).
     """
     with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
-        # Test: Interior gap with TWA+LAST multi-agg (correct syntax: twa,last)
         r.execute_command('DEL', 'gap_twa_last_test')
         assert r.execute_command('TS.CREATE', 'gap_twa_last_test')
 
-        # Samples: t=5 (value=100), t=45 (value=300)
-        # Interior gap in buckets [10,20), [20,30), [30,40)
+        # Samples t=5 (=100), t=45 (=300); bucket size 10 over [0,50].
+        # [0,10) and [40,50) hold real samples; [10,20) [20,30) [30,40) are an interior gap.
         r.execute_command('TS.ADD', 'gap_twa_last_test', 5, 100)
         r.execute_command('TS.ADD', 'gap_twa_last_test', 45, 300)
 
-        # Query with TWA+LAST multi-agg (correct syntax: twa,last)
-        result = r.execute_command('TS.RANGE', 'gap_twa_last_test', 0, 50,
-                                   'AGGREGATION', 'twa,last', 10, 'EMPTY')
+        # Per bucket: [ts, twa, last]. LAST is LOCF (100 until the t=45 bucket); TWA interpolates.
+        expected = [
+            [0,  '112.5', '100'],
+            [10, '150',   '100'],
+            [20, '200',   '100'],
+            [30, '250',   '100'],
+            [40, '287.5', '300'],
+        ]
+        fwd = decode_if_needed(r.execute_command(
+            'TS.RANGE', 'gap_twa_last_test', 0, 50, 'AGGREGATION', 'twa,last', 10, 'EMPTY'))
+        assert fwd == expected, f'fwd: {fwd!r} != {expected!r}'
 
-        # Result format: [[ts, twa_val, last_val], [ts, twa_val, last_val], ...]
-        assert len(result) == 5, f"Expected 5 buckets, got {len(result)}"
+        rev = decode_if_needed(r.execute_command(
+            'TS.REVRANGE', 'gap_twa_last_test', 0, 50, 'AGGREGATION', 'twa,last', 10, 'EMPTY'))
+        assert rev == list(reversed(expected)), f'rev: {rev!r} != {list(reversed(expected))!r}'
 
-        # Bucket [0,10): contains sample at t=5 (value=100)
-        assert result[0][0] == 0
-        assert float(result[0][2]) == 100.0, \
-            f"Bucket [0,10): expected LAST=100, got {result[0][2]}"
 
-        # Bucket [10,20): interior gap
-        # LAST should be LOCF from t=5 sample (100)
-        # TWA should interpolate between 100 and 300
-        assert result[1][0] == 10
-        assert 100 <= float(result[1][1]) <= 300, \
-            f"Bucket [10,20): TWA should be 100-300, got {result[1][1]}"
-        assert float(result[1][2]) == 100.0, \
-            f"Bucket [10,20): expected LAST=100 (LOCF), got {result[1][2]}"
+def test_empty_gap_fill_interior_no_edge_scan():
+    """
+    Guards the check_edge_gaps optimization in fillEmptyBuckets().
 
-        # Bucket [20,30): interior gap
-        assert result[2][0] == 20
-        assert 100 <= float(result[2][1]) <= 300, \
-            f"Bucket [20,30): TWA should be 100-300, got {result[2][1]}"
-        assert float(result[2][2]) == 100.0, \
-            f"Bucket [20,30): expected LAST=100 (LOCF), got {result[2][2]}"
+    Interior gap fills (the main aggregation loop and the single-agg MAX forward
+    fast path) now pass check_edge_gaps=False and skip the two edge-detection
+    series scans, because a sample provably exists on both sides. The
+    prefix/suffix/whole-range callers still pass True and must still DROP edge
+    gaps.
 
-        # Bucket [30,40): interior gap
-        assert result[3][0] == 30
-        assert 100 <= float(result[3][1]) <= 300, \
-            f"Bucket [30,40): TWA should be 100-300, got {result[3][1]}"
-        assert float(result[3][2]) == 100.0, \
-            f"Bucket [30,40): expected LAST=100 (LOCF), got {result[3][2]}"
+    This test packs several interior gaps AND real edge gaps into one EMPTY query
+    so both behaviors run together, for every aggregator and in both directions.
+    If the optimization ever wrongly skipped or mis-classified a gap, the emitted
+    bucket set or values would change here.
 
-        # Bucket [40,50): contains sample at t=45 (value=300)
-        assert result[4][0] == 40
-        assert float(result[4][2]) == 300.0, \
-            f"Bucket [40,50): expected LAST=300, got {result[4][2]}"
+    Layout (bucket size 10, ALIGN 0), samples at t=25, 55, 85:
+        [0,10) [10,20)     -> before first sample  -> dropped (prefix edge)
+        [20,30)            -> sample 25 (=100)
+        [30,40) [40,50)    -> interior gap         -> filled (check_edge_gaps=False)
+        [50,60)            -> sample 55 (=200)
+        [60,70) [70,80)    -> interior gap         -> filled (check_edge_gaps=False)
+        [80,90)            -> sample 85 (=300)
+        [90,100) [100,110) -> after last sample    -> dropped (suffix edge)
+    => exactly 7 emitted buckets: ts 20, 30, 40, 50, 60, 70, 80
+    """
+    with Env(decodeResponses=True).getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.CREATE', 'g')
+        assert r.execute_command('TS.MADD', 'g', 25, 100, 'g', 55, 200, 'g', 85, 300) == [25, 55, 85]
+
+        def rng(agg, start=0, end=109):
+            return decode_if_needed(r.execute_command(
+                'TS.range', 'g', start, end, 'ALIGN', '0', 'AGGREGATION', agg, 10, 'EMPTY'))
+
+        def revrng(agg, start=0, end=109):
+            return decode_if_needed(r.execute_command(
+                'TS.revrange', 'g', start, end, 'ALIGN', '0', 'AGGREGATION', agg, 10, 'EMPTY'))
+
+        ts = [20, 30, 40, 50, 60, 70, 80]
+
+        def expected(by_ts):
+            return [[t, by_ts[t]] for t in ts]
+
+        # LAST: LOCF carried across every interior gap (the seeded path).
+        last_vals = {20: '100', 30: '100', 40: '100', 50: '200', 60: '200', 70: '200', 80: '300'}
+        # SUM / COUNT: documented empty-bucket value 0 in gaps.
+        sum_vals = {20: '100', 30: '0', 40: '0', 50: '200', 60: '0', 70: '0', 80: '300'}
+        count_vals = {20: '1', 30: '0', 40: '0', 50: '1', 60: '0', 70: '0', 80: '1'}
+        # MAX/MIN/FIRST/AVG: NaN in gaps, sample value in real buckets.
+        nan_vals = {20: '100', 30: 'NaN', 40: 'NaN', 50: '200', 60: 'NaN', 70: 'NaN', 80: '300'}
+
+        # 'max' specifically exercises the single-agg forward FAST PATH (the second
+        # interior caller that now skips the edge scan).
+        cases = (
+            ('last', last_vals),
+            ('sum', sum_vals),
+            ('count', count_vals),
+            ('max', nan_vals),
+            ('min', nan_vals),
+            ('first', nan_vals),
+            ('avg', nan_vals),
+        )
+        for agg, vals in cases:
+            exp = expected(vals)
+            assert rng(agg) == exp, f'{agg} fwd: {rng(agg)!r} != {exp!r}'
+            assert revrng(agg) == list(reversed(exp)), \
+                f'{agg} rev: {revrng(agg)!r} != {list(reversed(exp))!r}'
+
+        # Ranges entirely before the first / after the last sample have no neighbor on one
+        # side and must stay empty for every aggregator. This is the edge path that still
+        # scans & drops - proving the optimization didn't disable edge handling.
+        for agg in ('last', 'sum', 'count', 'max', 'min', 'first', 'avg', 'twa'):
+            assert rng(agg, 0, 19) == [], f'{agg}: prefix-only range should be empty'
+            assert rng(agg, 90, 109) == [], f'{agg}: suffix-only range should be empty'
+            assert revrng(agg, 0, 19) == [], f'{agg}: prefix-only revrange should be empty'
+            assert revrng(agg, 90, 109) == [], f'{agg}: suffix-only revrange should be empty'
+
+        # TWA interior multi-gap fill also goes through the check_edge_gaps=False after-finalize
+        # path. Use a constant value so the interpolated gap buckets are exactly 100 (deterministic,
+        # no float fragility): samples 5,35,65 (=100) over [0,69], bucket 10 -> 7 buckets all 100,
+        # interior gaps filled (not dropped) in both directions.
+        assert r.execute_command('TS.CREATE', 'c')
+        assert r.execute_command('TS.MADD', 'c', 5, 100, 'c', 35, 100, 'c', 65, 100) == [5, 35, 65]
+        twa_const = [[t, '100'] for t in (0, 10, 20, 30, 40, 50, 60)]
+        twa_fwd = decode_if_needed(r.execute_command(
+            'TS.range', 'c', 0, 69, 'ALIGN', '0', 'AGGREGATION', 'twa', 10, 'EMPTY'))
+        twa_rev = decode_if_needed(r.execute_command(
+            'TS.revrange', 'c', 0, 69, 'ALIGN', '0', 'AGGREGATION', 'twa', 10, 'EMPTY'))
+        assert twa_fwd == twa_const, f'twa interior fwd: {twa_fwd!r} != {twa_const!r}'
+        assert twa_rev == list(reversed(twa_const)), f'twa interior rev: {twa_rev!r}'

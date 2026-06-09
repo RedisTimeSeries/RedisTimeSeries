@@ -59,8 +59,8 @@ typedef struct AggregationIterator
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
     bool hasTwa; // precomputed: any aggregation is TWA
-    bool handled_twa_empty_prefix;
-    bool handled_twa_empty_suffix;
+    bool handled_empty_prefix;
+    bool handled_empty_suffix;
     timestamp_t prev_ts;
     bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
     bool validPerAgg[TS_AGG_TYPES_MAX]; // per-aggregation validity tracking for current bucket
