@@ -1442,8 +1442,7 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
             if (first_bucket <= last_bucket) {
                 has_empty_buckets = false;
             }
-            first_bucket =
-                max(0, (int64_t)((int64_t)first_bucket - (int64_t)aggregationTimeDelta));
+            first_bucket = max(0, (int64_t)((int64_t)first_bucket - (int64_t)aggregationTimeDelta));
         } else {
             if (first_bucket >= last_bucket) {
                 has_empty_buckets = false;
