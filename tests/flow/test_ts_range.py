@@ -1399,6 +1399,15 @@ def test_empty_gap_fill_prefix_suffix_whole_range():
         assert rng(18, 22, 'last') == case5
         assert revrng(18, 22, 'last') == list(reversed(case5))
 
+        # Case prefix-emit: a leading gap whose older neighbor is OUT of range. Sample 10 (=100)
+        # is before the query, sample 20 (=110) is the first in-range sample. Buckets 13..19 form
+        # a prefix gap that must be EMITTED via LOCF from the out-of-range sample 10, then 20 holds
+        # 110. Unlike case 3 (whole-range, entered via agg_iter_on_empty_chunk), this drives the
+        # forward agg_iter_apply_empty_prefix emit path directly.
+        case_prefix = [[ts, '100'] for ts in range(13, 20)] + [[20, '110']]
+        assert rng(13, 20, 'last') == case_prefix
+        assert revrng(13, 20, 'last') == list(reversed(case_prefix))
+
         # Edge gaps with no neighbor on one side are dropped for every aggregator (PM canceled
         # cases 6 and 7): a range entirely before the first / after the last sample is empty.
         for agg in ('last', 'twa', 'avg', 'max', 'min', 'sum', 'first', 'count'):
