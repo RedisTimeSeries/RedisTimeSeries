@@ -30,6 +30,17 @@
 #include "LibMR/src/cluster.h"
 #include "LibMR/src/mr.h"
 #include "RedisModulesSDK/redismodule.h"
+
+// MOD-15307: pre-fork drain subevents on RedisModuleEvent_ForkChild. Defined here too so the
+// module builds against an older pinned RedisModulesSDK that predates them (redis core sends
+// these values: 2, 3). On a redis core that doesn't fire _PRE, the drain just never triggers
+// (old, unfixed behavior) but the module still loads normally.
+#ifndef REDISMODULE_SUBEVENT_FORK_CHILD_PRE
+#define REDISMODULE_SUBEVENT_FORK_CHILD_PRE 2
+#endif
+#ifndef REDISMODULE_SUBEVENT_FORK_CHILD_CANCELLED
+#define REDISMODULE_SUBEVENT_FORK_CHILD_CANCELLED 3
+#endif
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
@@ -1996,6 +2007,42 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
     }
 }
 
+// MOD-15307: coordinate LibMR's background threads with redis core's fork().
+// On FORK_CHILD_PRE (fired on the main thread just before fork()) drain/quiesce the LibMR
+// worker pool and event-loop thread to a safe, lock-free point so the child does not inherit
+// a libc lock held by a LibMR thread (ghost-lock). Resume on FORK_CHILD_BORN (fork succeeded)
+// or FORK_CHILD_CANCELLED (fork did not happen). Removes the migration-time stalls behind
+// MOD-14239/14289 and MOD-14615.
+void ForkChildCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    REDISMODULE_NOT_USED(eid);
+    REDISMODULE_NOT_USED(data);
+
+    if (!LibMR_IsInitialized()) {
+        return;
+    }
+
+    // MOD-15307: the pre-fork drain matters only for the multi-shard (LibMR cluster) path
+    // exercised during ASM slot migration. In a non-clustered server the LibMR event-loop
+    // thread is idle, so draining it around every fork (RDB / AOF rewrite / replica sync) is
+    // unnecessary -- and disturbing that fork path can do more harm than good. Restrict the
+    // drain to cluster mode, leaving standalone forks exactly as upstream.
+    if ((RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER) == 0) {
+        return;
+    }
+
+    switch (subevent) {
+        case REDISMODULE_SUBEVENT_FORK_CHILD_PRE:
+            MR_DrainForFork();
+            break;
+        case REDISMODULE_SUBEVENT_FORK_CHILD_BORN:
+        case REDISMODULE_SUBEVENT_FORK_CHILD_CANCELLED:
+            MR_ResumeAfterFork();
+            break;
+        default:
+            break;
+    }
+}
+
 void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
     if (eid.id != REDISMODULE_EVENT_CLUSTER_SLOT_MIGRATION) {
         RedisModule_Log(
@@ -2381,6 +2428,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
+        // MOD-15307: drain LibMR threads before fork() (FORK_CHILD_PRE) to avoid ghost-locking
+        // the child; resume on BORN/CANCELLED. On a redis core that doesn't fire _PRE this is a
+        // no-op (the subevent never arrives) and the module behaves as before.
+        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ForkChild, ForkChildCallback);
     }
 
     Initialize_RdbNotifications(ctx);
