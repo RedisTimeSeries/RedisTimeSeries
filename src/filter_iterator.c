@@ -886,12 +886,12 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
 // EMPTY range: fill empty buckets from query start to the first raw sample. Returns 0 or -1 on
 // error. Edge gaps with no older neighbor are dropped inside fillEmptyBuckets.
 static int agg_iter_apply_empty_prefix(AggregationIterator *self,
-                                           EnrichedChunk *enrichedChunk,
-                                           uint64_t aggregationTimeDelta,
-                                           bool is_reversed,
-                                           bool multiAgg,
-                                           size_t *agg_n_samples,
-                                           int64_t *si) {
+                                       EnrichedChunk *enrichedChunk,
+                                       uint64_t aggregationTimeDelta,
+                                       bool is_reversed,
+                                       bool multiAgg,
+                                       size_t *agg_n_samples,
+                                       int64_t *si) {
     if (!self->empty || self->handled_empty_prefix) {
         return 0;
     }
@@ -1494,12 +1494,12 @@ EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter) {
     }
 
     if (agg_iter_apply_empty_prefix(self,
-                                        enrichedChunk,
-                                        aggregationTimeDelta,
-                                        is_reversed,
-                                        multiAgg,
-                                        &agg_n_samples,
-                                        &si) != 0) {
+                                    enrichedChunk,
+                                    aggregationTimeDelta,
+                                    is_reversed,
+                                    multiAgg,
+                                    &agg_n_samples,
+                                    &si) != 0) {
         return NULL;
     }
     self->hasUnFinalizedContext = true;
