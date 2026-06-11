@@ -121,17 +121,26 @@ def _cmp(r, keys, lo='-', hi='+', rev=False, **kw):
 _counter = [0]
 
 
-def _mk(r, point_lists, dp=None):
-    """Create N keys under one shared hash tag; feed each its (ts,val) points."""
+def _mk(r, point_lists, dp=None, chunk_size=None, enc=None):
+    """Create N keys under one shared hash tag; feed each its (ts,val) points.
+
+    chunk_size / enc let a test force many chunks per key (CHUNK_SIZE 48 with
+    UNCOMPRESSED holds 3 samples/chunk), exercising the cross-chunk GetNext path.
+    Both may be a single value (applied to every key) or a per-key list.
+    """
     _counter[0] += 1
     tag = f"rxc{_counter[0]}"
     keys = []
     for i, pts in enumerate(point_lists):
         k = f"{{{tag}}}:{i}"
+        args = ['TS.CREATE', k]
+        if enc is not None:
+            args += ['ENCODING', enc[i] if isinstance(enc, list) else enc]
+        if chunk_size is not None:
+            args += ['CHUNK_SIZE', chunk_size[i] if isinstance(chunk_size, list) else chunk_size]
         if dp:
-            r.execute_command('TS.CREATE', k, 'DUPLICATE_POLICY', dp)
-        else:
-            r.execute_command('TS.CREATE', k)
+            args += ['DUPLICATE_POLICY', dp]
+        r.execute_command(*args)
         for ts, v in pts:
             r.execute_command('TS.ADD', k, ts, v)
         keys.append(k)
@@ -233,6 +242,107 @@ def test_compare_duplicate_and_many_keys():
         _cmp(r, k)
         _cmp(r, k, rev=True)
         _cmp(r, k, aggs=['sum'], bucket=3)
+
+
+# ---------------------------------------------------------------------------
+# multiple chunks per key
+#
+# ReplySeriesRangeX holds only one "front" sample per key and relies on
+# SeriesSampleIterator_GetNext to pull the next chunk transparently when the
+# current one is drained. CHUNK_SIZE 48 + UNCOMPRESSED packs only 3 samples per
+# chunk, so a handful of samples already spans several chunks. These check that
+# the k-way merge stays correct across chunk boundaries (both encodings).
+# ---------------------------------------------------------------------------
+
+def test_compare_multi_chunk_uncompressed():
+    with _conn() as r:
+        # 30 samples/key @ 3 samples/chunk => ~10 chunks each, ragged overlap
+        k = _mk(r, [[(t, t) for t in range(0, 30)],
+                    [(t, t * 2) for t in range(5, 35)],
+                    [(t, -t) for t in [0, 7, 14, 21, 28]]],
+                chunk_size=48, enc='UNCOMPRESSED')
+        _cmp(r, k); _cmp(r, k, rev=True)
+        _cmp(r, k, aggs=['sum', 'min', 'max'], bucket=4)
+        _cmp(r, k, aggs=['avg'], bucket=4, rev=True)
+        _cmp(r, k, count=7)
+
+
+def test_compare_multi_chunk_compressed():
+    with _conn() as r:
+        k = _mk(r, [[(t, (t * 13) % 40 - 5) for t in range(0, 60)],
+                    [(t, (t * 7) % 30) for t in range(10, 70)]],
+                chunk_size=64, enc='COMPRESSED')
+        _cmp(r, k); _cmp(r, k, rev=True)
+        _cmp(r, k, aggs=['sum'], bucket=5)
+        _cmp(r, k, aggs=['last'], bucket=5, empty=True)
+
+
+def test_compare_multi_chunk_boundary_alignment():
+    with _conn() as r:
+        # Chunk boundaries fall at different absolute timestamps per key (offset
+        # starts + 3 samples/chunk), so the merge crosses a boundary in one key
+        # while mid-chunk in another -> stresses the front/NaN pivot.
+        k = _mk(r, [[(t, 100 + t) for t in range(0, 18)],
+                    [(t, 200 + t) for t in range(1, 19)],
+                    [(t, 300 + t) for t in range(2, 20)]],
+                chunk_size=48, enc='UNCOMPRESSED')
+        _cmp(r, k); _cmp(r, k, rev=True)
+        for c in [1, 2, 3, 4, 5, 9, 100]:
+            _cmp(r, k, count=c)
+            _cmp(r, k, count=c, rev=True)
+
+
+def test_compare_multi_chunk_mixed_encoding():
+    with _conn() as r:
+        # one compressed key + one uncompressed key, both spanning many chunks
+        k = _mk(r, [[(t, t) for t in range(0, 40)],
+                    [(t, t * 3) for t in range(0, 40)]],
+                chunk_size=[48, 64], enc=['UNCOMPRESSED', 'COMPRESSED'])
+        _cmp(r, k); _cmp(r, k, rev=True)
+        _cmp(r, k, aggs=['min', 'max'], bucket=6)
+
+
+def test_compare_single_key_multi_chunk():
+    with _conn() as r:
+        # A single key spanning many chunks must still equal plain TS.RANGE.
+        for enc, cs in [('UNCOMPRESSED', 48), ('COMPRESSED', 64)]:
+            k = _mk(r, [[(t, (t * t) % 97 - 30) for t in range(0, 80)]],
+                    chunk_size=cs, enc=enc)
+            _cmp(r, k); _cmp(r, k, rev=True)
+            # windows that start/end mid-chunk
+            for lo, hi in [('-', '+'), (0, 9), (7, 41), (50, 79), (38, 38)]:
+                _cmp(r, k, lo=lo, hi=hi)
+                _cmp(r, k, lo=lo, hi=hi, rev=True)
+            for agg in ['first', 'last', 'min', 'max', 'sum', 'avg', 'count']:
+                _cmp(r, k, aggs=[agg], bucket=7)
+                _cmp(r, k, aggs=[agg], bucket=7, rev=True)
+                _cmp(r, k, aggs=[agg], bucket=7, empty=True)
+            for c in [1, 5, 13, 1000]:
+                _cmp(r, k, count=c)
+                _cmp(r, k, count=c, rev=True)
+
+
+def test_compare_multi_chunk_per_key_aggregators():
+    with _conn() as r:
+        # 6 keys, ragged + tiny chunks (3 samples/chunk) => many chunks each,
+        # with a DISTINCT aggregator per key so each column is reduced
+        # differently while the merge crosses chunk boundaries.
+        pts = []
+        for i in range(6):
+            pts.append([(t, (t * 7 + i * 5) % 50 - 10) for t in range(i, 45, (i % 2) + 1)])
+        k = _mk(r, pts,
+                chunk_size=[48, 48, 64, 64, 48, 64],
+                enc=['UNCOMPRESSED', 'COMPRESSED', 'UNCOMPRESSED',
+                     'COMPRESSED', 'UNCOMPRESSED', 'COMPRESSED'])
+        aggs = ['first', 'max', 'min', 'last', 'sum', 'avg']
+        for bucket in [1, 4, 7, 10]:
+            _cmp(r, k, aggs=aggs, bucket=bucket)
+            _cmp(r, k, aggs=aggs, bucket=bucket, rev=True)
+            _cmp(r, k, aggs=aggs, bucket=bucket, empty=True)
+            _cmp(r, k, aggs=aggs, bucket=bucket, empty=True, rev=True)
+        # combined with COUNT
+        _cmp(r, k, aggs=aggs, bucket=5, count=6)
+        _cmp(r, k, aggs=aggs, bucket=5, count=6, rev=True)
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +476,14 @@ def test_compare_fuzz():
                     else:
                         row.append((ts, rnd.randint(-40, 40)))
                 pts.append(row)
-            k = _mk(r, pts)
+            # Half the time force tiny chunks (many chunks/key) with a random
+            # per-key encoding, to fuzz the cross-chunk GetNext merge path.
+            if rnd.random() < 0.5:
+                cs = [rnd.choice([48, 56, 64, 128]) for _ in range(nkeys)]
+                enc = [rnd.choice(['COMPRESSED', 'UNCOMPRESSED']) for _ in range(nkeys)]
+                k = _mk(r, pts, chunk_size=cs, enc=enc)
+            else:
+                k = _mk(r, pts)
 
             rev = rnd.random() < 0.5
             kw = {}
