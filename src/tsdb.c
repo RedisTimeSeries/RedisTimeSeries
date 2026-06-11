@@ -1416,7 +1416,9 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             args->aggregationArgs.bucketTS,
                                                             series,
                                                             args->startTimestamp,
-                                                            args->endTimestamp);
+                                                            args->endTimestamp,
+                                                            args->filterByValueArgs,
+                                                            args->filterByTSArgs);
     }
 
     return chain;

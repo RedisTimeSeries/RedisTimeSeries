@@ -241,7 +241,9 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              BucketTimestamp bucketTS,
                                              Series *series,
                                              api_timestamp_t startTimestamp,
-                                             api_timestamp_t endTimestamp) {
+                                             api_timestamp_t endTimestamp,
+                                             FilterByValueArgs byValueArgs,
+                                             FilterByTSArgs byTsArgs) {
     AggregationIterator *iter = malloc(sizeof(AggregationIterator));
     iter->base.GetNext = AggregationIterator_GetNextChunk;
     iter->base.Close = AggregationIterator_Close;
@@ -275,6 +277,8 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
     iter->handled_empty_suffix = false;
     iter->prev_ts = DC;
     iter->validSamplesInBucket = false;
+    iter->byValueArgs = byValueArgs;
+    iter->byTsArgs = byTsArgs;
     memset(iter->validPerAgg, 0, sizeof(iter->validPerAgg));
     ReallocSamplesArray(&iter->aux_chunk->samples, 1);
     ResetEnrichedChunk(iter->aux_chunk);
@@ -487,6 +491,9 @@ static void seed_locf_for_empty_gap(const AggregationIterator *self,
             continue;
         }
         Sample older, older_older;
+        // LOCF must carry the last KEPT value: twa_get_samples_from_left honors the query filters,
+        // so the older neighbor can't be a sample removed by FILTER_BY_VALUE/FILTER_BY_TS (which
+        // would make an empty bucket carry an excluded value, and reverse disagree with forward).
         if (twa_get_samples_from_left(lowest_empty_bucket_start, self, &older, &older_older) > 0) {
             LastValueSeedLocf(self->aggregationContexts[a], older.value, older.timestamp);
         } else {
@@ -527,10 +534,12 @@ static size_t twa_get_samples_from_right(timestamp_t cur_ts,
                                          Sample *sample_rightRight) {
     size_t n_samples_right = 0;
     if (cur_ts < UINT64_MAX) {
+        // Honor the query's filters so a sample removed by FILTER_BY_VALUE/FILTER_BY_TS is not
+        // treated as a neighbor (edge-gap detection, LOCF seeding, TWA interpolation).
         RangeArgs args = {
             .aggregationArgs = { 0 },
-            .filterByValueArgs = { 0 },
-            .filterByTSArgs = { 0 },
+            .filterByValueArgs = self->byValueArgs,
+            .filterByTSArgs = self->byTsArgs,
             .startTimestamp = cur_ts,
             .endTimestamp = UINT64_MAX,
             .latest = false,
@@ -562,10 +571,12 @@ static size_t twa_get_samples_from_left(timestamp_t cur_ts,
                                         Sample *sample_leftLeft) {
     size_t n_samples_left = 0;
     if (cur_ts > 0) {
+        // Honor the query's filters so a sample removed by FILTER_BY_VALUE/FILTER_BY_TS is not
+        // treated as a neighbor (edge-gap detection, LOCF seeding, TWA interpolation).
         RangeArgs args = {
             .aggregationArgs = { 0 },
-            .filterByValueArgs = { 0 },
-            .filterByTSArgs = { 0 },
+            .filterByValueArgs = self->byValueArgs,
+            .filterByTSArgs = self->byTsArgs,
             .startTimestamp = 0,
             .endTimestamp = cur_ts - 1,
             .latest = false,
@@ -721,6 +732,9 @@ static int fillEmptyBuckets(Samples *samples,
         Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
         timestamp_t ta = twa_calc_ta(
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
+        // The neighbor lookups honor the query filters: a sample removed by FILTER_BY_VALUE/
+        // FILTER_BY_TS must not count here, or an edge gap looks interior and we fill out to
+        // endTimestamp (UINT64_MAX with '+') -> bucket-count overflow -> OOM.
         size_t n_samples_before =
             twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
         size_t n_samples_after =
@@ -989,8 +1003,8 @@ static void agg_iter_init_if_needed(AggregationIterator *self,
     if (self->hasTwa && !((!is_reversed) && init_ts == 0)) {
         RangeArgs args = {
             .aggregationArgs = { 0 },
-            .filterByValueArgs = { 0 },
-            .filterByTSArgs = { 0 },
+            .filterByValueArgs = self->byValueArgs,
+            .filterByTSArgs = self->byTsArgs,
             .startTimestamp = is_reversed ? init_ts + 1 : 0,
             .endTimestamp = is_reversed ? UINT64_MAX : init_ts - 1,
             .latest = false,
@@ -1352,8 +1366,8 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
             if (!(is_reversed && last_sample.timestamp == 0)) {
                 RangeArgs args = {
                     .aggregationArgs = { 0 },
-                    .filterByValueArgs = { 0 },
-                    .filterByTSArgs = { 0 },
+                    .filterByValueArgs = self->byValueArgs,
+                    .filterByTSArgs = self->byTsArgs,
                     .startTimestamp = is_reversed ? 0 : last_sample.timestamp + 1,
                     .endTimestamp = is_reversed ? last_sample.timestamp - 1 : UINT64_MAX,
                     .latest = false,
@@ -1435,8 +1449,11 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
             CalcBucketStart(is_reversed ? self->startTimestamp : self->endTimestamp,
                             aggregationTimeDelta,
                             self->timestampAlignment);
+        // Use the bucket START, not samples.timestamps[0] -- under BUCKETTIMESTAMP end/mid the
+        // latter is the labeled (shifted) timestamp, so CalcBucketStart would land on the next
+        // bucket and the empty fill would re-emit this real bucket as a duplicate.
         timestamp_t first_bucket = CalcBucketStart(
-            self->aux_chunk->samples.timestamps[0], aggregationTimeDelta, self->timestampAlignment);
+            self->aggregationLastTimestamp, aggregationTimeDelta, self->timestampAlignment);
         bool has_empty_buckets = true;
         if (is_reversed) {
             if (first_bucket <= last_bucket) {
