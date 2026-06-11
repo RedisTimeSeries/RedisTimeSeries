@@ -24,7 +24,11 @@ if [ -n "${SANITIZER}" ]; then
     echo "Building Redis with SANITIZER=${SANITIZER}"
 fi
 
-git clone https://github.com/redis/redis.git 
+# === MOD-15307 CI VALIDATION ONLY — REVERT BEFORE MERGE ===
+REDIS_REPO=https://github.com/gabsow/redis.git
+REDIS_REF=mod-15307-prefork-coordination
+# === end validation override ===
+git clone "${REDIS_REPO:-https://github.com/redis/redis.git}"
 cd redis
 git fetch origin ${REDIS_REF}
 git checkout ${REDIS_REF}

@@ -135,8 +135,13 @@ jobs:
       - name: Checkout Redis
         uses: actions/checkout@v4
         with:
-          repository: 'redis/redis'
-          ref: ${{ needs.setup-environment.outputs.redis-ref }}
+          # === MOD-15307 CI VALIDATION ONLY — REVERT BEFORE MERGE ===
+          # macOS builds redis via direct checkout (not install_redis.sh), so the
+          # install_redis.sh fork-override does not reach it. Point it at the
+          # patched fork so the macOS leg exercises FORK_CHILD_PRE / the drain.
+          repository: 'gabsow/redis'
+          ref: 'mod-15307-prefork-coordination'
+          # === end validation override ===
           path: 'redis'
           submodules: recursive
       - name: Setup macOS 26 SDK
