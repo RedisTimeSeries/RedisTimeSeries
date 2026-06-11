@@ -663,6 +663,238 @@
         "since": "1.0.0",
         "group": "timeseries"
     },
+    "TS.RANGEX": {
+        "summary": "Query a range across multiple time series in forward direction, returning the results pivoted by timestamp (one value column per key)",
+        "complexity": "O(numkeys*(n/m+k)) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",
+        "arguments": [
+            {
+                "name": "numkeys",
+                "type": "integer"
+            },
+            {
+                "name": "key",
+                "type": "key",
+                "multiple": true
+            },
+            {
+                "name": "fromTimestamp",
+                "type": "string"
+            },
+            {
+                "name": "toTimestamp",
+                "type": "string"
+            },
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
+            {
+                "token": "FILTER_BY_TS",
+                "name": "Timestamp",
+                "type": "integer",
+                "multiple": true,
+                "optional": true
+            },
+            {
+                "type": "block",
+                "name": "fbv",
+                "optional": true,
+                "arguments": [
+                    {
+                        "name": "FILTER_BY_VALUE",
+                        "type": "pure-token",
+                        "token": "FILTER_BY_VALUE"
+                    },
+                    {
+                        "type": "double",
+                        "name": "min"
+                    },
+                    {
+                        "type": "double",
+                        "name": "max"
+                    }
+                ]
+            },
+            {
+                "token": "COUNT",
+                "name": "count",
+                "type": "integer",
+                "optional": true
+            },
+            {
+                "name": "aggregation",
+                "type": "block",
+                "optional": true,
+                "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
+                    {
+                        "type": "string",
+                        "token": "AGGREGATION",
+                        "name": "aggregators"
+                    },
+                    {
+                        "name": "bucketDuration",
+                        "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "pure-token",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true,
+                        "since": "1.8.0"
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true,
+                        "since": "1.8.0"
+                    }
+                ]
+            }
+        ],
+        "since": "8.10.0",
+        "group": "timeseries"
+    },
+    "TS.REVRANGEX": {
+        "summary": "Query a range across multiple time series in reverse direction, returning the results pivoted by timestamp (one value column per key)",
+        "complexity": "O(numkeys*(n/m+k)) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",
+        "arguments": [
+            {
+                "name": "numkeys",
+                "type": "integer"
+            },
+            {
+                "name": "key",
+                "type": "key",
+                "multiple": true
+            },
+            {
+                "name": "fromTimestamp",
+                "type": "string"
+            },
+            {
+                "name": "toTimestamp",
+                "type": "string"
+            },
+            {
+                "name": "LATEST",
+                "type": "string",
+                "optional": true,
+                "since": "1.8.0"
+            },
+            {
+                "token": "FILTER_BY_TS",
+                "name": "Timestamp",
+                "type": "integer",
+                "multiple": true,
+                "optional": true
+            },
+            {
+                "type": "block",
+                "name": "fbv",
+                "optional": true,
+                "arguments": [
+                    {
+                        "name": "FILTER_BY_VALUE",
+                        "type": "pure-token",
+                        "token": "FILTER_BY_VALUE"
+                    },
+                    {
+                        "type": "double",
+                        "name": "min"
+                    },
+                    {
+                        "type": "double",
+                        "name": "max"
+                    }
+                ]
+            },
+            {
+                "token": "COUNT",
+                "name": "count",
+                "type": "integer",
+                "optional": true
+            },
+            {
+                "name": "aggregation",
+                "type": "block",
+                "optional": true,
+                "arguments": [
+                    {
+                        "token": "ALIGN",
+                        "name": "value",
+                        "type": "integer",
+                        "optional": true
+                    },
+                    {
+                        "type": "string",
+                        "token": "AGGREGATION",
+                        "name": "aggregators"
+                    },
+                    {
+                        "name": "bucketDuration",
+                        "type": "integer"
+                    },
+                    {
+                        "name": "buckettimestamp",
+                        "type": "oneof",
+                        "token": "BUCKETTIMESTAMP",
+                        "optional": true,
+                        "arguments": [
+                            {
+                                "name": "-",
+                                "type": "pure-token",
+                                "token": "-"
+                            },
+                            {
+                                "name": "start",
+                                "type": "pure-token",
+                                "token": "start"
+                            },
+                            {
+                                "name": "+",
+                                "type": "pure-token",
+                                "token": "+"
+                            },
+                            {
+                                "name": "end",
+                                "type": "pure-token",
+                                "token": "end"
+                            },
+                            {
+                                "name": "~",
+                                "type": "pure-token",
+                                "token": "~"
+                            },
+                            {
+                                "name": "mid",
+                                "type": "pure-token",
+                                "token": "mid"
+                            }
+                        ],
+                        "since": "1.8.0"
+                    },
+                    {
+                        "name": "empty",
+                        "type": "pure-token",
+                        "token": "EMPTY",
+                        "optional": true,
+                        "since": "1.8.0"
+                    }
+                ]
+            }
+        ],
+        "since": "8.10.0",
+        "group": "timeseries"
+    },
     "TS.REVRANGE": {
         "summary": "Query a range in reverse direction",
         "complexity": "O(n/m+k) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",

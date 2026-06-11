@@ -255,6 +255,101 @@ def test_rangex_filter_by_value_matches():
 
 
 # ---------------------------------------------------------------------------
+# equivalence with TS.RANGE on the "empty terminal bucket" edge case
+#
+# These pin down the one place the rangex path differs structurally from
+# TS.RANGE: rangex wraps the aggregation chain in a SeriesSampleIterator
+# (chunk -> per-sample adapter) whose GetNext treats a non-NULL chunk with
+# zero samples as end-of-stream (sample_iterator.c). TS.RANGE instead reads
+# chunks directly and just skips an empty chunk.
+#
+# The aggregation iterator (filter_iterator.c) only ever returns a non-NULL
+# zero-sample chunk from agg_iter_finalize (terminal: input already
+# exhausted) — the mid-stream emitter agg_iter_try_emit_partial returns NULL
+# when it has zero samples. So the early end-of-stream can only coincide with
+# the true end, and rangex must equal TS.RANGE. A regression that made the
+# aggregation iterator emit an empty chunk mid-stream would truncate rangex
+# early while TS.RANGE kept going — these tests would catch exactly that.
+#
+# `count` on an all-NaN bucket is 0, so without EMPTY that bucket is dropped,
+# which is what produces the terminal zero-sample chunk we want to exercise.
+# ---------------------------------------------------------------------------
+
+def test_rangex_trailing_all_nan_bucket_matches_range():
+    """Last bucket in the window is all-NaN (dropped without EMPTY).
+
+    This is the agg_iter_finalize zero-sample terminal chunk. rangex (single
+    key) must emit the earlier valid buckets and stop exactly where TS.RANGE
+    stops — no extra trailing row, no early truncation of the valid buckets.
+    """
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        key = '{rx_tnan}:k'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.MADD',
+                          key, 0, 1, key, 5, 1,        # bucket [0,10):  count 2
+                          key, 10, 1, key, 15, 1,      # bucket [10,20): count 2
+                          key, 20, 'nan', key, 25, 'nan')  # bucket [20,30): count 0 -> dropped
+
+        rng = r.execute_command('TS.RANGE', key, 0, 30, 'AGGREGATION', 'count', 10)
+        # Sanity: the trailing all-NaN bucket must be absent in TS.RANGE.
+        assert [row[0] for row in rng] == [0, 10], f'unexpected TS.RANGE: {rng!r}'
+
+        res = r.execute_command('TS.RANGEX', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
+        _assert_pivot(res, _pivot_ref(r, [key], 0, 30, aggs=['count'], bucket=10))
+
+
+def test_rangex_interior_all_nan_bucket_no_early_truncation():
+    """All-NaN bucket sits BETWEEN two valid buckets (dropped without EMPTY).
+
+    The valid bucket AFTER the gap must still appear: proves the rangex
+    sample-iterator does not hit a premature end-of-stream on the dropped
+    interior bucket (it never sees a mid-stream zero-sample chunk).
+    """
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        key = '{rx_inan}:k'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.MADD',
+                          key, 0, 1, key, 5, 1,            # [0,10):  count 2
+                          key, 10, 'nan', key, 15, 'nan',  # [10,20): count 0 -> dropped
+                          key, 20, 1, key, 25, 1)          # [20,30): count 2 (AFTER the gap)
+
+        rng = r.execute_command('TS.RANGE', key, 0, 30, 'AGGREGATION', 'count', 10)
+        # The dropped interior bucket (10) is gone; the bucket after it (20) survives.
+        assert [row[0] for row in rng] == [0, 20], f'unexpected TS.RANGE: {rng!r}'
+
+        res = r.execute_command('TS.RANGEX', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
+        _assert_pivot(res, _pivot_ref(r, [key], 0, 30, aggs=['count'], bucket=10))
+
+
+def test_revrangex_trailing_all_nan_bucket_matches_revrange():
+    """Reverse direction of the terminal zero-sample chunk path.
+
+    In reverse the "last" bucket consumed is the lowest-timestamp one; making
+    it all-NaN exercises agg_iter_finalize on the reverse chain. rangex must
+    match TS.REVRANGE.
+    """
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        key = '{rx_rtnan}:k'
+        r.execute_command('TS.CREATE', key)
+        r.execute_command('TS.MADD',
+                          key, 0, 'nan', key, 5, 'nan',  # [0,10):  count 0 -> dropped
+                          key, 10, 1, key, 15, 1,        # [10,20): count 2
+                          key, 20, 1, key, 25, 1)        # [20,30): count 2
+
+        rev = r.execute_command('TS.REVRANGE', key, 0, 30, 'AGGREGATION', 'count', 10)
+        assert [row[0] for row in rev] == [20, 10], f'unexpected TS.REVRANGE: {rev!r}'
+
+        res = r.execute_command('TS.REVRANGEX', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
+        _assert_pivot(res, _pivot_ref(r, [key], 0, 30, rev=True, aggs=['count'], bucket=10))
+
+
+# ---------------------------------------------------------------------------
 # errors
 # ---------------------------------------------------------------------------
 
