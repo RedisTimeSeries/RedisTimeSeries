@@ -204,9 +204,10 @@ def test_nrange_empty_matches():
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_ohlcv(r, '{rx_empty}')
-        # range spans an empty bucket [20,30) -> EMPTY emits an all-NaN row
+        # range spans an empty bucket [20,30) -> EMPTY emits an all-NaN row.
+        # NRANGE requires one aggregator per key, so repeat 'last' numkeys times.
         res = r.execute_command('TS.NRANGE', len(keys), *keys, 0, 30,
-                                'AGGREGATION', 'last', 10, 'EMPTY')
+                                'AGGREGATION', ','.join(['last'] * len(keys)), 10, 'EMPTY')
         _assert_pivot(res, _pivot_ref_empty(r, keys, 0, 30, 'last', 10))
 
 
