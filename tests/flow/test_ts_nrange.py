@@ -382,10 +382,19 @@ def test_nrange_errors():
         with pytest.raises(redis.ResponseError):
             r.execute_command('TS.NRANGE', 3, keys[0], '-', '+')
 
-        # aggregator count must equal numkeys
+        # aggregator count must equal numkeys (too few valid aggregators)
         with pytest.raises(redis.ResponseError, match="aggregators"):
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
-                              'AGGREGATION', 'min,max', 10)
+                              'AGGREGATION', 'min', 'max', 10)
+
+        # an undefined aggregator is rejected as an unknown aggregation type, not a count error
+        with pytest.raises(redis.ResponseError, match="[Uu]nknown aggregation"):
+            r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
+                              'AGGREGATION', 'min', 'bogus', 'max', 10)
+        # the old comma-joined form is now an unknown aggregator token
+        with pytest.raises(redis.ResponseError, match="[Uu]nknown aggregation"):
+            r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
+                              'AGGREGATION', 'min,max,avg', 10)
 
         # missing key
         with pytest.raises(redis.ResponseError):

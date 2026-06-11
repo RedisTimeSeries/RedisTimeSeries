@@ -613,26 +613,33 @@ static RedisModuleString **nrange_splice_aggregators(RedisModuleCtx *ctx,
     }
     const int firstAgg = rangeStart + aggRel + 1; // first aggregator token
 
-    // The aggregator tokens are the leading run after AGGREGATION; the numeric bucketDuration that
-    // follows can't parse as an aggregator and ends the run. The run length must equal numKeys,
-    // which rejects too-few/too-many aggregators and an unknown one (it ends the run early).
-    int n = 0;
-    while (firstAgg + n < argc && RMStringLenAggTypeToEnum(argv[firstAgg + n]) >= 0) {
-        n++;
-    }
-    if (n != numKeys) {
-        RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
-        *err = 1;
-        return NULL;
-    }
+    const int n = (int)numKeys;
 
-    // Join the aggregator tokens with commas into one token.
-    RedisModuleString *joined = RedisModule_CreateStringFromString(ctx, argv[firstAgg]);
-    for (int i = 1; i < n; i++) {
+    // Validate and comma-join the n aggregator tokens (one per key) in a single pass; the numeric
+    // bucketDuration follows them. joined starts empty so the error path can free unconditionally.
+    RedisModuleString *joined = RedisModule_CreateString(ctx, "", 0);
+    for (int i = 0; i < n; i++) {
+        if (firstAgg + i >= argc || RMStringLenAggTypeToEnum(argv[firstAgg + i]) < 0) {
+            // A missing/numeric slot means the bucketDuration arrived early (too few aggregators);
+            // any other token is a genuine unknown aggregator.
+            long long bucket;
+            if (firstAgg + i >= argc ||
+                RedisModule_StringToLongLong(argv[firstAgg + i], &bucket) == REDISMODULE_OK)
+                RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
+            else
+                RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+            goto fail;
+        }
         size_t len;
         const char *s = RedisModule_StringPtrLen(argv[firstAgg + i], &len);
-        RedisModule_StringAppendBuffer(ctx, joined, ",", 1);
+        if (i)
+            RedisModule_StringAppendBuffer(ctx, joined, ",", 1);
         RedisModule_StringAppendBuffer(ctx, joined, s, len);
+    }
+    // A valid aggregator where the bucketDuration belongs means more aggregators than keys.
+    if (firstAgg + n < argc && RMStringLenAggTypeToEnum(argv[firstAgg + n]) >= 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
+        goto fail;
     }
 
     // Splice: [..AGGREGATION] joined [bucketDuration..end], dropping the n-1 extra agg tokens.
@@ -644,6 +651,11 @@ static RedisModuleString **nrange_splice_aggregators(RedisModuleCtx *ctx,
     *out_argc = newArgc;
     *out_joined = joined;
     return out;
+
+fail:
+    RedisModule_FreeString(ctx, joined);
+    *err = 1;
+    return NULL;
 }
 
 // TS.NRANGE/TS.NREVRANGE numkeys key [key...] fromTimestamp toTimestamp [options]
