@@ -625,7 +625,8 @@ static RedisModuleString **nrange_splice_aggregators(RedisModuleCtx *ctx,
             long long bucket;
             if (firstAgg + i >= argc ||
                 RedisModule_StringToLongLong(argv[firstAgg + i], &bucket) == REDISMODULE_OK)
-                RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
+                RTS_ReplyGeneralError(ctx,
+                                      "TSDB: the number of aggregators must be equal to numkeys");
             else
                 RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
             goto fail;
