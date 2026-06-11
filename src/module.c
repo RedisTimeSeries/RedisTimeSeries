@@ -1480,10 +1480,10 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 /// TS.BGET fixed argv layout: TS.BGET key timestamp timeout [MIN_COUNT n] [MAX_COUNT n]
 typedef enum BGetArgv
 {
-    BGET_ARGV_COMMAND = 0,    ///< the command name itself
-    BGET_ARGV_KEY = 1,        ///< series key
-    BGET_ARGV_TIMESTAMP = 2,  ///< cursor / '-' / '+'
-    BGET_ARGV_TIMEOUT = 3,    ///< timeout in ms
+    BGET_ARGV_COMMAND = 0,     ///< the command name itself
+    BGET_ARGV_KEY = 1,         ///< series key
+    BGET_ARGV_TIMESTAMP = 2,   ///< cursor / '-' / '+'
+    BGET_ARGV_TIMEOUT = 3,     ///< timeout in ms
     BGET_ARGV_FIRST_OPTION = 4 ///< first MIN_COUNT/MAX_COUNT keyword (options follow in pairs)
 } BGetArgv;
 
