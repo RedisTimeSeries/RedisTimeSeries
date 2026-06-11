@@ -762,6 +762,7 @@ static const RedisModuleCommandInfo TS_BGET_INFO = {
     .complexity = "O(log(n)+k) where n is the number of samples in the series and k is the number "
                   "of returned samples",
     .since = "8.10.0",
+    .tips = "dont_cache",
     .arity = -4,
     .key_specs = (RedisModuleCommandKeySpec *)TS_BGET_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_BGET_ARGS,
@@ -1077,7 +1078,6 @@ static const RedisModuleCommandInfo TS_NREVRANGE_INFO = {
     .complexity = "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples "
                   "per chunk), k = Number of samples that are in the requested range",
     .since = "8.10.0",
-    .tips = "dont_cache",
     .arity = -5,
     .key_specs = (RedisModuleCommandKeySpec *)TS_NREVRANGE_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_NREVRANGE_ARGS,
@@ -1187,7 +1187,6 @@ static const RedisModuleCommandInfo TS_NRANGE_INFO = {
     .complexity = "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples "
                   "per chunk), k = Number of samples that are in the requested range",
     .since = "8.10.0",
-    .tips = "dont_cache",
     .arity = -5,
     .key_specs = (RedisModuleCommandKeySpec *)TS_NRANGE_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_NRANGE_ARGS,
