@@ -1,4 +1,5 @@
 import math
+import os
 import random
 from contextlib import contextmanager
 import pytest
@@ -462,19 +463,23 @@ def test_compare_combined_options():
 # ---------------------------------------------------------------------------
 
 def test_compare_fuzz():
-    rnd = random.Random(20260602)
+    # Randomized stress: each iteration builds a random multi-key dataset + random
+    # option set and asserts TS.RANGEX/REVRANGEX == the per-key TS.RANGE/REVRANGE
+    # results merged by timestamp. Tunable via env: RANGEX_FUZZ_ITERS (default 200),
+    # RANGEX_FUZZ_SEED (default 20260602).
+    iters = int(os.getenv('RANGEX_FUZZ_ITERS', '200'))
+    rnd = random.Random(int(os.getenv('RANGEX_FUZZ_SEED', '20260602')))
     with _conn() as r:
-        for _ in range(200):
-            nkeys = rnd.randint(1, 5)
+        for _ in range(iters):
+            nkeys = rnd.randint(1, 8)
+            # mostly small/dense data (fast); occasionally a larger, sparser pool
+            pool_hi, max_samples = rnd.choice([(45, 18), (45, 18), (45, 18), (500, 80)])
             pts = []
             for _ki in range(nkeys):
-                tss = sorted(rnd.sample(range(0, 45), rnd.randint(0, 18)))
+                ns = rnd.randint(0, min(max_samples, pool_hi))
                 row = []
-                for ts in tss:
-                    if rnd.random() < 0.08:
-                        row.append((ts, 'nan'))
-                    else:
-                        row.append((ts, rnd.randint(-40, 40)))
+                for ts in sorted(rnd.sample(range(0, pool_hi), ns)):
+                    row.append((ts, 'nan') if rnd.random() < 0.08 else (ts, rnd.randint(-1000, 1000)))
                 pts.append(row)
             # Half the time force tiny chunks (many chunks/key) with a random
             # per-key encoding, to fuzz the cross-chunk GetNext merge path.
@@ -488,29 +493,31 @@ def test_compare_fuzz():
             rev = rnd.random() < 0.5
             kw = {}
             # window
-            lo = '-' if rnd.random() < 0.5 else rnd.randint(0, 44)
-            hi = '+' if rnd.random() < 0.5 else (lo if isinstance(lo, int) else 0) + rnd.randint(0, 44)
+            lo = '-' if rnd.random() < 0.5 else rnd.randint(0, pool_hi)
+            hi = '+' if rnd.random() < 0.5 else (lo if isinstance(lo, int) else 0) + rnd.randint(0, pool_hi)
             kw['lo'], kw['hi'] = lo, hi
             # aggregation (per-key or broadcast)
-            if rnd.random() < 0.6:
-                if rnd.random() < 0.5:
-                    kw['aggs'] = [rnd.choice(AGGS)]
-                else:
-                    kw['aggs'] = [rnd.choice(AGGS) for _ in range(nkeys)]
-                kw['bucket'] = rnd.randint(1, 9)
+            aggs = None
+            if rnd.random() < 0.7:
+                aggs = [rnd.choice(AGGS)] if rnd.random() < 0.5 else [rnd.choice(AGGS) for _ in range(nkeys)]
+                kw['aggs'] = aggs
+                kw['bucket'] = rnd.randint(1, 12)
                 if rnd.random() < 0.4:
                     kw['empty'] = True
                 if rnd.random() < 0.3:
                     kw['bts'] = rnd.choice(['start', 'mid', 'end'])
                 if rnd.random() < 0.3:
-                    kw['align'] = rnd.randint(0, 10)
-            else:
-                # value filter only outside aggregation to keep combos simple
-                if rnd.random() < 0.4:
-                    a = rnd.randint(-40, 20)
-                    kw['fbv'] = (a, a + rnd.randint(0, 40))
+                    kw['align'] = rnd.randint(0, 12)
+            # value filter — combined with aggregation too
+            if rnd.random() < 0.35:
+                a = rnd.randint(-1000, 500)
+                kw['fbv'] = (a, a + rnd.randint(0, 1500))
+            # Skip a PRE-EXISTING engine crash (not rangex): TS.RANGE itself aborts on
+            # AGGREGATION twa + FILTER_BY_VALUE + EMPTY (fillEmptyBuckets/ReallocSamplesArray).
+            if kw.get('empty') and 'fbv' in kw and aggs and 'twa' in aggs:
+                kw['empty'] = False
             # count
             if rnd.random() < 0.4:
-                kw['count'] = rnd.randint(1, 12)
+                kw['count'] = rnd.randint(1, 20)
 
             _cmp(r, k, rev=rev, **kw)
