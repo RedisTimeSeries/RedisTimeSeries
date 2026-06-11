@@ -176,6 +176,64 @@ def test_bget_min_below_max_returns_oldest_max_count():
 
 
 # ---------------------------------------------------------------------------
+# 3d. Blocking path with MIN_COUNT < MAX_COUNT: the wake-up gate uses min_count,
+#     but the committed reply is still capped to the oldest max_count. A single
+#     TS.MADD lands all samples before the wake-up callback runs, so qualifying
+#     jumps past max_count in one shot — exercising gate vs cap in the async
+#     (reply-callback) path, not just the synchronous fast path (test 3b).
+# ---------------------------------------------------------------------------
+
+def test_bget_blocking_min_gate_max_cap():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    # cursor = 101 (literal), so the existing sample at 100 doesn't qualify and
+    # BGET blocks (0 < MIN_COUNT 2). MAX_COUNT 3 caps whatever we eventually return.
+    t, slot = _start_bget(env, "ts", 101, 10_000, min_count=2, max_count=3)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(), message="BGET should block until min_count qualifies")
+
+    # One MADD adds 5 new qualifying samples atomically; the wake-up sees 5 >= 2
+    # (gate satisfied) and must return the OLDEST 3 (cap), not all 5.
+    assert r.execute_command(
+        "TS.MADD",
+        "ts", 200, "2.0",
+        "ts", 300, "3.0",
+        "ts", 400, "4.0",
+        "ts", 500, "5.0",
+        "ts", 600, "6.0",
+    ) == [200, 300, 400, 500, 600]
+
+    t.join(timeout=2.0)
+    env.assertFalse(t.is_alive(), message="BGET should have unblocked once min_count qualified")
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [[200, b"2"], [300, b"3"], [400, b"4"]])
+
+
+# ---------------------------------------------------------------------------
+# 3e. Keyword matching is case-insensitive (house-style RMUtil_ArgIndex).
+# ---------------------------------------------------------------------------
+
+def test_bget_count_keywords_are_case_insensitive():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [
+        (100, "1.0"), (200, "2.0"), (300, "3.0"), (400, "4.0"),
+    ])
+
+    # cursor=0 -> 4 qualify; lower/mixed-case keywords must behave like uppercase.
+    res = r.execute_command("TS.BGET", "ts", 0, 1000, "min_count", 1, "Max_Count", 2)
+    env.assertEqual(res, [[100, b"1"], [200, b"2"]])
+
+
+# ---------------------------------------------------------------------------
 # 3c. Defaults: no MIN_COUNT/MAX_COUNT -> min_count=1, max_count=unlimited.
 # ---------------------------------------------------------------------------
 
@@ -296,10 +354,12 @@ def test_bget_plus_on_empty_series_blocks_until_first_add():
 
 
 # ---------------------------------------------------------------------------
-# 8. '+' sentinel: snapshot lastTs at command time, only NEW samples qualify.
+# 8. '+' sentinel: resolves to the latest sample's timestamp (aligned with
+#    TS.RANGE). Because the cursor is inclusive, the latest EXISTING sample
+#    qualifies, so the first call returns it immediately without blocking.
 # ---------------------------------------------------------------------------
 
-def test_bget_plus_only_returns_samples_added_after_command():
+def test_bget_plus_returns_latest_existing_sample():
     env = Env()
     if env.is_cluster():
         env.skip()
@@ -307,37 +367,33 @@ def test_bget_plus_only_returns_samples_added_after_command():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
 
-    # '+' resolves now to lastTs + 1 = 301. Existing 100/200/300 must NOT
-    # qualify; only a future ADD with ts >= 301 should wake us.
-    t, slot = _start_bget(env, "ts", "+", 10_000)
-    time.sleep(0.3)
-    env.assertTrue(t.is_alive(),
-                   message="BGET '+' should ignore pre-existing samples")
-
-    # Producer adds a strictly newer sample -> wake-up.
-    assert r.execute_command("TS.ADD", "ts", 400, "4.0") == 400
-
-    t.join(timeout=2.0)
-    env.assertFalse(t.is_alive())
-    env.assertEqual(slot["error"], None)
-    env.assertEqual(slot["result"], [[400, b"4"]])
-
-
-# ---------------------------------------------------------------------------
-# 9. '+' sentinel without producer: existing samples must NEVER be returned;
-#    on timeout we flush an empty array.
-# ---------------------------------------------------------------------------
-
-def test_bget_plus_with_no_new_samples_times_out_empty():
-    env = Env()
-    if env.is_cluster():
-        env.skip()
-
-    r = env.getConnection()
-    _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
-
+    # '+' resolves to lastTs = 300. With inclusive ts >= 300, only the latest
+    # sample qualifies; min_count defaults to 1 so it returns synchronously.
     t0 = time.time()
     res = r.execute_command("TS.BGET", "ts", "+", 1000)
+    elapsed = time.time() - t0
+
+    env.assertEqual(res, [[300, b"3"]])
+    env.assertTrue(elapsed < 0.5, message="BGET '+' should be ~instant, got %.3fs" % elapsed)
+
+
+# ---------------------------------------------------------------------------
+# 9. Paging continuation: after consuming via '+', a follow-up call from
+#    (last retrieved ts + 1) has nothing newer and times out with an empty reply.
+# ---------------------------------------------------------------------------
+
+def test_bget_paging_past_latest_times_out_empty():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
+
+    # Caller already consumed up to ts=300 and pages forward to 301; no sample
+    # has ts >= 301, so the call blocks and flushes empty on timeout.
+    t0 = time.time()
+    res = r.execute_command("TS.BGET", "ts", 301, 1000)
     elapsed = time.time() - t0
 
     env.assertEqual(res, [])
@@ -360,7 +416,9 @@ def test_bget_broadcasts_to_all_blocked_clients():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0")])
 
-    workers = [_start_bget(env, "ts", "+", 10_000) for _ in range(4)]
+    # cursor = 101 (literal): the existing sample at 100 doesn't qualify, so all
+    # clients block until a newer sample arrives.
+    workers = [_start_bget(env, "ts", 101, 10_000) for _ in range(4)]
     time.sleep(0.3)
     for t, _ in workers:
         env.assertTrue(t.is_alive(), message="all clients should be parked")

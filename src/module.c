@@ -1586,9 +1586,10 @@ static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     // timestamp: literal non-negative integer, or a '-' / '+' sentinel.
     // '-' is a static substitution: cursor=0 matches every sample under our
     // inclusive ts >= cursor semantic.
-    // '+' must be resolved against the live series exactly once (here) so
-    // the cursor stays stable across wake-ups; if we re-resolved on every
-    // signal, lastTs would chase forward and we'd never reply.
+    // '+' denotes the latest sample's timestamp (0 when the series is empty),
+    // aligned with TS.RANGE. It must be resolved against the live series exactly
+    // once (here) so the cursor stays stable across wake-ups; if we re-resolved
+    // on every signal, lastTs would chase forward and we'd never reply.
     api_timestamp_t cursor = 0;
     size_t ts_len = 0;
     const char *ts_str = RedisModule_StringPtrLen(argv[BGET_ARGV_TIMESTAMP], &ts_len);
@@ -1607,14 +1608,7 @@ static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
             return REDISMODULE_ERR;
         } else {
             Series *series = RedisModule_ModuleTypeGetValue(key);
-            // Saturate at UINT64_MAX so `lastTimestamp + 1` cannot wrap to 0
-            // (which would silently flip the cursor's meaning from "future
-            // only" to "every sample"). No timestamp can exceed UINT64_MAX,
-            // so cursor=UINT64_MAX is the correct unreachable upper bound.
-            cursor = (SeriesGetNumSamples(series) == 0) ? 0
-                     : (series->lastTimestamp == UINT64_MAX)
-                         ? UINT64_MAX
-                         : (api_timestamp_t)(series->lastTimestamp + 1);
+            cursor = (SeriesGetNumSamples(series) == 0) ? 0 : (api_timestamp_t)series->lastTimestamp;
         }
         if (key) {
             RedisModule_CloseKey(key);
