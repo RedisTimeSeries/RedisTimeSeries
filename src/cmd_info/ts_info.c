@@ -723,6 +723,51 @@ static const RedisModuleCommandInfo TS_GET_INFO = {
 };
 
 // ===============================
+// TS.BGET key timestamp timeout [MIN_COUNT min_count] [MAX_COUNT max_count]
+// ===============================
+static const RedisModuleCommandKeySpec TS_BGET_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RO,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_BGET_ARGS[] = {
+    { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+    { .name = "timestamp", .type = REDISMODULE_ARG_TYPE_STRING },
+    { .name = "timeout", .type = REDISMODULE_ARG_TYPE_INTEGER },
+    { .name = "MIN_COUNT",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "min_count", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "MIN_COUNT" },
+              { 0 } } },
+    { .name = "MAX_COUNT",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "max_count", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "MAX_COUNT" },
+              { 0 } } },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_BGET_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Blocking GET: wait up to timeout ms or until min_count samples with timestamp >= "
+               "timestamp are available, then return up to max_count of the oldest such samples",
+    .complexity = "O(log(n)+k) where n is the number of samples in the series and k is the number "
+                  "of returned samples",
+    .since = "8.10.0",
+    .arity = -4,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_BGET_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_BGET_ARGS,
+};
+
+// ===============================
 // TS.REVRANGE key fromTimestamp toTimestamp
 //  [LATEST]
 //  [FILTER_BY_TS ts...]
@@ -1629,6 +1674,11 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     // Register TS.GET command info
     RedisModuleCommand *cmd_get = RedisModule_GetCommand(ctx, "TS.GET");
     if (!cmd_get || RedisModule_SetCommandInfo(cmd_get, &TS_GET_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.BGET command info
+    RedisModuleCommand *cmd_bget = RedisModule_GetCommand(ctx, "TS.BGET");
+    if (!cmd_bget || RedisModule_SetCommandInfo(cmd_bget, &TS_BGET_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.RANGE command info
