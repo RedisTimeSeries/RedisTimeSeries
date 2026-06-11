@@ -684,7 +684,7 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     RedisModuleKey **keys = NULL;
     Series **series = NULL;
     AbstractSampleIterator **iters = NULL;
-    RedisModuleString *joinedAgg = NULL;  // synthesized comma token, NULL if no rewrite
+    RedisModuleString *joinedAgg = NULL; // synthesized comma token, NULL if no rewrite
     RedisModuleString **rewrittenArgv = NULL;
     size_t numClasses = 0;
     int rv = REDISMODULE_ERR;

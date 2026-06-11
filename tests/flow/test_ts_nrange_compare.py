@@ -78,7 +78,7 @@ def _nrange_args(keys, lo, hi, rev, *, aggs=None, bucket=None, count=None,
         # NRANGE requires one aggregator per key; a test that passes a single
         # aggregator means "the same one for every key", so replicate it.
         cmd_aggs = aggs * len(keys) if len(aggs) == 1 else aggs
-        cmd += ['AGGREGATION', ','.join(cmd_aggs), bucket]
+        cmd += ['AGGREGATION', *cmd_aggs, bucket]
         if bts is not None:
             cmd += ['BUCKETTIMESTAMP', bts]
         if empty:
