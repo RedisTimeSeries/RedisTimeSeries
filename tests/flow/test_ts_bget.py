@@ -8,7 +8,18 @@ from includes import *
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _start_bget(env, key, cursor, count, timeout_ms):
+def _bget_argv(key, cursor, timeout_ms, min_count=None, max_count=None):
+    """Build a TS.BGET argument list for the
+    `key timestamp timeout [MIN_COUNT n] [MAX_COUNT n]` syntax."""
+    argv = [key, cursor, timeout_ms]
+    if min_count is not None:
+        argv += ["MIN_COUNT", min_count]
+    if max_count is not None:
+        argv += ["MAX_COUNT", max_count]
+    return argv
+
+
+def _start_bget(env, key, cursor, timeout_ms, min_count=None, max_count=None):
     """Spawn a worker thread that issues TS.BGET on its own connection.
 
     Returns (thread, slot) where `slot` is mutated by the worker:
@@ -17,14 +28,13 @@ def _start_bget(env, key, cursor, count, timeout_ms):
         slot["elapsed"] -> wall-clock seconds the BGET call took
     """
     slot = {"result": None, "error": None, "elapsed": None}
+    argv = _bget_argv(key, cursor, timeout_ms, min_count, max_count)
 
     def worker():
         conn = env.getConnection()
         t0 = time.time()
         try:
-            slot["result"] = conn.execute_command(
-                "TS.BGET", key, cursor, count, timeout_ms
-            )
+            slot["result"] = conn.execute_command("TS.BGET", *argv)
         except Exception as e:
             slot["error"] = str(e)
         finally:
@@ -45,7 +55,7 @@ def _seed(r, key, samples):
 # 1. Immediate reply when enough qualifying samples already exist.
 # ---------------------------------------------------------------------------
 
-def test_bget_returns_immediately_when_count_already_satisfied():
+def test_bget_returns_immediately_when_min_count_already_satisfied():
     env = Env()
     if env.is_cluster():
         env.skip()  # BGET is a single-key primitive; cluster routing is orthogonal.
@@ -53,10 +63,10 @@ def test_bget_returns_immediately_when_count_already_satisfied():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
 
-    # cursor=101 -> qualifying = {200, 300}; count=2 is already met,
-    # so BGET should NOT block and return synchronously.
+    # cursor=101 -> qualifying = {200, 300}; MIN_COUNT 2 is already met, so BGET
+    # should NOT block and return synchronously (MAX_COUNT 2 caps the reply).
     t0 = time.time()
-    res = r.execute_command("TS.BGET", "ts", 101, 2, 1000)
+    res = r.execute_command("TS.BGET", "ts", 101, 1000, "MIN_COUNT", 2, "MAX_COUNT", 2)
     elapsed = time.time() - t0
 
     env.assertEqual(res, [[200, b"2"], [300, b"3"]])
@@ -65,10 +75,10 @@ def test_bget_returns_immediately_when_count_already_satisfied():
 
 
 # ---------------------------------------------------------------------------
-# 2. Blocks until SignalKeyAsReady has pushed qualifying-count to >= count.
+# 2. Blocks until SignalKeyAsReady has pushed qualifying-count to >= min_count.
 # ---------------------------------------------------------------------------
 
-def test_bget_blocks_then_unblocks_when_count_is_reached():
+def test_bget_blocks_then_unblocks_when_min_count_is_reached():
     env = Env()
     if env.is_cluster():
         env.skip()
@@ -77,12 +87,12 @@ def test_bget_blocks_then_unblocks_when_count_is_reached():
     _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
 
     # cursor=101 -> initial qualifying = {200, 300} = 2 < 5, so BGET blocks.
-    # NOTE: to reach count=5 with cursor=101 we need THREE more samples,
+    # NOTE: to reach min_count=5 with cursor=101 we need THREE more samples,
     # not two — the sample at ts=100 doesn't qualify because 100 < 101
     # (cursor is an inclusive lower bound: only ts >= cursor qualifies).
     # Each TS.ADD fires SignalKeyAsReady -> reply_cb runs; only the third
     # add commits because that's when qualifying becomes 5.
-    t, slot = _start_bget(env, "ts", 101, 5, 10_000)
+    t, slot = _start_bget(env, "ts", 101, 10_000, min_count=5, max_count=5)
 
     # Give the worker enough time to issue BlockClientOnKeys on the server.
     time.sleep(0.3)
@@ -105,7 +115,7 @@ def test_bget_blocks_then_unblocks_when_count_is_reached():
 
     t.join(timeout=2.0)
     env.assertFalse(t.is_alive(),
-                    message="BGET should have replied once qualifying >= count")
+                    message="BGET should have replied once qualifying >= min_count")
 
     env.assertEqual(slot["error"], None)
     env.assertEqual(
@@ -118,11 +128,11 @@ def test_bget_blocks_then_unblocks_when_count_is_reached():
 
 
 # ---------------------------------------------------------------------------
-# 3. Oldest-first paging: when MORE than `count` samples qualify, return the
-#    oldest `count` (so callers can advance the cursor to the last returned ts).
+# 3. Oldest-first paging: when MORE than `max_count` samples qualify, return the
+#    oldest `max_count` (so callers can advance the cursor to the last returned ts).
 # ---------------------------------------------------------------------------
 
-def test_bget_returns_oldest_count_when_more_qualify():
+def test_bget_returns_oldest_max_count_when_more_qualify():
     env = Env()
     if env.is_cluster():
         env.skip()
@@ -133,20 +143,59 @@ def test_bget_returns_oldest_count_when_more_qualify():
         (400, "4.0"), (500, "5.0"),
     ])
 
-    # cursor=101 -> 4 qualifying (200, 300, 400, 500); count=2 -> take the OLDEST 2.
-    res = r.execute_command("TS.BGET", "ts", 101, 2, 1000)
+    # cursor=101 -> 4 qualifying (200, 300, 400, 500); MAX_COUNT 2 -> take the OLDEST 2.
+    res = r.execute_command("TS.BGET", "ts", 101, 1000, "MAX_COUNT", 2)
     env.assertEqual(res, [[200, b"2"], [300, b"3"]])
 
     # The caller pages forward by setting cursor to last_returned_ts + 1
     # (cursor is inclusive: ts >= cursor qualifies, so passing 300 would
     # re-emit the sample we already saw).
-    res = r.execute_command("TS.BGET", "ts", 301, 2, 1000)
+    res = r.execute_command("TS.BGET", "ts", 301, 1000, "MAX_COUNT", 2)
     env.assertEqual(res, [[400, b"4"], [500, b"5"]])
 
 
 # ---------------------------------------------------------------------------
+# 3b. MIN_COUNT vs MAX_COUNT divergence: wait for min_count, then return the
+#     oldest max_count (which may be fewer than what qualifies).
+# ---------------------------------------------------------------------------
+
+def test_bget_min_below_max_returns_oldest_max_count():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [
+        (100, "1.0"), (200, "2.0"), (300, "3.0"),
+        (400, "4.0"), (500, "5.0"), (600, "6.0"),
+    ])
+
+    # cursor=0 -> 6 qualify; MIN_COUNT 2 already met, MAX_COUNT 4 caps to oldest 4.
+    res = r.execute_command("TS.BGET", "ts", 0, 1000, "MIN_COUNT", 2, "MAX_COUNT", 4)
+    env.assertEqual(res, [[100, b"1"], [200, b"2"], [300, b"3"], [400, b"4"]])
+
+
+# ---------------------------------------------------------------------------
+# 3c. Defaults: no MIN_COUNT/MAX_COUNT -> min_count=1, max_count=unlimited.
+# ---------------------------------------------------------------------------
+
+def test_bget_defaults_min_one_max_unlimited():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
+
+    # min_count defaults to 1 (already met), max_count defaults to unlimited
+    # so every qualifying sample is returned.
+    res = r.execute_command("TS.BGET", "ts", 0, 1000)
+    env.assertEqual(res, [[100, b"1"], [200, b"2"], [300, b"3"]])
+
+
+# ---------------------------------------------------------------------------
 # 4. Timeout flush: client blocks, no producer feeds it, timeout fires and we
-#    flush whatever is available (which may be fewer than count).
+#    flush whatever is available (which may be fewer than min_count).
 # ---------------------------------------------------------------------------
 
 def test_bget_timeout_flushes_available_samples():
@@ -160,10 +209,10 @@ def test_bget_timeout_flushes_available_samples():
         (400, "4.0"), (500, "5.0"),
     ])
 
-    # cursor=101 -> 4 qualifying; count=10 cannot be reached. Nobody else adds.
+    # cursor=101 -> 4 qualifying; MIN_COUNT 10 cannot be reached. Nobody else adds.
     # After timeout_ms expires the timeout_cb flushes the 4 available samples.
     t0 = time.time()
-    res = r.execute_command("TS.BGET", "ts", 101, 10, 1000)
+    res = r.execute_command("TS.BGET", "ts", 101, 1000, "MIN_COUNT", 10)
     elapsed = time.time() - t0
 
     env.assertEqual(
@@ -190,8 +239,8 @@ def test_bget_dash_returns_all_existing_samples():
     _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
 
     # '-' resolves statically to cursor=0; with ts >= 0 every sample qualifies,
-    # so count=3 is already met and BGET returns synchronously.
-    res = r.execute_command("TS.BGET", "ts", "-", 3, 5000)
+    # so MIN_COUNT 3 is already met and BGET returns synchronously.
+    res = r.execute_command("TS.BGET", "ts", "-", 5000, "MIN_COUNT", 3, "MAX_COUNT", 3)
     env.assertEqual(res, [[100, b"1"], [200, b"2"], [300, b"3"]])
 
 
@@ -207,7 +256,7 @@ def test_bget_dash_on_empty_series_blocks_until_first_add():
     r = env.getConnection()
     r.execute_command("FLUSHALL")  # key "ts" must not exist for this scenario.
 
-    t, slot = _start_bget(env, "ts", "-", 1, 10_000)
+    t, slot = _start_bget(env, "ts", "-", 10_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET '-' on missing key should block until ADD")
@@ -233,7 +282,7 @@ def test_bget_plus_on_empty_series_blocks_until_first_add():
     r = env.getConnection()
     r.execute_command("FLUSHALL")
 
-    t, slot = _start_bget(env, "ts", "+", 1, 10_000)
+    t, slot = _start_bget(env, "ts", "+", 10_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET '+' on missing key should block until ADD")
@@ -260,7 +309,7 @@ def test_bget_plus_only_returns_samples_added_after_command():
 
     # '+' resolves now to lastTs + 1 = 301. Existing 100/200/300 must NOT
     # qualify; only a future ADD with ts >= 301 should wake us.
-    t, slot = _start_bget(env, "ts", "+", 1, 10_000)
+    t, slot = _start_bget(env, "ts", "+", 10_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET '+' should ignore pre-existing samples")
@@ -288,7 +337,7 @@ def test_bget_plus_with_no_new_samples_times_out_empty():
     _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
 
     t0 = time.time()
-    res = r.execute_command("TS.BGET", "ts", "+", 1, 1000)
+    res = r.execute_command("TS.BGET", "ts", "+", 1000)
     elapsed = time.time() - t0
 
     env.assertEqual(res, [])
@@ -311,7 +360,7 @@ def test_bget_broadcasts_to_all_blocked_clients():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0")])
 
-    workers = [_start_bget(env, "ts", "+", 1, 10_000) for _ in range(4)]
+    workers = [_start_bget(env, "ts", "+", 10_000) for _ in range(4)]
     time.sleep(0.3)
     for t, _ in workers:
         env.assertTrue(t.is_alive(), message="all clients should be parked")
@@ -343,7 +392,7 @@ def test_bget_on_compaction_destination_wakes_on_bucket_commit():
     assert r.execute_command(
         "TS.CREATERULE", "src", "dst", "AGGREGATION", "avg", 10)
 
-    t, slot = _start_bget(env, "dst", "-", 1, 10_000)
+    t, slot = _start_bget(env, "dst", "-", 10_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET on empty dst should be parked")
@@ -373,7 +422,7 @@ def test_bget_wrongtype_literal_cursor():
     r = env.getConnection()
     r.set("not_a_ts", "hello")
     with pytest.raises(redis.ResponseError, match="WRONGTYPE"):
-        r.execute_command("TS.BGET", "not_a_ts", 0, 1, 0)
+        r.execute_command("TS.BGET", "not_a_ts", 0, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -396,7 +445,7 @@ def test_bget_inside_multi_refuses_with_clear_error():
                                    # branch instead of replying synchronously.
 
     r.execute_command("MULTI")
-    r.execute_command("TS.BGET", "ts", 0, 1, 1000)
+    r.execute_command("TS.BGET", "ts", 0, 1000)
     try:
         res = r.execute_command("EXEC")
         env.assertEqual(len(res), 1)
@@ -417,7 +466,7 @@ def test_bget_inside_eval_refuses_with_clear_error():
 
     with pytest.raises(redis.ResponseError) as excinfo:
         r.execute_command(
-            "EVAL", "return redis.call('TS.BGET','ts',0,1,1000)", 1, "ts")
+            "EVAL", "return redis.call('TS.BGET','ts',0,1000)", 1, "ts")
     env.assertTrue(_is_deny_blocking_error(excinfo.value),
                    message="unexpected error: %r" % (excinfo.value,))
 
@@ -435,16 +484,20 @@ def test_bget_parse_errors():
     _seed(r, "ts", [(100, "1.0")])
 
     bad_argv = [
-        ("ts",),                          # wrong arity (too few)
-        ("ts", 0, 1, 0, "extra"),         # wrong arity (too many)
-        ("ts", 0, 0, 1000),               # count == 0
-        ("ts", 0, -1, 1000),              # count < 0
-        ("ts", 0, 1, -1),                 # timeout < 0
-        ("ts", 0, "abc", 1000),           # non-integer count
-        ("ts", 0, "1.5", 1000),           # non-integer count
-        ("ts", 0, 1, "abc"),              # non-integer timeout
-        ("ts", "abc", 1, 1000),           # non-integer / non-sentinel timestamp
-        ("ts", -1, 1, 1000),              # negative literal timestamp
+        ("ts",),                                       # wrong arity (too few)
+        ("ts", 0),                                     # wrong arity (too few)
+        ("ts", 0, 0, "MIN_COUNT", 1, "MAX_COUNT", 1, "x"),  # arity (too many)
+        ("ts", 0, 1000, "MIN_COUNT", 0),               # min_count == 0
+        ("ts", 0, 1000, "MIN_COUNT", -1),              # min_count < 0
+        ("ts", 0, 1000, "MAX_COUNT", 0),               # max_count == 0
+        ("ts", 0, -1),                                 # timeout < 0
+        ("ts", 0, 1000, "MIN_COUNT", "abc"),           # non-integer min_count
+        ("ts", 0, 1000, "MIN_COUNT", "1.5"),           # non-integer min_count
+        ("ts", 0, "abc"),                              # non-integer timeout
+        ("ts", "abc", 1000),                           # non-integer / non-sentinel ts
+        ("ts", -1, 1000),                              # negative literal timestamp
+        ("ts", 0, 1000, "MIN_COUNT", 5, "MAX_COUNT", 2),   # min_count > max_count
+        ("ts", 0, 1000, "MIN_COUNT"),                  # dangling keyword (no value)
     ]
     for argv in bad_argv:
         with pytest.raises(redis.ResponseError):
@@ -463,9 +516,9 @@ def test_bget_timeout_zero_returns_partial_without_blocking():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0"), (200, "2.0")])
 
-    # count=10, only 2 qualifying samples; timeout=0 must flush immediately.
+    # MIN_COUNT 10, only 2 qualifying samples; timeout=0 must flush immediately.
     t0 = time.time()
-    res = r.execute_command("TS.BGET", "ts", 0, 10, 0)
+    res = r.execute_command("TS.BGET", "ts", 0, 0, "MIN_COUNT", 10)
     elapsed = time.time() - t0
 
     env.assertEqual(res, [[100, b"1"], [200, b"2"]])

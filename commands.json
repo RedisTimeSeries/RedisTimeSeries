@@ -1388,7 +1388,7 @@
         "group": "timeseries"
     },
     "TS.BGET": {
-        "summary": "Blocking GET: wait up to `timeout` milliseconds and retrieve up to `count` samples with timestamp >= `timestamp`. Returns the oldest qualifying samples in ascending timestamp order. When `timeout` is 0 the command does not block and returns whatever is available now (possibly empty or fewer than `count`).",
+        "summary": "Blocking GET: wait up to `timeout` milliseconds or until at least `min_count` samples with timestamp >= `timestamp` are available (whichever occurs first), then retrieve up to `max_count` of the oldest qualifying samples in ascending timestamp order. When `timeout` is 0 the command does not block and returns whatever is available now (possibly empty or fewer than `min_count`). Defaults: `min_count` 1, `max_count` unlimited.",
         "complexity": "O(log(n)+k) where n is the number of samples in the series and k is the number of returned samples",
         "arguments": [
             {
@@ -1400,12 +1400,20 @@
                 "type": "string"
             },
             {
-                "name": "count",
+                "name": "timeout",
                 "type": "integer"
             },
             {
-                "name": "timeout",
-                "type": "integer"
+                "name": "min_count",
+                "token": "MIN_COUNT",
+                "type": "integer",
+                "optional": true
+            },
+            {
+                "name": "max_count",
+                "token": "MAX_COUNT",
+                "type": "integer",
+                "optional": true
             }
         ],
         "command_flags": [
