@@ -155,7 +155,7 @@ def test_nrange_ohlcv_aggregators_explicit():
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_ohlcv(r, '{rx_ohlcv}')
         res = r.execute_command('TS.NRANGE', 5, *keys, '-', '+',
-                                'AGGREGATION', 'first,max,min,last,sum', 10)
+                                'AGGREGATION', 'first', 'max', 'min', 'last', 'sum', 10)
         assert len(res) == 2
         assert res[0][0] == 0
         # bucket [0,10): first=10 max=14 min=8 last=11 sum=43
@@ -172,7 +172,7 @@ def test_nrange_per_key_agg_matches_range():
         keys = _setup_distinct(r, '{rx_agg}')
         aggs = ['sum', 'min', 'max']
         res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
-                                'AGGREGATION', ','.join(aggs), 2)
+                                'AGGREGATION', *aggs, 2)
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+', aggs=aggs, bucket=2))
 
 
@@ -195,7 +195,7 @@ def test_nrevrange_agg_matches_revrange():
         keys = _setup_distinct(r, '{rx_revagg}')
         aggs = ['count', 'sum', 'last']
         res = r.execute_command('TS.NREVRANGE', len(keys), *keys, '-', '+',
-                                'AGGREGATION', ','.join(aggs), 3)
+                                'AGGREGATION', *aggs, 3)
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+', rev=True, aggs=aggs, bucket=3))
 
 
@@ -207,7 +207,7 @@ def test_nrange_empty_matches():
         # range spans an empty bucket [20,30) -> EMPTY emits an all-NaN row.
         # NRANGE requires one aggregator per key, so repeat 'last' numkeys times.
         res = r.execute_command('TS.NRANGE', len(keys), *keys, 0, 30,
-                                'AGGREGATION', ','.join(['last'] * len(keys)), 10, 'EMPTY')
+                                'AGGREGATION', *(['last'] * len(keys)), 10, 'EMPTY')
         _assert_pivot(res, _pivot_ref_empty(r, keys, 0, 30, 'last', 10))
 
 
