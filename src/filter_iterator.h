@@ -64,6 +64,10 @@ typedef struct AggregationIterator
     timestamp_t prev_ts;
     bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
     bool validPerAgg[TS_AGG_TYPES_MAX]; // per-aggregation validity tracking for current bucket
+    // Same sample filters as the query, so the edge-gap drop counts only kept samples: a sample
+    // removed by FILTER_BY_VALUE/FILTER_BY_TS must not make an edge gap look like an interior one.
+    FilterByValueArgs byValueArgs;
+    FilterByTSArgs byTsArgs;
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
@@ -76,7 +80,9 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              BucketTimestamp bucketTS,
                                              Series *series,
                                              api_timestamp_t startTimestamp,
-                                             api_timestamp_t endTimestamp);
+                                             api_timestamp_t endTimestamp,
+                                             FilterByValueArgs byValueArgs,
+                                             FilterByTSArgs byTsArgs);
 EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 
