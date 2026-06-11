@@ -1029,8 +1029,8 @@ static const RedisModuleCommandInfo TS_NREVRANGE_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
     .summary = "Query a range across multiple time series in reverse direction, returning the "
                "results pivoted by timestamp (one value column per key)",
-    .complexity = "O(numkeys*(n/m+k)) where n = Number of data points, m = Chunk size (data "
-                  "points per chunk), k = Number of data points that are in the requested range",
+    .complexity = "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples "
+                  "per chunk), k = Number of samples that are in the requested range",
     .since = "8.10.0",
     .tips = "dont_cache",
     .arity = -5,
@@ -1139,8 +1139,8 @@ static const RedisModuleCommandInfo TS_NRANGE_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
     .summary = "Query a range across multiple time series in forward direction, returning the "
                "results pivoted by timestamp (one value column per key)",
-    .complexity = "O(numkeys*(n/m+k)) where n = Number of data points, m = Chunk size (data "
-                  "points per chunk), k = Number of data points that are in the requested range",
+    .complexity = "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples "
+                  "per chunk), k = Number of samples that are in the requested range",
     .since = "8.10.0",
     .tips = "dont_cache",
     .arity = -5,

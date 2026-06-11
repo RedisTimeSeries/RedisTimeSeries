@@ -597,8 +597,8 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 // Like TS.RANGE but over an explicit list of same-slot keys, returning results
 // pivoted by timestamp: one row [timestamp, [value-per-key...]] in key order,
 // NaN where a key has no sample at that timestamp. With AGGREGATION, the number
-// of (comma-separated) aggregators must be 1 (broadcast) or equal to numkeys
-// (one per key); all share a single bucketDuration.
+// of aggregators must equal numkeys (one per key); all share a single
+// bucketDuration.
 int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     // argv: [0]=cmd [1]=numkeys [2..1+numkeys]=keys [2+numkeys]=from [3+numkeys]=to ...
     if (argc < 5) {
@@ -628,8 +628,8 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     }
 
     const size_t numClasses = rangeArgs.aggregationArgs.numClasses;
-    if (numClasses != 0 && numClasses != 1 && numClasses != (size_t)numKeys) {
-        RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be 1 or equal to numkeys");
+    if (numClasses != 0 && numClasses != (size_t)numKeys) {
+        RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
         free(rangeArgs.aggregationArgs.classes);
         return REDISMODULE_ERR;
     }
@@ -660,8 +660,7 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
             perKey.aggregationArgs.classes = NULL;
         } else {
             perKey.aggregationArgs.numClasses = 1;
-            perKey.aggregationArgs.classes =
-                &rangeArgs.aggregationArgs.classes[numClasses == 1 ? 0 : i];
+            perKey.aggregationArgs.classes = &rangeArgs.aggregationArgs.classes[i];
         }
         iters[i] = SeriesCreateSampleIterator(series[i], &perKey, rev, true);
     }

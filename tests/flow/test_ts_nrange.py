@@ -176,15 +176,16 @@ def test_nrange_per_key_agg_matches_range():
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+', aggs=aggs, bucket=2))
 
 
-def test_nrange_single_aggregator_broadcast():
+def test_nrange_single_aggregator_rejected():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_bcast}')
-        # one aggregator applies to all keys
-        res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
-                                'AGGREGATION', 'avg', 2)
-        _assert_pivot(res, _pivot_ref(r, keys, '-', '+', aggs=['avg'], bucket=2))
+        # a single aggregator for multiple keys is rejected: the count must
+        # equal numkeys (one aggregator per key)
+        with pytest.raises(redis.ResponseError, match="aggregators"):
+            r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
+                              'AGGREGATION', 'avg', 2)
 
 
 def test_nrevrange_agg_matches_revrange():
@@ -380,7 +381,7 @@ def test_nrange_errors():
         with pytest.raises(redis.ResponseError):
             r.execute_command('TS.NRANGE', 3, keys[0], '-', '+')
 
-        # aggregator count must be 1 or numkeys
+        # aggregator count must equal numkeys
         with pytest.raises(redis.ResponseError, match="aggregators"):
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min,max', 10)
@@ -400,9 +401,13 @@ def test_nrange_crossslot():
         env.skip()
     with env.getClusterConnectionIfNeeded() as r:
         # Different hash tags -> different slots; the keynum key-spec must make
-        # the cluster reject the command with CROSSSLOT.
+        # the command be rejected for spanning slots. Depending on the client,
+        # this is caught either client-side (redis-py's cluster client computes
+        # the slots from the key-spec and raises RedisClusterException before
+        # the command leaves the client) or server-side (CROSSSLOT ResponseError).
         r.execute_command('TS.CREATE', 'cs{a}')
         r.execute_command('TS.CREATE', 'cs{b}')
         for cmd in ('TS.NRANGE', 'TS.NREVRANGE'):
-            with pytest.raises(redis.ResponseError, match='CROSSSLOT'):
+            with pytest.raises((redis.ResponseError, redis.exceptions.RedisClusterException),
+                               match='CROSSSLOT|same key slot'):
                 r.execute_command(cmd, 2, 'cs{a}', 'cs{b}', '-', '+')

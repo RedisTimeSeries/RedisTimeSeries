@@ -18,7 +18,7 @@ from includes import *
 # keynum key-spec lands.
 
 AGGS = ['min', 'max', 'sum', 'avg', 'count', 'first', 'last', 'range',
-        'std.p', 'std.s', 'var.p', 'var.s', 'twa']
+        'std.p', 'std.s', 'var.p', 'var.s', 'twa', 'countNaN', 'countAll']
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +75,10 @@ def _nrange_args(keys, lo, hi, rev, *, aggs=None, bucket=None, count=None,
     if aggs is not None:
         if align is not None:
             cmd += ['ALIGN', align]
-        cmd += ['AGGREGATION', ','.join(aggs), bucket]
+        # NRANGE requires one aggregator per key; a test that passes a single
+        # aggregator means "the same one for every key", so replicate it.
+        cmd_aggs = aggs * len(keys) if len(aggs) == 1 else aggs
+        cmd += ['AGGREGATION', ','.join(cmd_aggs), bucket]
         if bts is not None:
             cmd += ['BUCKETTIMESTAMP', bts]
         if empty:
@@ -382,7 +385,7 @@ def test_compare_per_key_aggregators():
             _cmp(r, k, aggs=aggs, bucket=bucket, empty=True, rev=True)
 
 
-def test_compare_single_aggregator_broadcast():
+def test_compare_same_aggregator_per_key():
     with _conn() as r:
         k = _agg_dataset(r, 4)
         for agg in ['avg', 'sum', 'count', 'last']:
@@ -526,7 +529,8 @@ def test_compare_fuzz():
             lo = '-' if rnd.random() < 0.5 else rnd.randint(0, pool_hi)
             hi = '+' if rnd.random() < 0.5 else (lo if isinstance(lo, int) else 0) + rnd.randint(0, pool_hi)
             kw['lo'], kw['hi'] = lo, hi
-            # aggregation (per-key or broadcast)
+            # aggregation: either the same aggregator for every key (a single
+            # entry, replicated by _nrange_args) or a distinct one per key
             aggs = None
             if rnd.random() < 0.7:
                 aggs = [rnd.choice(AGGS)] if rnd.random() < 0.5 else [rnd.choice(AGGS) for _ in range(nkeys)]

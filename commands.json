@@ -665,7 +665,7 @@
     },
     "TS.NRANGE": {
         "summary": "Query a range across multiple time series in forward direction, returning the results pivoted by timestamp (one value column per key)",
-        "complexity": "O(numkeys*(n/m+k)) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",
+        "complexity": "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples per chunk), k = Number of samples that are in the requested range",
         "arguments": [
             {
                 "name": "numkeys",
@@ -687,8 +687,7 @@
             {
                 "name": "LATEST",
                 "type": "string",
-                "optional": true,
-                "since": "1.8.0"
+                "optional": true
             },
             {
                 "token": "FILTER_BY_TS",
@@ -737,7 +736,8 @@
                     {
                         "type": "string",
                         "token": "AGGREGATION",
-                        "name": "aggregators"
+                        "name": "aggregators",
+                        "multiple": true
                     },
                     {
                         "name": "bucketDuration",
@@ -747,15 +747,13 @@
                         "name": "buckettimestamp",
                         "type": "pure-token",
                         "token": "BUCKETTIMESTAMP",
-                        "optional": true,
-                        "since": "1.8.0"
+                        "optional": true
                     },
                     {
                         "name": "empty",
                         "type": "pure-token",
                         "token": "EMPTY",
-                        "optional": true,
-                        "since": "1.8.0"
+                        "optional": true
                     }
                 ]
             }
@@ -765,7 +763,7 @@
     },
     "TS.NREVRANGE": {
         "summary": "Query a range across multiple time series in reverse direction, returning the results pivoted by timestamp (one value column per key)",
-        "complexity": "O(numkeys*(n/m+k)) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",
+        "complexity": "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples per chunk), k = Number of samples that are in the requested range",
         "arguments": [
             {
                 "name": "numkeys",
@@ -787,8 +785,7 @@
             {
                 "name": "LATEST",
                 "type": "string",
-                "optional": true,
-                "since": "1.8.0"
+                "optional": true
             },
             {
                 "token": "FILTER_BY_TS",
@@ -837,7 +834,8 @@
                     {
                         "type": "string",
                         "token": "AGGREGATION",
-                        "name": "aggregators"
+                        "name": "aggregators",
+                        "multiple": true
                     },
                     {
                         "name": "bucketDuration",
@@ -879,15 +877,13 @@
                                 "type": "pure-token",
                                 "token": "mid"
                             }
-                        ],
-                        "since": "1.8.0"
+                        ]
                     },
                     {
                         "name": "empty",
                         "type": "pure-token",
                         "token": "EMPTY",
-                        "optional": true,
-                        "since": "1.8.0"
+                        "optional": true
                     }
                 ]
             }
