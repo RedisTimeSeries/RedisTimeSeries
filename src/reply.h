@@ -43,6 +43,21 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
 
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool rev);
 
+// Reply one pivoted row: [timestamp, [value_0, value_1, ..., value_{num_values-1}]].
+void ReplyWithPivotSample(RedisModuleCtx *ctx,
+                          uint64_t timestamp,
+                          const double *values,
+                          size_t num_values);
+
+// Merge num_keys time-ordered per-key sample iterators into a timestamp-major
+// reply (one row per distinct timestamp, NaN where a key has no sample). Used by
+// TS.RANGEX / TS.REVRANGEX. Consumes and closes each iterator.
+int ReplySeriesRangeX(RedisModuleCtx *ctx,
+                      AbstractSampleIterator **iters,
+                      size_t num_keys,
+                      long long count,
+                      bool reverse);
+
 void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
                                     const Series *series,

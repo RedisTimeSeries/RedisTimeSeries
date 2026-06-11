@@ -19,6 +19,8 @@
 #include "utils/arr.h"
 #include "rmutil/alloc.h"
 
+#include <math.h> // NAN
+
 // double string presentation requires 15 digit integers +
 // '.' + "e+" or "e-" + 3 digits of exponent
 #define MAX_VAL_LEN 24
@@ -232,6 +234,83 @@ void ReplyWithMultiAggSample(RedisModuleCtx *ctx,
     for (size_t i = 0; i < num_values; i++) {
         ReplyWithDoubleOrString(ctx, values[i]);
     }
+}
+
+void ReplyWithPivotSample(RedisModuleCtx *ctx,
+                          uint64_t timestamp,
+                          const double *values,
+                          size_t num_values) {
+    RedisModule_ReplyWithArray(ctx, 2);
+    RedisModule_ReplyWithLongLong(ctx, timestamp);
+    RedisModule_ReplyWithArray(ctx, num_values);
+    for (size_t i = 0; i < num_values; i++) {
+        ReplyWithDoubleOrString(ctx, values[i]);
+    }
+}
+
+int ReplySeriesRangeX(RedisModuleCtx *ctx,
+                      AbstractSampleIterator **iters,
+                      size_t num_keys,
+                      long long count,
+                      bool reverse) {
+    const long long limit = (count < 0) ? LLONG_MAX : count;
+
+    // Streaming k-way merge: hold only one "front" sample per key at a time.
+    Sample *front = malloc(num_keys * sizeof(*front));
+    bool *active = malloc(num_keys * sizeof(*active));
+    double *row = malloc(num_keys * sizeof(*row));
+    size_t active_count = 0;
+
+    for (size_t i = 0; i < num_keys; i++) {
+        active[i] = (iters[i]->GetNext(iters[i], &front[i]) == CR_OK);
+        if (active[i]) {
+            active_count++;
+        }
+    }
+
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+
+    long long emitted = 0;
+    while (active_count > 0 && emitted < limit) {
+        // Next output timestamp: smallest front (largest when reverse).
+        bool found = false;
+        timestamp_t target = 0;
+        for (size_t i = 0; i < num_keys; i++) {
+            if (!active[i]) {
+                continue;
+            }
+            if (!found || (reverse ? (front[i].timestamp > target) : (front[i].timestamp < target))) {
+                target = front[i].timestamp;
+                found = true;
+            }
+        }
+
+        // Build the pivoted row; NaN for any key with no sample at this timestamp.
+        for (size_t i = 0; i < num_keys; i++) {
+            if (active[i] && front[i].timestamp == target) {
+                row[i] = front[i].value;
+                if (iters[i]->GetNext(iters[i], &front[i]) != CR_OK) {
+                    active[i] = false;
+                    active_count--;
+                }
+            } else {
+                row[i] = NAN;
+            }
+        }
+
+        ReplyWithPivotSample(ctx, target, row, num_keys);
+        emitted++;
+    }
+
+    RedisModule_ReplySetArrayLength(ctx, emitted);
+
+    for (size_t i = 0; i < num_keys; i++) {
+        iters[i]->Close(iters[i]);
+    }
+    free(front);
+    free(active);
+    free(row);
+    return REDISMODULE_OK;
 }
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series) {

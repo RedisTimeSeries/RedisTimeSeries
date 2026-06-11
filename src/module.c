@@ -591,6 +591,99 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return TSDB_generic_range(ctx, argv, argc, true);
 }
 
+// TS.RANGEX/TS.REVRANGEX numkeys key [key...] fromTimestamp toTimestamp [options]
+//   [LATEST] [FILTER_BY_TS ts...] [FILTER_BY_VALUE min max] [COUNT count]
+//   [[ALIGN align] AGGREGATION agg[,agg...] bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
+// Like TS.RANGE but over an explicit list of same-slot keys, returning results
+// pivoted by timestamp: one row [timestamp, [value-per-key...]] in key order,
+// NaN where a key has no sample at that timestamp. With AGGREGATION, the number
+// of (comma-separated) aggregators must be 1 (broadcast) or equal to numkeys
+// (one per key); all share a single bucketDuration.
+int TSDB_generic_rangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
+    // argv: [0]=cmd [1]=numkeys [2..1+numkeys]=keys [2+numkeys]=from [3+numkeys]=to ...
+    if (argc < 5) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    long long numKeys;
+    if (RedisModule_StringToLongLong(argv[1], &numKeys) != REDISMODULE_OK || numKeys <= 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: numkeys must be a positive integer");
+        return REDISMODULE_ERR;
+    }
+
+    // cmd + numkeys + numKeys keys + fromTimestamp + toTimestamp
+    if ((long long)argc < 2 + numKeys + 2) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    const int rangeStart = (int)(2 + numKeys);
+    RangeArgs rangeArgs = { 0 };
+    if (parseRangeArguments(ctx, rangeStart, argv, argc, &rangeArgs) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    const size_t numClasses = rangeArgs.aggregationArgs.numClasses;
+    if (numClasses != 0 && numClasses != 1 && numClasses != (size_t)numKeys) {
+        RTS_ReplyGeneralError(ctx,
+                              "TSDB: the number of aggregators must be 1 or equal to numkeys");
+        free(rangeArgs.aggregationArgs.classes);
+        return REDISMODULE_ERR;
+    }
+
+    RedisModuleKey **keys = calloc(numKeys, sizeof(RedisModuleKey *));
+    Series **series = calloc(numKeys, sizeof(Series *));
+    AbstractSampleIterator **iters = NULL;
+    int rv = REDISMODULE_ERR;
+    size_t opened = 0;
+
+    for (; opened < (size_t)numKeys; opened++) {
+        const GetSeriesResult status = GetSeries(ctx,
+                                                 argv[2 + opened],
+                                                 &keys[opened],
+                                                 &series[opened],
+                                                 REDISMODULE_READ,
+                                                 GetSeriesFlags_CheckForAcls);
+        if (status != GetSeriesResult_Success) {
+            goto cleanup; // GetSeries already replied with the error
+        }
+    }
+
+    iters = malloc(numKeys * sizeof(AbstractSampleIterator *));
+    for (size_t i = 0; i < (size_t)numKeys; i++) {
+        RangeArgs perKey = rangeArgs; // shares filters; classes is read-only here
+        if (numClasses == 0) {
+            perKey.aggregationArgs.numClasses = 0;
+            perKey.aggregationArgs.classes = NULL;
+        } else {
+            perKey.aggregationArgs.numClasses = 1;
+            perKey.aggregationArgs.classes =
+                &rangeArgs.aggregationArgs.classes[numClasses == 1 ? 0 : i];
+        }
+        iters[i] = SeriesCreateSampleIterator(series[i], &perKey, rev, true);
+    }
+
+    ReplySeriesRangeX(ctx, iters, numKeys, rangeArgs.count, rev); // closes each iterator
+    rv = REDISMODULE_OK;
+
+cleanup:
+    free(iters);
+    free(rangeArgs.aggregationArgs.classes);
+    for (size_t i = 0; i < opened; i++) {
+        RedisModule_CloseKey(keys[i]);
+    }
+    free(keys);
+    free(series);
+    return rv;
+}
+
+int TSDB_rangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return TSDB_generic_rangex(ctx, argv, argc, false);
+}
+
+int TSDB_revrangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return TSDB_generic_rangex(ctx, argv, argc, true);
+}
+
 static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t timestamp,
@@ -2348,6 +2441,28 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     SetCommandAcls(ctx, "ts.mrevrange", "read");
+
+    // TS.RANGEX / TS.REVRANGEX: keys are explicit but at variable positions
+    // (after numkeys), so they are not declared as a fixed key range here. Per-key
+    // ACLs are enforced at runtime by GetSeries(GetSeriesFlags_CheckForAcls); a
+    // proper keynum key-spec for cluster routing is a follow-up.
+    if (RedisModule_CreateCommand(ctx, "ts.rangex", TSDB_rangex, "readonly", 0, 0, -1) ==
+        REDISMODULE_ERR) {
+        FreeConfigAndStaticCtx();
+
+        return REDISMODULE_ERR;
+    }
+
+    SetCommandAcls(ctx, "ts.rangex", "read");
+
+    if (RedisModule_CreateCommand(ctx, "ts.revrangex", TSDB_revrangex, "readonly", 0, 0, -1) ==
+        REDISMODULE_ERR) {
+        FreeConfigAndStaticCtx();
+
+        return REDISMODULE_ERR;
+    }
+
+    SetCommandAcls(ctx, "ts.revrangex", "read");
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
