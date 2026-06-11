@@ -288,13 +288,11 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
 static size_t twa_get_samples_from_left(timestamp_t cur_ts,
                                         const AggregationIterator *self,
                                         Sample *sample_left,
-                                        Sample *sample_leftLeft,
-                                        bool apply_filter);
+                                        Sample *sample_leftLeft);
 static size_t twa_get_samples_from_right(timestamp_t cur_ts,
                                          const AggregationIterator *self,
                                          Sample *sample_right,
-                                         Sample *sample_rightRight,
-                                         bool apply_filter);
+                                         Sample *sample_rightRight);
 timestamp_t twa_calc_ta(bool reverse,
                         timestamp_t bucketStartTS,
                         timestamp_t bucketEndTS,
@@ -373,9 +371,8 @@ static void twa_compute_empty_bucket_value(const AggregationIterator *self,
         false, bucket_ts, bucket_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
 
     size_t n_samples_before =
-        twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore, true);
-    size_t n_samples_after =
-        twa_get_samples_from_right(tb, self, &sample_after, &sample_afAfter, true);
+        twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
+    size_t n_samples_after = twa_get_samples_from_right(tb, self, &sample_after, &sample_afAfter);
 
     twa_calc_empty_bucket_val(ta,
                               tb,
@@ -494,11 +491,10 @@ static void seed_locf_for_empty_gap(const AggregationIterator *self,
             continue;
         }
         Sample older, older_older;
-        // apply_filter=true: LOCF must carry the last KEPT value. Without the filter the older
-        // neighbor could be a sample removed by FILTER_BY_VALUE/FILTER_BY_TS, so an empty bucket
-        // would carry a value the filter excluded (and reverse would disagree with forward).
-        if (twa_get_samples_from_left(lowest_empty_bucket_start, self, &older, &older_older, true) >
-            0) {
+        // LOCF must carry the last KEPT value: twa_get_samples_from_left honors the query filters,
+        // so the older neighbor can't be a sample removed by FILTER_BY_VALUE/FILTER_BY_TS (which
+        // would make an empty bucket carry an excluded value, and reverse disagree with forward).
+        if (twa_get_samples_from_left(lowest_empty_bucket_start, self, &older, &older_older) > 0) {
             LastValueSeedLocf(self->aggregationContexts[a], older.value, older.timestamp);
         } else {
             /* No older sample exists. The next non-empty bucket's appendValue will go through the
@@ -535,14 +531,15 @@ static void fillEmptyBucketsWithDefaultVals(size_t *write_index,
 static size_t twa_get_samples_from_right(timestamp_t cur_ts,
                                          const AggregationIterator *self,
                                          Sample *sample_right,
-                                         Sample *sample_rightRight,
-                                         bool apply_filter) {
+                                         Sample *sample_rightRight) {
     size_t n_samples_right = 0;
     if (cur_ts < UINT64_MAX) {
+        // Honor the query's filters so a sample removed by FILTER_BY_VALUE/FILTER_BY_TS is not
+        // treated as a neighbor (edge-gap detection, LOCF seeding, TWA interpolation).
         RangeArgs args = {
             .aggregationArgs = { 0 },
-            .filterByValueArgs = apply_filter ? self->byValueArgs : (FilterByValueArgs){ 0 },
-            .filterByTSArgs = apply_filter ? self->byTsArgs : (FilterByTSArgs){ 0 },
+            .filterByValueArgs = self->byValueArgs,
+            .filterByTSArgs = self->byTsArgs,
             .startTimestamp = cur_ts,
             .endTimestamp = UINT64_MAX,
             .latest = false,
@@ -571,14 +568,15 @@ static size_t twa_get_samples_from_right(timestamp_t cur_ts,
 static size_t twa_get_samples_from_left(timestamp_t cur_ts,
                                         const AggregationIterator *self,
                                         Sample *sample_left,
-                                        Sample *sample_leftLeft,
-                                        bool apply_filter) {
+                                        Sample *sample_leftLeft) {
     size_t n_samples_left = 0;
     if (cur_ts > 0) {
+        // Honor the query's filters so a sample removed by FILTER_BY_VALUE/FILTER_BY_TS is not
+        // treated as a neighbor (edge-gap detection, LOCF seeding, TWA interpolation).
         RangeArgs args = {
             .aggregationArgs = { 0 },
-            .filterByValueArgs = apply_filter ? self->byValueArgs : (FilterByValueArgs){ 0 },
-            .filterByTSArgs = apply_filter ? self->byTsArgs : (FilterByTSArgs){ 0 },
+            .filterByValueArgs = self->byValueArgs,
+            .filterByTSArgs = self->byTsArgs,
             .startTimestamp = 0,
             .endTimestamp = cur_ts - 1,
             .latest = false,
@@ -641,8 +639,8 @@ static void twa_fillEmptyBuckets(size_t *write_index,
     int64_t agg_time_delta = self->aggregationTimeDelta;
     ta = twa_calc_ta(
         false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
-    n_samples_before = twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore, true);
-    n_samples_after = twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter, true);
+    n_samples_before = twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
+    n_samples_after = twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter);
 
     for (size_t i = 0; i < n_empty_buckets; ++i) {
         ta = twa_calc_ta(
@@ -734,12 +732,13 @@ static int fillEmptyBuckets(Samples *samples,
         Sample sample_before, sample_befBefore, sample_after, sample_afAfter;
         timestamp_t ta = twa_calc_ta(
             false, cur_ts, cur_ts + agg_time_delta, self->startTimestamp, self->endTimestamp);
-        // apply_filter=true: a neighbor removed by FILTER_BY_VALUE/FILTER_BY_TS must not count, or
-        // an edge gap looks interior and we fill out to endTimestamp (UINT64_MAX with '+') -> OOM.
+        // The neighbor lookups honor the query filters: a sample removed by FILTER_BY_VALUE/
+        // FILTER_BY_TS must not count here, or an edge gap looks interior and we fill out to
+        // endTimestamp (UINT64_MAX with '+') -> bucket-count overflow -> OOM.
         size_t n_samples_before =
-            twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore, true);
+            twa_get_samples_from_left(ta, self, &sample_before, &sample_befBefore);
         size_t n_samples_after =
-            twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter, true);
+            twa_get_samples_from_right(ta, self, &sample_after, &sample_afAfter);
         if (n_samples_before == 0 || n_samples_after == 0) {
             return 0;
         }

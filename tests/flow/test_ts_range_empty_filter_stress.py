@@ -260,3 +260,102 @@ def test_range_empty_filter_stress():
             for agg in NON_TWA_AGGS:
                 _check(r, samples, agg, bucket=bucket, lo=lo, hi=hi, rev=rev,
                        fbv=fbv, fbts=fbts, empty=empty, bts=bts)
+
+
+# ---------------------------------------------------------------------------
+# twa: filter-equivalence oracle
+#
+# twa is excluded from the value oracle above (we don't reimplement its integral). Instead we
+# verify the filter is applied correctly by EQUIVALENCE: twa over the full data WITH the filter must
+# equal twa over only the kept samples WITHOUT a filter. This uses the engine's own (trusted)
+# no-filter twa as the reference, so it needs no hand-derived twa math. Bounds may be anything --
+# they apply identically to both sides, so the equivalence is independent of query-boundary rules.
+# ---------------------------------------------------------------------------
+
+def _kept_for_filter(samples, fbv, fbts):
+    fset = set(fbts) if fbts is not None else None
+    return [(t, v) for (t, v) in samples
+            if (fbv is None or fbv[0] <= v <= fbv[1])
+            and (fset is None or t in fset)]
+
+
+def test_twa_filter_equivalence_stress():
+    import os
+    iters = int(os.getenv('TWA_FILTER_FUZZ_ITERS', '400'))
+    rnd = random.Random(int(os.getenv('TWA_FILTER_FUZZ_SEED', '20260612')))
+
+    env = Env(decodeResponses=False)
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('FLUSHALL')
+        kid = 0
+        for _ in range(iters):
+            hi_pool = rnd.choice([40, 60, 120])
+            n = rnd.randint(1, 14)
+            ts = sorted(rnd.sample(range(0, hi_pool), n))
+            samples = [(t, rnd.randint(-50, 50)) for t in ts]
+
+            bucket = rnd.randint(1, 9)
+            empty = rnd.random() < 0.85
+            bts = rnd.choice([None, 'start', 'mid', 'end'])
+            rev = rnd.random() < 0.5
+            lo = '-' if rnd.random() < 0.5 else rnd.randint(0, hi_pool)
+            hi = '+' if rnd.random() < 0.5 else (lo if isinstance(lo, int) else 0) + rnd.randint(0, hi_pool)
+
+            # always apply a filter (no-filter would make the equivalence trivial)
+            fbv = None
+            fbts = None
+            if rnd.random() < 0.6 or not ts:
+                a = rnd.randint(-50, 40)
+                fbv = (a, a + rnd.randint(0, 60))
+            else:
+                k = rnd.randint(1, len(ts))
+                fbts = sorted(rnd.sample(ts, k))
+
+            kept = _kept_for_filter(samples, fbv, fbts)
+
+            kid += 1
+            full = 'twf:%d' % kid
+            keptk = 'twk:%d' % kid
+            r.execute_command('TS.CREATE', full)
+            r.execute_command('TS.CREATE', keptk)
+            m = []
+            for t, v in samples:
+                m += [full, t, v]
+            if m:
+                r.execute_command('TS.MADD', *m)
+            m = []
+            for t, v in kept:
+                m += [keptk, t, v]
+            if m:
+                r.execute_command('TS.MADD', *m)
+
+            # A: full data WITH the filter
+            a_args = ['TS.REVRANGE' if rev else 'TS.RANGE', full, lo, hi]
+            if fbts is not None:
+                a_args += ['FILTER_BY_TS', *fbts]
+            if fbv is not None:
+                a_args += ['FILTER_BY_VALUE', fbv[0], fbv[1]]
+            a_args += ['AGGREGATION', 'twa', bucket]
+            if bts is not None:
+                a_args += ['BUCKETTIMESTAMP', bts]
+            if empty:
+                a_args += ['EMPTY']
+            # B: only the kept samples, NO filter
+            b_args = ['TS.REVRANGE' if rev else 'TS.RANGE', keptk, lo, hi, 'AGGREGATION', 'twa', bucket]
+            if bts is not None:
+                b_args += ['BUCKETTIMESTAMP', bts]
+            if empty:
+                b_args += ['EMPTY']
+
+            a = r.execute_command(*a_args)
+            b = r.execute_command(*b_args)
+            label = ' '.join(str(x) for x in a_args)
+            assert len(a) == len(b), \
+                "row count %d \!= %d for: %s\n%s\nvs\n%s" % (len(a), len(b), label, a, b)
+            for ra, rb in zip(a, b):
+                assert int(ra[0]) == int(rb[0]), \
+                    "ts %s \!= %s for: %s\n%s\nvs\n%s" % (ra[0], rb[0], label, a, b)
+                assert _eq(_parse_val(ra[1]), _parse_val(rb[1])), \
+                    "twa %r \!= %r at ts %s for: %s\n%s\nvs\n%s" % (ra[1], rb[1], ra[0], label, a, b)
+            r.execute_command('DEL', full, keptk)
