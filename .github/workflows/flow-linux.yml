@@ -188,10 +188,15 @@ jobs:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}
 
       - name: Upload test artifacts
-        if: failure()
+        # MOD-14615: capture every shard's log (all masters AND replicas) on
+        # EVERY run, not just failures, so passing runs still yield the per-shard
+        # diagnostics. retention-days bounds the storage cost of always-on upload.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
+          if-no-files-found: warn
+          retention-days: 7
           path: |
             tests/**/*.log
 
