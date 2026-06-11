@@ -289,8 +289,8 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
 
         // Build the pivoted row. A missing sample for a key at this timestamp is
         // reported as NaN -- indistinguishable from a key that has a real sample
-        // whose value is NaN. This conflation is intentional (documented in the
-        // TS.NRANGE/TS.NREVRANGE command summary); disambiguating would require a
+        // whose value is NaN. This conflation is intended behavior (see the
+        // TS.NRANGE/TS.NREVRANGE command docs); disambiguating would require a
         // separate null cell.
         for (size_t i = 0; i < num_keys; i++) {
             if (active[i] && front[i].timestamp == target) {
