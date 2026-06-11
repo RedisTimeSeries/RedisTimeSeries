@@ -273,6 +273,7 @@ int ReplySeriesRangeX(RedisModuleCtx *ctx,
     long long emitted = 0;
     while (active_count > 0 && emitted < limit) {
         // Next output timestamp: smallest front (largest when reverse).
+        // Linear over the fronts; a heap could replace it if num_keys grows large.
         bool found = false;
         timestamp_t target = 0;
         for (size_t i = 0; i < num_keys; i++) {
