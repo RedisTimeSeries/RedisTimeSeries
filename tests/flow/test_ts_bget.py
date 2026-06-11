@@ -404,6 +404,62 @@ def test_bget_paging_past_latest_times_out_empty():
 
 
 # ---------------------------------------------------------------------------
+# 9b. '$' sentinel: resolves to lastTs + 1, so the latest EXISTING sample is
+#     excluded and only samples reported after the command qualify. The first
+#     call blocks until a strictly-newer sample arrives.
+# ---------------------------------------------------------------------------
+
+def test_bget_dollar_only_returns_samples_added_after_command():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0")])
+
+    # '$' resolves to lastTs + 1 = 301. Existing 100/200/300 must NOT qualify;
+    # only a future ADD with ts >= 301 should wake us.
+    t, slot = _start_bget(env, "ts", "$", 10_000)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(),
+                   message="BGET '$' should ignore pre-existing samples and block")
+
+    # Producer adds a strictly newer sample -> wake-up.
+    assert r.execute_command("TS.ADD", "ts", 400, "4.0") == 400
+
+    t.join(timeout=2.0)
+    env.assertFalse(t.is_alive())
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [[400, b"4"]])
+
+
+# ---------------------------------------------------------------------------
+# 9c. '$' on an empty / missing series: resolves to cursor=0 (like '-'/'+'),
+#     so it blocks until the first sample is added.
+# ---------------------------------------------------------------------------
+
+def test_bget_dollar_on_empty_series_blocks_until_first_add():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.execute_command("FLUSHALL")
+
+    t, slot = _start_bget(env, "ts", "$", 10_000)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(),
+                   message="BGET '$' on missing key should block until ADD")
+
+    assert r.execute_command("TS.ADD", "ts", 100, "1.0") == 100
+
+    t.join(timeout=2.0)
+    env.assertFalse(t.is_alive())
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [[100, b"1"]])
+
+
+# ---------------------------------------------------------------------------
 # 10. Multi-client broadcast: every parked client receives the new sample
 #     (TS.BGET semantics — not BLPOP-style first-waiter-wins dequeue).
 # ---------------------------------------------------------------------------
