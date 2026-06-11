@@ -1453,22 +1453,25 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 /* ============================================================================
  *  TS.BGET — Blocking GET (cursor-style tailing of a series)
  *
- *  Syntax:  TS.BGET key timestamp count timeout
+ *  Syntax:  TS.BGET key timestamp timeout [MIN_COUNT min_count] [MAX_COUNT max_count]
  *
- *  Returns up to `count` samples with sample-ts greater than or equal to the
- *  resolved cursor, sorted ascending. Blocks up to `timeout` ms waiting for
- *  qualifying samples. `timestamp` may be a literal UNIX-ms value or one of
- *  the sentinels `-` (earliest) / `+` (latest at command-receive time; first
- *  call only).
+ *  Returns up to `max_count` samples (default unlimited) with sample-ts greater
+ *  than or equal to the resolved cursor, sorted ascending. Blocks up to
+ *  `timeout` ms waiting until at least `min_count` qualifying samples exist
+ *  (default 1). `timestamp` may be a literal UNIX-ms value or one of the
+ *  sentinels `-` (earliest) / `+` (latest existing sample, inclusive) /
+ *  `$` (latest sample's ts + 1, i.e. only post-command samples qualify).
  *
  *  Wake-up is driven by RedisModule_SignalKeyAsReady() in the sample-append
  *  chokepoint of the engine (covers TS.ADD / TS.MADD / TS.INCRBY / TS.DECRBY
  *  on append, plus compaction-rule writes to the destination key).
  *
- *  Sentinel support (all resolved inside parse_bget_args):
+ *  Sentinel support (all resolved once inside parse_bget_args):
  *    `-` -> cursor=0 (no lower bound).
- *    `+` -> cursor=series->lastTimestamp+1, snapshotted once at command
- *           receipt; missing/empty -> 0; wrong-type key -> WRONGTYPE.
+ *    `+` -> cursor=series->lastTimestamp (latest existing sample qualifies,
+ *           aligned with TS.RANGE); missing/empty -> 0; wrong-type -> WRONGTYPE.
+ *    `$` -> cursor=series->lastTimestamp+1 (only post-command samples qualify);
+ *           missing/empty -> 0; wrong-type -> WRONGTYPE.
  * ============================================================================
  */
 
@@ -1482,7 +1485,7 @@ typedef enum BGetArgv
 {
     BGET_ARGV_COMMAND = 0,     ///< the command name itself
     BGET_ARGV_KEY = 1,         ///< series key
-    BGET_ARGV_TIMESTAMP = 2,   ///< cursor / '-' / '+'
+    BGET_ARGV_TIMESTAMP = 2,   ///< cursor / '-' / '+' / '$'
     BGET_ARGV_TIMEOUT = 3,     ///< timeout in ms
     BGET_ARGV_FIRST_OPTION = 4 ///< first MIN_COUNT/MAX_COUNT keyword (options follow in pairs)
 } BGetArgv;
@@ -1542,7 +1545,12 @@ typedef struct BGetCtx
  * @return REDISMODULE_OK on success, REDISMODULE_ERR on any reply written.
  */
 static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, BGetCtx *out) {
-    if (argc < BGET_MIN_ARGC || argc > BGET_MAX_ARGC) {
+    // Optional args come only as MIN_COUNT/MAX_COUNT keyword+value pairs, so
+    // anything past the fixed args must be a whole number of BGET_OPTION_STRIDE
+    // tokens. This rejects a stray trailing token or a lone keyword (e.g. an
+    // odd argc of 5 or 7) instead of silently ignoring it.
+    if (argc < BGET_MIN_ARGC || argc > BGET_MAX_ARGC ||
+        (argc - BGET_MIN_ARGC) % BGET_OPTION_STRIDE != 0) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_ERR;
     }
