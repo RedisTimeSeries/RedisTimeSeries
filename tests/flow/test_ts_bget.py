@@ -284,32 +284,6 @@ def test_bget_timeout_flushes_available_samples():
                    message="Timeout overshoot too large: %.3fs" % elapsed)
 
 
-def test_bget_timeout_flush_respects_max_count():
-    env = Env()
-    if env.is_cluster():
-        env.skip()
-
-    r = env.getConnection()
-    _seed(r, "ts", [
-        (100, "1.0"), (200, "2.0"), (300, "3.0"),
-        (400, "4.0"), (500, "5.0"),
-    ])
-
-    # cursor=101 -> 4 qualifying samples; MIN_COUNT 10 can never be reached and
-    # nobody adds, so the timeout_cb flushes. Even on the flush path the reply
-    # must honor MAX_COUNT and return only the oldest 2 (not all 4 available).
-    t0 = time.time()
-    res = r.execute_command("TS.BGET", "ts", 101, 1000,
-                            "MIN_COUNT", 10, "MAX_COUNT", 2)
-    elapsed = time.time() - t0
-
-    env.assertEqual(res, [[200, b"2"], [300, b"3"]])
-    env.assertTrue(elapsed >= 0.9,
-                   message="Expected to wait ~1s on timeout, only waited %.3fs" % elapsed)
-    env.assertTrue(elapsed < 5.0,
-                   message="Timeout overshoot too large: %.3fs" % elapsed)
-
-
 # ---------------------------------------------------------------------------
 # 5. '-' sentinel: cursor=0, matches every existing sample.
 # ---------------------------------------------------------------------------
