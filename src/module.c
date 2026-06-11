@@ -2273,29 +2273,6 @@ example:
 redis-server --loadmodule ./redistimeseries.so COMPACTION_POLICY
 "max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d" RETENTION_POLICY 3600 MAX_SAMPLE_PER_CHUNK 1024
 */
-// Declare the keynum key-spec for TS.RANGEX/TS.REVRANGEX (numkeys at argv[1],
-// keys from argv[2], step 1) so the cluster can route and reject cross-slot.
-static void setRangexKeySpec(RedisModuleCtx *ctx, const char *name) {
-    RedisModuleCommand *cmd = RedisModule_GetCommand(ctx, name);
-    if (cmd == NULL) {
-        return;
-    }
-    RedisModuleCommandKeySpec keyspecs[] = {
-        { .flags = REDISMODULE_CMD_KEY_RO | REDISMODULE_CMD_KEY_ACCESS,
-          .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
-          .bs.index.pos = 1,
-          .find_keys_type = REDISMODULE_KSPEC_FK_KEYNUM,
-          .fk.keynum = { .keynumidx = 0, .firstkey = 1, .keystep = 1 } },
-        { 0 }
-    };
-    RedisModuleCommandInfo info = {
-        .version = REDISMODULE_COMMAND_INFO_VERSION,
-        .arity = -5, // cmd + numkeys + >=1 key + from + to
-        .key_specs = keyspecs,
-    };
-    RedisModule_SetCommandInfo(cmd, &info);
-}
-
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (RedisModule_Init(ctx, "timeseries", REDISTIMESERIES_MODULE_VERSION, REDISMODULE_APIVER_1) ==
         REDISMODULE_ERR) {
@@ -2467,7 +2444,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     // TS.RANGEX / TS.REVRANGEX: keys are explicit but at variable positions (after
     // numkeys), so they can't use the fixed first/last/step args; a keynum key-spec
-    // is attached below via setRangexKeySpec for cluster routing.
+    // is attached via RegisterTSCommandInfos (TS_RANGEX_INFO) for cluster routing.
     if (RedisModule_CreateCommand(ctx, "ts.rangex", TSDB_rangex, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
         FreeConfigAndStaticCtx();
@@ -2485,9 +2462,6 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     SetCommandAcls(ctx, "ts.revrangex", "read");
-
-    setRangexKeySpec(ctx, "ts.rangex");
-    setRangexKeySpec(ctx, "ts.revrangex");
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
