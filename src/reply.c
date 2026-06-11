@@ -248,7 +248,7 @@ void ReplyWithPivotSample(RedisModuleCtx *ctx,
     }
 }
 
-int ReplySeriesRangeX(RedisModuleCtx *ctx,
+int ReplySeriesNRange(RedisModuleCtx *ctx,
                       AbstractSampleIterator **iters,
                       size_t num_keys,
                       long long count,
@@ -280,13 +280,17 @@ int ReplySeriesRangeX(RedisModuleCtx *ctx,
             if (!active[i]) {
                 continue;
             }
-            if (!found || (reverse ? (front[i].timestamp > target) : (front[i].timestamp < target))) {
+            if (!found ||
+                (reverse ? (front[i].timestamp > target) : (front[i].timestamp < target))) {
                 target = front[i].timestamp;
                 found = true;
             }
         }
 
-        // Build the pivoted row; NaN for any key with no sample at this timestamp.
+        // Build the pivoted row. A missing sample for a key at this timestamp is
+        // reported as NaN -- indistinguishable from a key that has a real sample
+        // whose value is NaN. This conflation is intentional (see TS.NRANGE docs:
+        // "known limitations"); disambiguating would require a separate null cell.
         for (size_t i = 0; i < num_keys; i++) {
             if (active[i] && front[i].timestamp == target) {
                 row[i] = front[i].value;

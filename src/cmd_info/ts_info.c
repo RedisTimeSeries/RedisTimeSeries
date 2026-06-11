@@ -929,14 +929,15 @@ static const RedisModuleCommandInfo TS_RANGE_INFO = {
 };
 
 // ===============================
-// TS.REVRANGEX numkeys key [key ...] fromTimestamp toTimestamp
+// TS.NREVRANGE numkeys key [key ...] fromTimestamp toTimestamp
 //  [LATEST]
 //  [FILTER_BY_TS ts...]
 //  [FILTER_BY_VALUE min max]
 //  [COUNT count]
-//  [[ALIGN align] AGGREGATION aggregator[,aggregator...] bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
+//  [[ALIGN align] AGGREGATION aggregator[,aggregator...] bucketDuration [BUCKETTIMESTAMP bt]
+//  [EMPTY]]
 // ===============================
-static const RedisModuleCommandKeySpec TS_REVRANGEX_KEYSPECS[] = {
+static const RedisModuleCommandKeySpec TS_NREVRANGE_KEYSPECS[] = {
     { .flags = REDISMODULE_CMD_KEY_RO | REDISMODULE_CMD_KEY_ACCESS,
       .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
       .bs.index = { .pos = 1 },
@@ -945,7 +946,7 @@ static const RedisModuleCommandKeySpec TS_REVRANGEX_KEYSPECS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandArg TS_REVRANGEX_ARGS[] = {
+static const RedisModuleCommandArg TS_NREVRANGE_ARGS[] = {
     { .name = "numkeys", .type = REDISMODULE_ARG_TYPE_INTEGER },
     { .name = "key",
       .type = REDISMODULE_ARG_TYPE_KEY,
@@ -1024,7 +1025,7 @@ static const RedisModuleCommandArg TS_REVRANGEX_ARGS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandInfo TS_REVRANGEX_INFO = {
+static const RedisModuleCommandInfo TS_NREVRANGE_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
     .summary = "Query a range across multiple time series in reverse direction, returning the "
                "results pivoted by timestamp (one value column per key)",
@@ -1033,19 +1034,20 @@ static const RedisModuleCommandInfo TS_REVRANGEX_INFO = {
     .since = "8.10.0",
     .tips = "dont_cache",
     .arity = -5,
-    .key_specs = (RedisModuleCommandKeySpec *)TS_REVRANGEX_KEYSPECS,
-    .args = (RedisModuleCommandArg *)TS_REVRANGEX_ARGS,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_NREVRANGE_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_NREVRANGE_ARGS,
 };
 
 // ===============================
-// TS.RANGEX numkeys key [key ...] fromTimestamp toTimestamp
+// TS.NRANGE numkeys key [key ...] fromTimestamp toTimestamp
 //  [LATEST]
 //  [FILTER_BY_TS ts...]
 //  [FILTER_BY_VALUE min max]
 //  [COUNT count]
-//  [[ALIGN align] AGGREGATION aggregator[,aggregator...] bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
+//  [[ALIGN align] AGGREGATION aggregator[,aggregator...] bucketDuration [BUCKETTIMESTAMP bt]
+//  [EMPTY]]
 // ===============================
-static const RedisModuleCommandKeySpec TS_RANGEX_KEYSPECS[] = {
+static const RedisModuleCommandKeySpec TS_NRANGE_KEYSPECS[] = {
     { .flags = REDISMODULE_CMD_KEY_RO | REDISMODULE_CMD_KEY_ACCESS,
       .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
       .bs.index = { .pos = 1 },
@@ -1054,7 +1056,7 @@ static const RedisModuleCommandKeySpec TS_RANGEX_KEYSPECS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandArg TS_RANGEX_ARGS[] = {
+static const RedisModuleCommandArg TS_NRANGE_ARGS[] = {
     { .name = "numkeys", .type = REDISMODULE_ARG_TYPE_INTEGER },
     { .name = "key",
       .type = REDISMODULE_ARG_TYPE_KEY,
@@ -1133,7 +1135,7 @@ static const RedisModuleCommandArg TS_RANGEX_ARGS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandInfo TS_RANGEX_INFO = {
+static const RedisModuleCommandInfo TS_NRANGE_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
     .summary = "Query a range across multiple time series in forward direction, returning the "
                "results pivoted by timestamp (one value column per key)",
@@ -1142,8 +1144,8 @@ static const RedisModuleCommandInfo TS_RANGEX_INFO = {
     .since = "8.10.0",
     .tips = "dont_cache",
     .arity = -5,
-    .key_specs = (RedisModuleCommandKeySpec *)TS_RANGEX_KEYSPECS,
-    .args = (RedisModuleCommandArg *)TS_RANGEX_ARGS,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_NRANGE_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_NRANGE_ARGS,
 };
 
 // ===============================
@@ -1640,15 +1642,15 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
         RedisModule_SetCommandInfo(cmd_revrange, &TS_REVRANGE_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    // Register TS.RANGEX command info
-    RedisModuleCommand *cmd_rangex = RedisModule_GetCommand(ctx, "TS.RANGEX");
-    if (!cmd_rangex || RedisModule_SetCommandInfo(cmd_rangex, &TS_RANGEX_INFO) == REDISMODULE_ERR)
+    // Register TS.NRANGE command info
+    RedisModuleCommand *cmd_nrange = RedisModule_GetCommand(ctx, "TS.NRANGE");
+    if (!cmd_nrange || RedisModule_SetCommandInfo(cmd_nrange, &TS_NRANGE_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    // Register TS.REVRANGEX command info
-    RedisModuleCommand *cmd_revrangex = RedisModule_GetCommand(ctx, "TS.REVRANGEX");
-    if (!cmd_revrangex ||
-        RedisModule_SetCommandInfo(cmd_revrangex, &TS_REVRANGEX_INFO) == REDISMODULE_ERR)
+    // Register TS.NREVRANGE command info
+    RedisModuleCommand *cmd_nrevrange = RedisModule_GetCommand(ctx, "TS.NREVRANGE");
+    if (!cmd_nrevrange ||
+        RedisModule_SetCommandInfo(cmd_nrevrange, &TS_NREVRANGE_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.QUERYINDEX command info

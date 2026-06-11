@@ -591,7 +591,7 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return TSDB_generic_range(ctx, argv, argc, true);
 }
 
-// TS.RANGEX/TS.REVRANGEX numkeys key [key...] fromTimestamp toTimestamp [options]
+// TS.NRANGE/TS.NREVRANGE numkeys key [key...] fromTimestamp toTimestamp [options]
 //   [LATEST] [FILTER_BY_TS ts...] [FILTER_BY_VALUE min max] [COUNT count]
 //   [[ALIGN align] AGGREGATION agg[,agg...] bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
 // Like TS.RANGE but over an explicit list of same-slot keys, returning results
@@ -599,7 +599,7 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 // NaN where a key has no sample at that timestamp. With AGGREGATION, the number
 // of (comma-separated) aggregators must be 1 (broadcast) or equal to numkeys
 // (one per key); all share a single bucketDuration.
-int TSDB_generic_rangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
+int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     // argv: [0]=cmd [1]=numkeys [2..1+numkeys]=keys [2+numkeys]=from [3+numkeys]=to ...
     if (argc < 5) {
         return RedisModule_WrongArity(ctx);
@@ -611,8 +611,13 @@ int TSDB_generic_rangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         return REDISMODULE_ERR;
     }
 
-    // cmd + numkeys + numKeys keys + fromTimestamp + toTimestamp
-    if ((long long)argc < 2 + numKeys + 2) {
+    // cmd + numkeys + from + to = 4 non-key args. Compare against the argc bound
+    // rather than computing 2 + numKeys + 2: numKeys is user-controlled, so that
+    // sum overflows for values near LLONG_MAX, wraps negative, and would skip this
+    // guard (then calloc(numKeys, ...) returns NULL and gets dereferenced). This
+    // form can't overflow (argc is a small int, and argc >= 5 above) and also
+    // bounds numKeys <= argc so the per-key allocations below can't realistically fail.
+    if (numKeys > (long long)argc - 4) {
         return RedisModule_WrongArity(ctx);
     }
 
@@ -624,8 +629,7 @@ int TSDB_generic_rangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 
     const size_t numClasses = rangeArgs.aggregationArgs.numClasses;
     if (numClasses != 0 && numClasses != 1 && numClasses != (size_t)numKeys) {
-        RTS_ReplyGeneralError(ctx,
-                              "TSDB: the number of aggregators must be 1 or equal to numkeys");
+        RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be 1 or equal to numkeys");
         free(rangeArgs.aggregationArgs.classes);
         return REDISMODULE_ERR;
     }
@@ -662,7 +666,7 @@ int TSDB_generic_rangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         iters[i] = SeriesCreateSampleIterator(series[i], &perKey, rev, true);
     }
 
-    ReplySeriesRangeX(ctx, iters, numKeys, rangeArgs.count, rev); // closes each iterator
+    ReplySeriesNRange(ctx, iters, numKeys, rangeArgs.count, rev); // closes each iterator
     rv = REDISMODULE_OK;
 
 cleanup:
@@ -676,12 +680,12 @@ cleanup:
     return rv;
 }
 
-int TSDB_rangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    return TSDB_generic_rangex(ctx, argv, argc, false);
+int TSDB_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return TSDB_generic_nrange(ctx, argv, argc, false);
 }
 
-int TSDB_revrangex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    return TSDB_generic_rangex(ctx, argv, argc, true);
+int TSDB_nrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return TSDB_generic_nrange(ctx, argv, argc, true);
 }
 
 static int internalAdd(RedisModuleCtx *ctx,
@@ -2442,26 +2446,26 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SetCommandAcls(ctx, "ts.mrevrange", "read");
 
-    // TS.RANGEX / TS.REVRANGEX: keys are explicit but at variable positions (after
+    // TS.NRANGE / TS.NREVRANGE: keys are explicit but at variable positions (after
     // numkeys), so they can't use the fixed first/last/step args; a keynum key-spec
-    // is attached via RegisterTSCommandInfos (TS_RANGEX_INFO) for cluster routing.
-    if (RedisModule_CreateCommand(ctx, "ts.rangex", TSDB_rangex, "readonly", 0, 0, -1) ==
+    // is attached via RegisterTSCommandInfos (TS_NRANGE_INFO) for cluster routing.
+    if (RedisModule_CreateCommand(ctx, "ts.nrange", TSDB_nrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
         FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
 
-    SetCommandAcls(ctx, "ts.rangex", "read");
+    SetCommandAcls(ctx, "ts.nrange", "read");
 
-    if (RedisModule_CreateCommand(ctx, "ts.revrangex", TSDB_revrangex, "readonly", 0, 0, -1) ==
+    if (RedisModule_CreateCommand(ctx, "ts.nrevrange", TSDB_nrevrange, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {
         FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
     }
 
-    SetCommandAcls(ctx, "ts.revrangex", "read");
+    SetCommandAcls(ctx, "ts.nrevrange", "read");
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {

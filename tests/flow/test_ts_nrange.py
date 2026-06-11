@@ -3,16 +3,19 @@ import pytest
 import redis
 from includes import *
 
-# Tests for TS.RANGEX / TS.REVRANGEX.
+# Tests for TS.NRANGE / TS.NREVRANGE.
 #
 # Strategy ("follow the DB and commands"): the source of truth is the existing
 # single-key TS.RANGE / TS.REVRANGE. For every scenario we query each key with
 # TS.RANGE (with its own aggregator when relevant) and merge those result-sets by
-# timestamp in Python (outer join, NaN for gaps, key order preserved). TS.RANGEX
+# timestamp in Python (outer join, NaN for gaps, key order preserved). TS.NRANGE
 # must produce exactly that pivot.
 #
-# All keys share a hash tag so they live in the same slot (TS.RANGEX requires it).
-# Cluster is skipped until the keynum key-spec lands.
+# TS.NRANGE/TS.NREVRANGE are single-shard: all keys must live in the same slot
+# (the keynum key-spec makes the cluster route to one shard and reject cross-slot
+# with CROSSSLOT). Once routed, execution is identical to standalone, so the logic
+# tests below run on a single shard (shared hash tag) and skipOnCluster(); cluster
+# coverage is just the cross-slot rejection in test_nrange_crossslot.
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +38,7 @@ def _norm(v):
 
 
 def _pivot_ref(r, keys, lo, hi, rev=False, aggs=None, bucket=None, extra=None):
-    """Expected TS.RANGEX result, derived from per-key TS.RANGE/TS.REVRANGE."""
+    """Expected TS.NRANGE result, derived from per-key TS.RANGE/TS.REVRANGE."""
     cmd = 'TS.REVRANGE' if rev else 'TS.RANGE'
     extra = list(extra or [])
     maps = []
@@ -50,7 +53,7 @@ def _pivot_ref(r, keys, lo, hi, rev=False, aggs=None, bucket=None, extra=None):
     for m in maps:
         all_ts |= set(m.keys())
     ordered = sorted(all_ts, reverse=rev)
-    # b'NaN' is the sentinel TS.RANGEX uses for a key with no sample at a ts.
+    # b'NaN' is the sentinel TS.NRANGE uses for a key with no sample at a ts.
     return [[ts, [m.get(ts, b'NaN') for m in maps]] for ts in ordered]
 
 
@@ -98,12 +101,12 @@ def _setup_distinct(r, tag):
 # raw (no aggregation)
 # ---------------------------------------------------------------------------
 
-def test_rangex_raw_explicit():
+def test_nrange_raw_explicit():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_ohlcv(r, '{rx_raw}')
-        res = r.execute_command('TS.RANGEX', 5, *keys, '-', '+')
+        res = r.execute_command('TS.NRANGE', 5, *keys, '-', '+')
         # raw mode: one row per DISTINCT timestamp across all keys (0,3,6,9,10,13,17)
         assert len(res) == 7
         assert res[0][0] == 0
@@ -115,30 +118,30 @@ def test_rangex_raw_explicit():
         assert [_norm(x) for x in res[6][1]] == [15.0, 15.0, 15.0, 'NAN', 15.0]
 
 
-def test_rangex_raw_matches_range():
+def test_nrange_raw_matches_range():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_rawd}')
-        res = r.execute_command('TS.RANGEX', len(keys), *keys, '-', '+')
+        res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+')
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+'))
 
 
-def test_revrangex_matches_revrange():
+def test_nrevrange_matches_revrange():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_rev}')
-        res = r.execute_command('TS.REVRANGEX', len(keys), *keys, '-', '+')
+        res = r.execute_command('TS.NREVRANGE', len(keys), *keys, '-', '+')
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+', rev=True))
 
 
-def test_rangex_single_key_matches_range():
+def test_nrange_single_key_matches_range():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_one}')
-        res = r.execute_command('TS.RANGEX', 1, keys[0], '-', '+')
+        res = r.execute_command('TS.NRANGE', 1, keys[0], '-', '+')
         _assert_pivot(res, _pivot_ref(r, [keys[0]], '-', '+'))
 
 
@@ -146,12 +149,12 @@ def test_rangex_single_key_matches_range():
 # aggregation
 # ---------------------------------------------------------------------------
 
-def test_rangex_ohlcv_aggregators_explicit():
+def test_nrange_ohlcv_aggregators_explicit():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_ohlcv(r, '{rx_ohlcv}')
-        res = r.execute_command('TS.RANGEX', 5, *keys, '-', '+',
+        res = r.execute_command('TS.NRANGE', 5, *keys, '-', '+',
                                 'AGGREGATION', 'first,max,min,last,sum', 10)
         assert len(res) == 2
         assert res[0][0] == 0
@@ -162,46 +165,46 @@ def test_rangex_ohlcv_aggregators_explicit():
         assert [_norm(x) for x in res[1][1]] == [12.0, 15.0, 9.0, 'NAN', 36.0]
 
 
-def test_rangex_per_key_agg_matches_range():
+def test_nrange_per_key_agg_matches_range():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_agg}')
         aggs = ['sum', 'min', 'max']
-        res = r.execute_command('TS.RANGEX', len(keys), *keys, '-', '+',
+        res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
                                 'AGGREGATION', ','.join(aggs), 2)
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+', aggs=aggs, bucket=2))
 
 
-def test_rangex_single_aggregator_broadcast():
+def test_nrange_single_aggregator_broadcast():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_bcast}')
         # one aggregator applies to all keys
-        res = r.execute_command('TS.RANGEX', len(keys), *keys, '-', '+',
+        res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
                                 'AGGREGATION', 'avg', 2)
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+', aggs=['avg'], bucket=2))
 
 
-def test_revrangex_agg_matches_revrange():
+def test_nrevrange_agg_matches_revrange():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_revagg}')
         aggs = ['count', 'sum', 'last']
-        res = r.execute_command('TS.REVRANGEX', len(keys), *keys, '-', '+',
+        res = r.execute_command('TS.NREVRANGE', len(keys), *keys, '-', '+',
                                 'AGGREGATION', ','.join(aggs), 3)
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+', rev=True, aggs=aggs, bucket=3))
 
 
-def test_rangex_empty_matches():
+def test_nrange_empty_matches():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_ohlcv(r, '{rx_empty}')
         # range spans an empty bucket [20,30) -> EMPTY emits an all-NaN row
-        res = r.execute_command('TS.RANGEX', len(keys), *keys, 0, 30,
+        res = r.execute_command('TS.NRANGE', len(keys), *keys, 0, 30,
                                 'AGGREGATION', 'last', 10, 'EMPTY')
         _assert_pivot(res, _pivot_ref_empty(r, keys, 0, 30, 'last', 10))
 
@@ -222,33 +225,33 @@ def _pivot_ref_empty(r, keys, lo, hi, agg, bucket):
 # shared options: COUNT / FILTER_BY_TS / FILTER_BY_VALUE
 # ---------------------------------------------------------------------------
 
-def test_rangex_count_limits_rows():
+def test_nrange_count_limits_rows():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_count}')
         full = _pivot_ref(r, keys, '-', '+')
-        res = r.execute_command('TS.RANGEX', len(keys), *keys, '-', '+', 'COUNT', 2)
+        res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+', 'COUNT', 2)
         _assert_pivot(res, full[:2])
 
 
-def test_rangex_filter_by_ts_matches():
+def test_nrange_filter_by_ts_matches():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_fbts}')
-        res = r.execute_command('TS.RANGEX', len(keys), *keys, '-', '+',
+        res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
                                 'FILTER_BY_TS', 0, 3, 6)
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+', extra=['FILTER_BY_TS', 0, 3, 6]))
 
 
-def test_rangex_filter_by_value_matches():
+def test_nrange_filter_by_value_matches():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_fbv}')
         # value window that drops some samples per key -> turns into NaN gaps
-        res = r.execute_command('TS.RANGEX', len(keys), *keys, '-', '+',
+        res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
                                 'FILTER_BY_VALUE', 102, 302)
         _assert_pivot(res, _pivot_ref(r, keys, '-', '+',
                                       extra=['FILTER_BY_VALUE', 102, 302]))
@@ -257,8 +260,8 @@ def test_rangex_filter_by_value_matches():
 # ---------------------------------------------------------------------------
 # equivalence with TS.RANGE on the "empty terminal bucket" edge case
 #
-# These pin down the one place the rangex path differs structurally from
-# TS.RANGE: rangex wraps the aggregation chain in a SeriesSampleIterator
+# These pin down the one place the nrange path differs structurally from
+# TS.RANGE: nrange wraps the aggregation chain in a SeriesSampleIterator
 # (chunk -> per-sample adapter) whose GetNext treats a non-NULL chunk with
 # zero samples as end-of-stream (sample_iterator.c). TS.RANGE instead reads
 # chunks directly and just skips an empty chunk.
@@ -267,18 +270,18 @@ def test_rangex_filter_by_value_matches():
 # zero-sample chunk from agg_iter_finalize (terminal: input already
 # exhausted) — the mid-stream emitter agg_iter_try_emit_partial returns NULL
 # when it has zero samples. So the early end-of-stream can only coincide with
-# the true end, and rangex must equal TS.RANGE. A regression that made the
-# aggregation iterator emit an empty chunk mid-stream would truncate rangex
+# the true end, and nrange must equal TS.RANGE. A regression that made the
+# aggregation iterator emit an empty chunk mid-stream would truncate nrange
 # early while TS.RANGE kept going — these tests would catch exactly that.
 #
 # `count` on an all-NaN bucket is 0, so without EMPTY that bucket is dropped,
 # which is what produces the terminal zero-sample chunk we want to exercise.
 # ---------------------------------------------------------------------------
 
-def test_rangex_trailing_all_nan_bucket_matches_range():
+def test_nrange_trailing_all_nan_bucket_matches_range():
     """Last bucket in the window is all-NaN (dropped without EMPTY).
 
-    This is the agg_iter_finalize zero-sample terminal chunk. rangex (single
+    This is the agg_iter_finalize zero-sample terminal chunk. nrange (single
     key) must emit the earlier valid buckets and stop exactly where TS.RANGE
     stops — no extra trailing row, no early truncation of the valid buckets.
     """
@@ -296,14 +299,14 @@ def test_rangex_trailing_all_nan_bucket_matches_range():
         # Sanity: the trailing all-NaN bucket must be absent in TS.RANGE.
         assert [row[0] for row in rng] == [0, 10], f'unexpected TS.RANGE: {rng!r}'
 
-        res = r.execute_command('TS.RANGEX', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
+        res = r.execute_command('TS.NRANGE', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
         _assert_pivot(res, _pivot_ref(r, [key], 0, 30, aggs=['count'], bucket=10))
 
 
-def test_rangex_interior_all_nan_bucket_no_early_truncation():
+def test_nrange_interior_all_nan_bucket_no_early_truncation():
     """All-NaN bucket sits BETWEEN two valid buckets (dropped without EMPTY).
 
-    The valid bucket AFTER the gap must still appear: proves the rangex
+    The valid bucket AFTER the gap must still appear: proves the nrange
     sample-iterator does not hit a premature end-of-stream on the dropped
     interior bucket (it never sees a mid-stream zero-sample chunk).
     """
@@ -321,15 +324,15 @@ def test_rangex_interior_all_nan_bucket_no_early_truncation():
         # The dropped interior bucket (10) is gone; the bucket after it (20) survives.
         assert [row[0] for row in rng] == [0, 20], f'unexpected TS.RANGE: {rng!r}'
 
-        res = r.execute_command('TS.RANGEX', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
+        res = r.execute_command('TS.NRANGE', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
         _assert_pivot(res, _pivot_ref(r, [key], 0, 30, aggs=['count'], bucket=10))
 
 
-def test_revrangex_trailing_all_nan_bucket_matches_revrange():
+def test_nrevrange_trailing_all_nan_bucket_matches_revrange():
     """Reverse direction of the terminal zero-sample chunk path.
 
     In reverse the "last" bucket consumed is the lowest-timestamp one; making
-    it all-NaN exercises agg_iter_finalize on the reverse chain. rangex must
+    it all-NaN exercises agg_iter_finalize on the reverse chain. nrange must
     match TS.REVRANGE.
     """
     e = Env()
@@ -345,7 +348,7 @@ def test_revrangex_trailing_all_nan_bucket_matches_revrange():
         rev = r.execute_command('TS.REVRANGE', key, 0, 30, 'AGGREGATION', 'count', 10)
         assert [row[0] for row in rev] == [20, 10], f'unexpected TS.REVRANGE: {rev!r}'
 
-        res = r.execute_command('TS.REVRANGEX', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
+        res = r.execute_command('TS.NREVRANGE', 1, key, 0, 30, 'AGGREGATION', 'count', 10)
         _assert_pivot(res, _pivot_ref(r, [key], 0, 30, rev=True, aggs=['count'], bucket=10))
 
 
@@ -353,7 +356,7 @@ def test_revrangex_trailing_all_nan_bucket_matches_revrange():
 # errors
 # ---------------------------------------------------------------------------
 
-def test_rangex_errors():
+def test_nrange_errors():
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
@@ -361,21 +364,45 @@ def test_rangex_errors():
 
         # non-integer numkeys
         with pytest.raises(redis.ResponseError, match="numkeys"):
-            r.execute_command('TS.RANGEX', 'x', keys[0], keys[1], '-', '+')
+            r.execute_command('TS.NRANGE', 'x', keys[0], keys[1], '-', '+')
 
         # non-positive numkeys (enough args to pass arity)
         with pytest.raises(redis.ResponseError, match="numkeys"):
-            r.execute_command('TS.RANGEX', -1, keys[0], keys[1], '-', '+')
+            r.execute_command('TS.NRANGE', -1, keys[0], keys[1], '-', '+')
+
+        # numkeys near LLONG_MAX must not overflow the arity check (was a
+        # crash: 2+numKeys+2 wrapped negative, skipped the guard, then
+        # calloc(numKeys, ...) returned NULL and got dereferenced).
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.NRANGE', 9223372036854775807, keys[0], '-', '+')
 
         # numkeys larger than the keys actually provided -> wrong arity
         with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.RANGEX', 3, keys[0], '-', '+')
+            r.execute_command('TS.NRANGE', 3, keys[0], '-', '+')
 
         # aggregator count must be 1 or numkeys
         with pytest.raises(redis.ResponseError, match="aggregators"):
-            r.execute_command('TS.RANGEX', 3, *keys, '-', '+',
+            r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min,max', 10)
 
         # missing key
         with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.RANGEX', 1, '{rx_err}:nope', '-', '+')
+            r.execute_command('TS.NRANGE', 1, '{rx_err}:nope', '-', '+')
+
+
+# ---------------------------------------------------------------------------
+# cluster: keys must share a slot -> cross-slot keys are rejected
+# ---------------------------------------------------------------------------
+
+def test_nrange_crossslot():
+    env = Env(decodeResponses=True)
+    if not env.isCluster():
+        env.skip()
+    with env.getClusterConnectionIfNeeded() as r:
+        # Different hash tags -> different slots; the keynum key-spec must make
+        # the cluster reject the command with CROSSSLOT.
+        r.execute_command('TS.CREATE', 'cs{a}')
+        r.execute_command('TS.CREATE', 'cs{b}')
+        for cmd in ('TS.NRANGE', 'TS.NREVRANGE'):
+            with pytest.raises(redis.ResponseError, match='CROSSSLOT'):
+                r.execute_command(cmd, 2, 'cs{a}', 'cs{b}', '-', '+')

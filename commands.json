@@ -663,7 +663,7 @@
         "since": "1.0.0",
         "group": "timeseries"
     },
-    "TS.RANGEX": {
+    "TS.NRANGE": {
         "summary": "Query a range across multiple time series in forward direction, returning the results pivoted by timestamp (one value column per key)",
         "complexity": "O(numkeys*(n/m+k)) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",
         "arguments": [
@@ -763,7 +763,7 @@
         "since": "8.10.0",
         "group": "timeseries"
     },
-    "TS.REVRANGEX": {
+    "TS.NREVRANGE": {
         "summary": "Query a range across multiple time series in reverse direction, returning the results pivoted by timestamp (one value column per key)",
         "complexity": "O(numkeys*(n/m+k)) where n = Number of data points, m = Chunk size (data points per chunk), k = Number of data points that are in the requested range",
         "arguments": [

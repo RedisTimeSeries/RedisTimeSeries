@@ -51,8 +51,8 @@ void ReplyWithPivotSample(RedisModuleCtx *ctx,
 
 // Merge num_keys time-ordered per-key sample iterators into a timestamp-major
 // reply (one row per distinct timestamp, NaN where a key has no sample). Used by
-// TS.RANGEX / TS.REVRANGEX. Consumes and closes each iterator.
-int ReplySeriesRangeX(RedisModuleCtx *ctx,
+// TS.NRANGE / TS.NREVRANGE. Consumes and closes each iterator.
+int ReplySeriesNRange(RedisModuleCtx *ctx,
                       AbstractSampleIterator **iters,
                       size_t num_keys,
                       long long count,

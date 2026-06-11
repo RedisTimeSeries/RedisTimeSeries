@@ -6,15 +6,15 @@ import pytest
 import redis
 from includes import *
 
-# Exhaustive cross-checks for TS.RANGEX / TS.REVRANGEX.
+# Exhaustive cross-checks for TS.NRANGE / TS.NREVRANGE.
 #
 # Ground truth = the existing single-key TS.RANGE / TS.REVRANGE. For any set of
 # options we query each key individually with those same options, merge the
 # per-key result-sets by timestamp (outer join, key order preserved, NaN for a
 # key with no value at a timestamp), apply COUNT to the merged rows, and assert
-# TS.RANGEX produces exactly that.
+# TS.NRANGE produces exactly that.
 #
-# Same hash tag => same slot (TS.RANGEX requires it). Cluster skipped until the
+# Same hash tag => same slot (TS.NRANGE requires it). Cluster skipped until the
 # keynum key-spec lands.
 
 AGGS = ['min', 'max', 'sum', 'avg', 'count', 'first', 'last', 'range',
@@ -60,9 +60,9 @@ def _single_args(name, key, lo, hi, *, aggs=None, idx=0, bucket=None,
     return a
 
 
-def _rangex_args(keys, lo, hi, rev, *, aggs=None, bucket=None, count=None,
+def _nrange_args(keys, lo, hi, rev, *, aggs=None, bucket=None, count=None,
                  fbt=None, fbv=None, align=None, bts=None, empty=False, latest=False):
-    name = 'TS.REVRANGEX' if rev else 'TS.RANGEX'
+    name = 'TS.NREVRANGE' if rev else 'TS.NRANGE'
     cmd = [name, len(keys), *keys, lo, hi]
     if latest:
         cmd.append('LATEST')
@@ -104,7 +104,7 @@ def _expected(r, keys, lo, hi, rev, *, aggs=None, bucket=None, count=None,
 
 
 def _cmp(r, keys, lo='-', hi='+', rev=False, **kw):
-    cmd = _rangex_args(keys, lo, hi, rev, **kw)
+    cmd = _nrange_args(keys, lo, hi, rev, **kw)
     actual = r.execute_command(*cmd)
     expected = _expected(r, keys, lo, hi, rev, **kw)
     label = ' '.join(str(x) for x in cmd)
@@ -248,7 +248,7 @@ def test_compare_duplicate_and_many_keys():
 # ---------------------------------------------------------------------------
 # multiple chunks per key
 #
-# ReplySeriesRangeX holds only one "front" sample per key and relies on
+# ReplySeriesNRange holds only one "front" sample per key and relies on
 # SeriesSampleIterator_GetNext to pull the next chunk transparently when the
 # current one is drained. CHUNK_SIZE 48 + UNCOMPRESSED packs only 3 samples per
 # chunk, so a handful of samples already spans several chunks. These check that
@@ -459,16 +459,46 @@ def test_compare_combined_options():
 
 
 # ---------------------------------------------------------------------------
+# LATEST (compaction destination: partial current bucket)
+# ---------------------------------------------------------------------------
+
+def test_compare_latest():
+    # LATEST only affects a downsampled (compaction) series: it reports the
+    # still-open current bucket. NRANGE must apply it per-key exactly like
+    # TS.RANGE -- otherwise the `latest` plumbing is untested.
+    with _conn() as r:
+        tag = 'rxlatest'
+        dests = []
+        for i in range(3):
+            src, dst = f'{{{tag}}}:src{i}', f'{{{tag}}}:dst{i}'
+            r.execute_command('TS.CREATE', src)
+            r.execute_command('TS.CREATE', dst)
+            r.execute_command('TS.CREATERULE', src, dst, 'AGGREGATION', 'sum', 10)
+            # bucket [0,10) closes when 11 arrives; [10,20) stays open (partial),
+            # so it is visible ONLY with LATEST. Values differ per key (the +i).
+            for ts, v in [(1, 1 + i), (2, 3), (11, 7), (13, 1 + i)]:
+                r.execute_command('TS.ADD', src, ts, v)
+            dests.append(dst)
+
+        # Without LATEST the open bucket is hidden; with LATEST it appears.
+        # NRANGE/NREVRANGE must match per-key TS.RANGE/TS.REVRANGE in both cases.
+        _cmp(r, dests)
+        _cmp(r, dests, latest=True)
+        _cmp(r, dests, latest=True, rev=True)
+        _cmp(r, dests, latest=True, aggs=['sum'], bucket=10)
+
+
+# ---------------------------------------------------------------------------
 # fuzz
 # ---------------------------------------------------------------------------
 
 def test_compare_fuzz():
     # Randomized stress: each iteration builds a random multi-key dataset + random
-    # option set and asserts TS.RANGEX/REVRANGEX == the per-key TS.RANGE/REVRANGE
-    # results merged by timestamp. Tunable via env: RANGEX_FUZZ_ITERS (default 200),
-    # RANGEX_FUZZ_SEED (default 20260602).
-    iters = int(os.getenv('RANGEX_FUZZ_ITERS', '200'))
-    rnd = random.Random(int(os.getenv('RANGEX_FUZZ_SEED', '20260602')))
+    # option set and asserts TS.NRANGE/NREVRANGE == the per-key TS.RANGE/REVRANGE
+    # results merged by timestamp. Tunable via env: NRANGE_FUZZ_ITERS (default 200),
+    # NRANGE_FUZZ_SEED (default 20260602).
+    iters = int(os.getenv('NRANGE_FUZZ_ITERS', '200'))
+    rnd = random.Random(int(os.getenv('NRANGE_FUZZ_SEED', '20260602')))
     with _conn() as r:
         for _ in range(iters):
             nkeys = rnd.randint(1, 8)
@@ -512,7 +542,7 @@ def test_compare_fuzz():
             if rnd.random() < 0.35:
                 a = rnd.randint(-1000, 500)
                 kw['fbv'] = (a, a + rnd.randint(0, 1500))
-            # Skip a PRE-EXISTING engine crash (not rangex): TS.RANGE itself aborts on
+            # Skip a PRE-EXISTING engine crash (not nrange): TS.RANGE itself aborts on
             # AGGREGATION twa + FILTER_BY_VALUE + EMPTY (fillEmptyBuckets/ReallocSamplesArray).
             if kw.get('empty') and 'fbv' in kw and aggs and 'twa' in aggs:
                 kw['empty'] = False
