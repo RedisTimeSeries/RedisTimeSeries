@@ -1,5 +1,4 @@
-# Stress tests for AGGREGATION + EMPTY combined with FILTER_BY_VALUE / FILTER_BY_TS,
-# for every aggregator EXCEPT twa.
+# Stress tests for AGGREGATION + EMPTY combined with FILTER_BY_VALUE / FILTER_BY_TS.
 #
 # Background: MOD-8187 extended EMPTY-bucket filling to all aggregators (not just twa). The
 # edge-gap "is there a neighbour?" check scanned the raw series and ignored the value/ts filters,
@@ -8,8 +7,11 @@
 # crash the server pre-fix; they also assert exact values against an INDEPENDENT oracle (computed
 # from first principles, never from the engine) so a wrong-value regression is caught too.
 #
-# twa is intentionally excluded: its interpolation still reads raw (unfiltered) neighbours, a
-# separate pre-existing issue tracked apart from the OOM fix.
+# twa is covered separately (test_twa_filter_equivalence_stress + the explicit crash test below):
+# this PR makes twa's neighbour lookups filter-aware too, so it can't be value-checked against the
+# same first-principles oracle (no hand-derived twa integral). Instead we verify it by EQUIVALENCE
+# -- twa(full data + filter) == twa(only the kept samples, no filter) -- plus a server-survives
+# check on the OOM repro. A full twa value-oracle is tracked as a follow-up.
 
 import math
 import random
@@ -359,3 +361,31 @@ def test_twa_filter_equivalence_stress():
                 assert _eq(_parse_val(ra[1]), _parse_val(rb[1])), \
                     "twa %r \!= %r at ts %s for: %s\n%s\nvs\n%s" % (ra[1], rb[1], ra[0], label, a, b)
             r.execute_command('DEL', full, keptk)
+
+
+def test_twa_oom_repro_survives():
+    """twa hits the same OOM path as the other aggregators; lock in the crash fix with a
+    server-survives check (no oracle needed). The [(5,10),(50,9999)] + FILTER_BY_VALUE 0 100 +
+    EMPTY shape aborted the server pre-fix: the filtered-out 9999 made the trailing edge gap look
+    interior, so the empty fill ran toward '+' (UINT64_MAX) and the bucket count overflowed."""
+    env = Env(decodeResponses=False)
+    env.skipOnCluster()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('FLUSHALL')
+        r.execute_command('TS.CREATE', 'twaoom')
+        r.execute_command('TS.MADD', 'twaoom', 5, 10, 'twaoom', 50, 9999)  # 9999 filtered out
+        variants = [
+            ['TS.RANGE', 'twaoom', '-', '+', 'FILTER_BY_VALUE', 0, 100,
+             'AGGREGATION', 'twa', 4, 'EMPTY'],
+            ['TS.REVRANGE', 'twaoom', '-', '+', 'FILTER_BY_VALUE', 0, 100,
+             'AGGREGATION', 'twa', 4, 'EMPTY'],
+            ['TS.RANGE', 'twaoom', '-', '+', 'FILTER_BY_VALUE', 0, 100,
+             'AGGREGATION', 'twa', 4, 'BUCKETTIMESTAMP', 'end', 'EMPTY'],
+            ['TS.REVRANGE', 'twaoom', '-', '+', 'FILTER_BY_VALUE', 0, 100,
+             'AGGREGATION', 'twa', 4, 'BUCKETTIMESTAMP', 'end', 'EMPTY'],
+            ['TS.RANGE', 'twaoom', '-', '+', 'FILTER_BY_TS', 5,
+             'AGGREGATION', 'twa', 4, 'EMPTY'],
+        ]
+        for cmd in variants:
+            r.execute_command(*cmd)              # pre-fix: server aborts here -> ConnectionError
+            assert r.execute_command('PING')     # must still be alive
