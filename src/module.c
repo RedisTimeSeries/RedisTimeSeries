@@ -591,6 +591,191 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return TSDB_generic_range(ctx, argv, argc, true);
 }
 
+// NRANGE takes one aggregator per key, space-separated, instead of the single comma-joined token
+// the shared range parser expects. We splice the numKeys aggregator tokens after AGGREGATION into
+// one comma-joined token, leaving the rest of the argument vector untouched so parseRangeArguments
+// (and its EMPTY/BUCKETTIMESTAMP offset math) keeps working unchanged. Returns a malloc'd argv the
+// caller frees (with *out_joined, the synthesized token), *out_argc set; or NULL when no rewrite
+// applies. On a bad request it replies, sets *err, and returns NULL.
+static RedisModuleString **nrange_splice_aggregators(RedisModuleCtx *ctx,
+                                                     RedisModuleString **argv,
+                                                     int argc,
+                                                     int rangeStart,
+                                                     long long numKeys,
+                                                     int *out_argc,
+                                                     RedisModuleString **out_joined,
+                                                     int *err) {
+    *err = 0;
+    *out_joined = NULL;
+    const int aggRel = RMUtil_ArgIndex("AGGREGATION", argv + rangeStart, argc - rangeStart);
+    if (numKeys <= 1 || aggRel < 0) {
+        return NULL; // a single aggregator is already one token, or there is no aggregation
+    }
+    const int firstAgg = rangeStart + aggRel + 1; // first aggregator token
+
+    const int n = (int)numKeys;
+
+    // Validate and comma-join the n aggregator tokens (one per key) in a single pass; the numeric
+    // bucketDuration follows them. joined starts empty so the error path can free unconditionally.
+    RedisModuleString *joined = RedisModule_CreateString(ctx, "", 0);
+    for (int i = 0; i < n; i++) {
+        if (firstAgg + i >= argc || RMStringLenAggTypeToEnum(argv[firstAgg + i]) < 0) {
+            // A missing/numeric slot means the bucketDuration arrived early (too few aggregators);
+            // any other token is a genuine unknown aggregator.
+            long long bucket;
+            if (firstAgg + i >= argc ||
+                RedisModule_StringToLongLong(argv[firstAgg + i], &bucket) == REDISMODULE_OK)
+                RTS_ReplyGeneralError(ctx,
+                                      "TSDB: the number of aggregators must be equal to numkeys");
+            else
+                RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+            goto fail;
+        }
+        size_t len;
+        const char *s = RedisModule_StringPtrLen(argv[firstAgg + i], &len);
+        if (i)
+            RedisModule_StringAppendBuffer(ctx, joined, ",", 1);
+        RedisModule_StringAppendBuffer(ctx, joined, s, len);
+    }
+    // A valid aggregator where the bucketDuration belongs means more aggregators than keys.
+    if (firstAgg + n < argc && RMStringLenAggTypeToEnum(argv[firstAgg + n]) >= 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
+        goto fail;
+    }
+
+    // Splice: [..AGGREGATION] joined [bucketDuration..end], dropping the n-1 extra agg tokens.
+    const int newArgc = argc - (n - 1);
+    RedisModuleString **out = malloc(newArgc * sizeof(*out));
+    memcpy(out, argv, firstAgg * sizeof(*out));
+    out[firstAgg] = joined;
+    memcpy(out + firstAgg + 1, argv + firstAgg + n, (argc - firstAgg - n) * sizeof(*out));
+    *out_argc = newArgc;
+    *out_joined = joined;
+    return out;
+
+fail:
+    RedisModule_FreeString(ctx, joined);
+    *err = 1;
+    return NULL;
+}
+
+// TS.NRANGE/TS.NREVRANGE numkeys key [key...] fromTimestamp toTimestamp [options]
+//   [LATEST] [FILTER_BY_TS ts...] [FILTER_BY_VALUE min max] [COUNT count]
+//   [[ALIGN align] AGGREGATION agg [agg ...] bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
+// Like TS.RANGE but over an explicit list of same-slot keys, returning results
+// pivoted by timestamp: one row [timestamp, [value-per-key...]] in key order,
+// NaN where a key has no sample at that timestamp. With AGGREGATION, the aggregators
+// are space-separated, one per key in key order, and their count must equal numkeys;
+// all share a single bucketDuration.
+int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
+    // argv: [0]=cmd [1]=numkeys [2..1+numkeys]=keys [2+numkeys]=from [3+numkeys]=to ...
+    if (argc < 5) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    long long numKeys;
+    if (RedisModule_StringToLongLong(argv[1], &numKeys) != REDISMODULE_OK || numKeys <= 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: numkeys must be a positive integer");
+        return REDISMODULE_ERR;
+    }
+
+    // cmd + numkeys + from + to = 4 non-key args. Compare against the argc bound
+    // rather than computing 2 + numKeys + 2: numKeys is user-controlled, so that
+    // sum overflows for values near LLONG_MAX, wraps negative, and would skip this
+    // guard (then calloc(numKeys, ...) returns NULL and gets dereferenced). This
+    // form can't overflow (argc is a small int, and argc >= 5 above) and also
+    // bounds numKeys <= argc so the per-key allocations below can't realistically fail.
+    if (numKeys > (long long)argc - 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    const int rangeStart = (int)(2 + numKeys);
+
+    // Everything below frees through the cleanup label; declare it up front so the rewrite/parse
+    // error paths can goto there too.
+    RangeArgs rangeArgs = { 0 };
+    RedisModuleKey **keys = NULL;
+    Series **series = NULL;
+    AbstractSampleIterator **iters = NULL;
+    RedisModuleString *joinedAgg = NULL; // synthesized comma token, NULL if no rewrite
+    RedisModuleString **rewrittenArgv = NULL;
+    size_t numClasses = 0;
+    int rv = REDISMODULE_ERR;
+    size_t opened = 0;
+
+    // Collapse the space-separated per-key aggregators into the comma form the shared parser wants.
+    int rewrite_err = 0, rangeArgc = argc;
+    rewrittenArgv = nrange_splice_aggregators(
+        ctx, argv, argc, rangeStart, numKeys, &rangeArgc, &joinedAgg, &rewrite_err);
+    if (rewrite_err) {
+        goto cleanup;
+    }
+
+    if (parseRangeArguments(
+            ctx, rangeStart, rewrittenArgv ? rewrittenArgv : argv, rangeArgc, &rangeArgs) !=
+        REDISMODULE_OK) {
+        goto cleanup;
+    }
+
+    numClasses = rangeArgs.aggregationArgs.numClasses;
+    if (numClasses != 0 && numClasses != (size_t)numKeys) {
+        RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
+        goto cleanup;
+    }
+
+    keys = calloc(numKeys, sizeof(RedisModuleKey *));
+    series = calloc(numKeys, sizeof(Series *));
+
+    for (; opened < (size_t)numKeys; opened++) {
+        const GetSeriesResult status = GetSeries(ctx,
+                                                 argv[2 + opened],
+                                                 &keys[opened],
+                                                 &series[opened],
+                                                 REDISMODULE_READ,
+                                                 GetSeriesFlags_CheckForAcls);
+        if (status != GetSeriesResult_Success) {
+            goto cleanup; // GetSeries already replied with the error
+        }
+    }
+
+    iters = malloc(numKeys * sizeof(AbstractSampleIterator *));
+    for (size_t i = 0; i < (size_t)numKeys; i++) {
+        RangeArgs perKey = rangeArgs; // shares filters; classes is read-only here
+        if (numClasses == 0) {
+            perKey.aggregationArgs.numClasses = 0;
+            perKey.aggregationArgs.classes = NULL;
+        } else {
+            perKey.aggregationArgs.numClasses = 1;
+            perKey.aggregationArgs.classes = &rangeArgs.aggregationArgs.classes[i];
+        }
+        iters[i] = SeriesCreateSampleIterator(series[i], &perKey, rev, true);
+    }
+
+    ReplySeriesNRange(ctx, iters, numKeys, rangeArgs.count, rev); // closes each iterator
+    rv = REDISMODULE_OK;
+
+cleanup:
+    free(iters);
+    free(rangeArgs.aggregationArgs.classes);
+    free(rewrittenArgv);
+    if (joinedAgg)
+        RedisModule_FreeString(ctx, joinedAgg);
+    for (size_t i = 0; i < opened; i++) {
+        RedisModule_CloseKey(keys[i]);
+    }
+    free(keys);
+    free(series);
+    return rv;
+}
+
+int TSDB_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return TSDB_generic_nrange(ctx, argv, argc, false);
+}
+
+int TSDB_nrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return TSDB_generic_nrange(ctx, argv, argc, true);
+}
+
 static int internalAdd(RedisModuleCtx *ctx,
                        Series *series,
                        api_timestamp_t timestamp,
@@ -2348,6 +2533,27 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     SetCommandAcls(ctx, "ts.mrevrange", "read");
+
+    // TS.NRANGE / TS.NREVRANGE: keys are explicit but at variable positions (after
+    // numkeys), so they can't use the fixed first/last/step args; a keynum key-spec
+    // is attached via RegisterTSCommandInfos (TS_NRANGE_INFO) for cluster routing.
+    if (RedisModule_CreateCommand(ctx, "ts.nrange", TSDB_nrange, "readonly", 0, 0, -1) ==
+        REDISMODULE_ERR) {
+        FreeConfigAndStaticCtx();
+
+        return REDISMODULE_ERR;
+    }
+
+    SetCommandAcls(ctx, "ts.nrange", "read");
+
+    if (RedisModule_CreateCommand(ctx, "ts.nrevrange", TSDB_nrevrange, "readonly", 0, 0, -1) ==
+        REDISMODULE_ERR) {
+        FreeConfigAndStaticCtx();
+
+        return REDISMODULE_ERR;
+    }
+
+    SetCommandAcls(ctx, "ts.nrevrange", "read");
 
     if (RedisModule_CreateCommand(ctx, "ts.mget", TSDB_mget, "readonly", 0, 0, -1) ==
         REDISMODULE_ERR) {

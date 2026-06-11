@@ -690,20 +690,25 @@ int parseRangeArguments(RedisModuleCtx *ctx,
         }
     }
 
-    if (parseLatestArg(ctx, argv, argc, &args.latest) != REDISMODULE_OK) {
+    // Scope option scanning to start_index so user key names before it (the
+    // TS.NRANGE numkeys block) can't be matched as option keywords.
+    RedisModuleString **opts_argv = argv + start_index;
+    int opts_argc = argc - start_index;
+
+    if (parseLatestArg(ctx, opts_argv, opts_argc, &args.latest) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
     args.count = -1;
-    if (parseCountArgument(ctx, argv, argc, &args.count) != REDISMODULE_OK) {
+    if (parseCountArgument(ctx, opts_argv, opts_argc, &args.count) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    if (parseAggregationArgs(ctx, argv, argc, &args.aggregationArgs) == TSDB_ERROR) {
+    if (parseAggregationArgs(ctx, opts_argv, opts_argc, &args.aggregationArgs) == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
 
-    if (parseAlignmentArgs(ctx, argv, argc, &args.alignment, &args.timestampAlignment) ==
+    if (parseAlignmentArgs(ctx, opts_argv, opts_argc, &args.alignment, &args.timestampAlignment) ==
         TSDB_ERROR) {
         goto error_free_classes;
     }
@@ -727,11 +732,12 @@ int parseRangeArguments(RedisModuleCtx *ctx,
         }
     }
 
-    if (parseFilterByValueArgument(ctx, argv, argc, &args.filterByValueArgs) == TSDB_ERROR) {
+    if (parseFilterByValueArgument(ctx, opts_argv, opts_argc, &args.filterByValueArgs) ==
+        TSDB_ERROR) {
         goto error_free_classes;
     }
 
-    if (parseFilterByTimestamp(ctx, argv, argc, &args.filterByTSArgs) == TSDB_ERROR) {
+    if (parseFilterByTimestamp(ctx, opts_argv, opts_argc, &args.filterByTSArgs) == TSDB_ERROR) {
         goto error_free_classes;
     }
 
