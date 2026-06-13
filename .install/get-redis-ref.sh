@@ -42,8 +42,7 @@ fi
 
 # The dev/unreleased placeholder (99.99 or 99.99.99) means we track the
 # 'unstable' branch; a real version is used as the git ref directly.
-# 8.10 is also mapped to 'unstable' because the upstream redis/redis repo does
-# not yet have an 8.10 branch/tag; update this once it is released.
+# TODO: remove 8.10 once redis core branches out to 8.10
 case "$COMPAT_VERSION" in
 	99.99 | 99.99.99 | 8.10) REDIS_REF="unstable" ;;
 	*)                        REDIS_REF="$COMPAT_VERSION" ;;
