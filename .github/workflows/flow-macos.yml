@@ -116,6 +116,9 @@ jobs:
       PIP_BREAK_SYSTEM_PACKAGES: 1
     runs-on: ${{matrix.os}}
     needs: setup-environment
+    # macOS runs are legitimately slow (~3.5h) but should never hang for the
+    # full 360-minute default and stall the nightly.
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:

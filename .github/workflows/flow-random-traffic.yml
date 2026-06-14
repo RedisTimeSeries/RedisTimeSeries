@@ -54,6 +54,9 @@ jobs:
     name: random-traffic (${{ needs.pick-os.outputs.os }})
     needs: pick-os
     runs-on: ubuntu-latest
+    # Random traffic normally completes in ~20m; cap it so a hung redis-server
+    # or generator can't run until the 360-minute default and stall the nightly.
+    timeout-minutes: 60
     env:
       DOCKER_IMAGE: redistimeseries-${{ needs.pick-os.outputs.os }}:latest
       REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}

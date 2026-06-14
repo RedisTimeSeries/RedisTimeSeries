@@ -123,6 +123,12 @@ jobs:
     name: ${{ inputs.arch }}-${{ matrix.platform.os }}, ${{ needs.setup-environment.outputs.redis-ref }}
     runs-on: ${{ needs.setup-environment.outputs.runner }}
     needs: setup-environment
+    # Safety net so a hung step (e.g. a test that leaves an orphan process
+    # keeping the `docker run` open) fails fast instead of running until
+    # GitHub's 360-minute default and stalling the whole nightly.
+    # Valgrind runs are legitimately much slower (~3.5h) so they get a
+    # larger budget than regular/sanitizer builds (~1h).
+    timeout-minutes: ${{ inputs.run_valgrind && 300 || 90 }}
     strategy:
       fail-fast: false
       matrix:
@@ -159,6 +165,11 @@ jobs:
             make build
 
       - name: Run tests
+        # Tight per-step timeout on the step that has been observed to hang
+        # (tests finish and pass, but an orphaned process keeps `docker run`
+        # alive). A step-level timeout lets the always()/failure() steps below
+        # still run so test logs/artifacts are captured for diagnosis.
+        timeout-minutes: ${{ inputs.run_valgrind && 270 || 60 }}
         run: |
           # Capture test output to file for parsing by capture-test-results action
           # The workspace is mounted, so test_output.log will be accessible outside the container
