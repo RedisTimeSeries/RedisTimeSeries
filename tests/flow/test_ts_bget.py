@@ -651,3 +651,135 @@ def test_bget_timeout_zero_returns_partial_without_blocking():
     env.assertEqual(res, [[100, b"1"], [200, b"2"]])
     env.assertTrue(elapsed < 0.3,
                    message="timeout=0 must not block, took %.3fs" % elapsed)
+
+
+# ---------------------------------------------------------------------------
+# 16. Key deletion unblocks a parked BGET client well before its timeout.
+#     Regression: TS.BGET previously used BlockClientOnKeys (BLPOP-style)
+#     which ignored delete signals, so deleting the key left the client
+#     parked until timeout_ms — leaking the connection and hanging CI.
+# ---------------------------------------------------------------------------
+
+def test_bget_del_wakes_parked_client():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    t, slot = _start_bget(env, "ts", 0, 2_000, min_count=5)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(), message="BGET should be parked waiting for more samples")
+
+    t0 = time.time()
+    assert r.execute_command("DEL", "ts") == 1
+
+    t.join(timeout=1.5)
+    elapsed = time.time() - t0
+    env.assertFalse(t.is_alive(),
+                    message="DEL must wake the parked BGET client (took %.3fs)" % elapsed)
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [])
+    env.assertTrue(elapsed < 1.0,
+                   message="DEL wake must be immediate, took %.3fs" % elapsed)
+
+
+def test_bget_unlink_wakes_parked_client():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    t, slot = _start_bget(env, "ts", 0, 2_000, min_count=5)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(), message="BGET should be parked")
+
+    t0 = time.time()
+    assert r.execute_command("UNLINK", "ts") == 1
+
+    t.join(timeout=1.5)
+    elapsed = time.time() - t0
+    env.assertFalse(t.is_alive(),
+                    message="UNLINK must wake the parked BGET client (took %.3fs)" % elapsed)
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [])
+    env.assertTrue(elapsed < 1.0,
+                   message="UNLINK wake must be immediate, took %.3fs" % elapsed)
+
+
+def test_bget_flushall_wakes_parked_client():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    t, slot = _start_bget(env, "ts", 0, 2_000, min_count=5)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(), message="BGET should be parked")
+
+    t0 = time.time()
+    r.execute_command("FLUSHALL")
+
+    t.join(timeout=1.5)
+    elapsed = time.time() - t0
+    env.assertFalse(t.is_alive(),
+                    message="FLUSHALL must wake the parked BGET client (took %.3fs)" % elapsed)
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [])
+    env.assertTrue(elapsed < 1.0,
+                   message="FLUSHALL wake must be immediate, took %.3fs" % elapsed)
+
+
+def test_bget_flushdb_wakes_parked_client():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    t, slot = _start_bget(env, "ts", 0, 2_000, min_count=5)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(), message="BGET should be parked")
+
+    t0 = time.time()
+    r.execute_command("FLUSHDB")
+
+    t.join(timeout=1.5)
+    elapsed = time.time() - t0
+    env.assertFalse(t.is_alive(),
+                    message="FLUSHDB must wake the parked BGET client (took %.3fs)" % elapsed)
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [])
+    env.assertTrue(elapsed < 1.0,
+                   message="FLUSHDB wake must be immediate, took %.3fs" % elapsed)
+
+
+def test_bget_multiple_parked_clients_all_wake_on_del():
+    """Every client parked on the same key must wake on a single DEL,
+    not just one — TS.BGET is broadcast, not BLPOP-style dequeue."""
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    workers = [_start_bget(env, "ts", 0, 2_000, min_count=5) for _ in range(4)]
+    time.sleep(0.3)
+    for t, _ in workers:
+        env.assertTrue(t.is_alive(), message="each BGET should be parked")
+
+    assert r.execute_command("DEL", "ts") == 1
+
+    for t, slot in workers:
+        t.join(timeout=1.5)
+        env.assertFalse(t.is_alive(),
+                        message="every parked BGET must wake on DEL")
+        env.assertEqual(slot["error"], None)
+        env.assertEqual(slot["result"], [])
