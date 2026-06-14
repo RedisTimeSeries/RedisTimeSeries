@@ -349,10 +349,24 @@ run_tests() {
 	[[ -z "$RLTEST_PY" ]] && RLTEST_PY="$(pick_rltest_python)"
 
 	local E=0
-	if [[ $NOP != 1 ]]; then
-		{ $OP "$RLTEST_PY" -m RLTest @$rltest_config; (( E |= $? )); } || true
-	else
+	if [[ $NOP == 1 ]]; then
 		$OP "$RLTEST_PY" -m RLTest @$rltest_config
+	elif [[ $OS == linux && $GDB != 1 && $RLTEST_CONSOLE != 1 ]]; then
+		# Run RLTest in its own session/process group (setsid) so we can
+		# reliably reap its entire process tree once it returns. RLTest
+		# occasionally leaves an orphaned redis-server behind (e.g. a replica,
+		# AOF-rewrite or cluster node that wasn't shut down). Such an orphan
+		# inherits RLTest's stdout, which under CI is the write end of the
+		# `make test ... | tee` pipe; while it holds that pipe open `tee` never
+		# sees EOF and the job hangs until the CI timeout, even though every
+		# test has already passed and the summary was printed.
+		setsid "$RLTEST_PY" -m RLTest @$rltest_config &
+		local rltest_pid=$!
+		{ wait "$rltest_pid"; (( E |= $? )); } || true
+		# Reap anything still alive in RLTest's process group (-pid == pgid).
+		kill -9 -- -"$rltest_pid" 2>/dev/null || true
+	else
+		{ $OP "$RLTEST_PY" -m RLTest @$rltest_config; (( E |= $? )); } || true
 	fi
 
 	[[ $KEEP != 1 ]] && rm -f $rltest_config
