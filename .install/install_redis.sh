@@ -38,8 +38,9 @@ if [ -n "${VALGRIND}" ]; then
     echo "Building Redis without _FORTIFY_SOURCE for Valgrind"
     REDIS_EXTRA_CFLAGS="-U_FORTIFY_SOURCE"
 fi
-make SANITIZER=${SANITIZER:-} REDIS_CFLAGS="${REDIS_EXTRA_CFLAGS}" -j$(nproc)
-make SANITIZER=${SANITIZER:-} REDIS_CFLAGS="${REDIS_EXTRA_CFLAGS}" install
+# `install` builds `all` first, so a single invocation keeps the compiler flags
+# consistent and avoids a redundant rebuild.
+make SANITIZER=${SANITIZER:-} REDIS_CFLAGS="${REDIS_EXTRA_CFLAGS}" install -j$(nproc)
 cd ..
 
 echo "Redis installed successfully"
