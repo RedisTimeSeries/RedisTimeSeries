@@ -668,7 +668,9 @@ def test_bget_del_wakes_parked_client():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0")])
 
-    t, slot = _start_bget(env, "ts", 0, 2_000, min_count=5)
+    # 30s server-side timeout so a sub-second return is unambiguously the
+    # deletion wake, not a timeout flush.
+    t, slot = _start_bget(env, "ts", 0, 30_000, min_count=5)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(), message="BGET should be parked waiting for more samples")
 
@@ -693,7 +695,7 @@ def test_bget_unlink_wakes_parked_client():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0")])
 
-    t, slot = _start_bget(env, "ts", 0, 2_000, min_count=5)
+    t, slot = _start_bget(env, "ts", 0, 30_000, min_count=5)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(), message="BGET should be parked")
 
@@ -718,7 +720,7 @@ def test_bget_flushall_wakes_parked_client():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0")])
 
-    t, slot = _start_bget(env, "ts", 0, 2_000, min_count=5)
+    t, slot = _start_bget(env, "ts", 0, 30_000, min_count=5)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(), message="BGET should be parked")
 
@@ -743,7 +745,7 @@ def test_bget_flushdb_wakes_parked_client():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0")])
 
-    t, slot = _start_bget(env, "ts", 0, 2_000, min_count=5)
+    t, slot = _start_bget(env, "ts", 0, 30_000, min_count=5)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(), message="BGET should be parked")
 
@@ -770,7 +772,7 @@ def test_bget_multiple_parked_clients_all_wake_on_del():
     r = env.getConnection()
     _seed(r, "ts", [(100, "1.0")])
 
-    workers = [_start_bget(env, "ts", 0, 2_000, min_count=5) for _ in range(4)]
+    workers = [_start_bget(env, "ts", 0, 30_000, min_count=5) for _ in range(4)]
     time.sleep(0.3)
     for t, _ in workers:
         env.assertTrue(t.is_alive(), message="each BGET should be parked")
