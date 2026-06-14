@@ -29,8 +29,17 @@ cd redis
 git fetch origin ${REDIS_REF}
 git checkout ${REDIS_REF}
 git submodule update --init --recursive
-make SANITIZER=${SANITIZER:-} -j$(nproc)
-make install
+# For Valgrind runs only, build Redis without _FORTIFY_SOURCE. At -O2/-O3 the
+# distro compiler lowers correct memmove() calls into __memcpy_chk(), which
+# Valgrind's direction-agnostic overlap check misreports as errors (e.g. in
+# readSyncBulkPayload). Other builds keep fortification unchanged. See RED-195208.
+REDIS_EXTRA_CFLAGS=""
+if [ -n "${VALGRIND}" ]; then
+    echo "Building Redis without _FORTIFY_SOURCE for Valgrind"
+    REDIS_EXTRA_CFLAGS="-U_FORTIFY_SOURCE"
+fi
+make SANITIZER=${SANITIZER:-} REDIS_CFLAGS="${REDIS_EXTRA_CFLAGS}" -j$(nproc)
+make SANITIZER=${SANITIZER:-} REDIS_CFLAGS="${REDIS_EXTRA_CFLAGS}" install
 cd ..
 
 echo "Redis installed successfully"

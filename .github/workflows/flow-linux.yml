@@ -146,6 +146,7 @@ jobs:
             -f Dockerfile.${{ matrix.platform.os }} \
             --build-arg REDIS_REF=${{ env.REDIS_REF }} \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
+            --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
             -t ${{ env.DOCKER_IMAGE }} \
             .
 
