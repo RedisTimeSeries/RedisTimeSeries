@@ -471,6 +471,10 @@ void FreeSeries(void *value) {
         RedisModule_FreeString(NULL, series->srcKey);
     }
     if (series->keyName) {
+        // Wake any TS.BGET client parked on this key before we drop it, so
+        // FLUSHALL / DEL / expire / eviction don't leave the client hanging
+        // until its user-supplied timeout (or forever, if timeout_ms == 0).
+        RedisModule_SignalKeyAsReady(rts_staticCtx, series->keyName);
         RedisModule_FreeString(NULL, series->keyName);
     }
 

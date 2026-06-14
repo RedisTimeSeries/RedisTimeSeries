@@ -32,6 +32,15 @@ def _start_bget(env, key, cursor, timeout_ms, min_count=None, max_count=None):
 
     def worker():
         conn = env.getConnection()
+        # Cap the socket read so a stuck server-side BGET cannot keep the
+        # thread (daemon or not) alive past a short, predictable bound.
+        # Slightly above timeout_ms to let the server's own timeout fire
+        # first under normal conditions.
+        try:
+            conn.connection_pool.connection_kwargs["socket_timeout"] = \
+                max(1.0, (timeout_ms / 1000.0) + 1.0)
+        except Exception:
+            pass
         t0 = time.time()
         try:
             slot["result"] = conn.execute_command("TS.BGET", *argv)
@@ -39,6 +48,10 @@ def _start_bget(env, key, cursor, timeout_ms, min_count=None, max_count=None):
             slot["error"] = str(e)
         finally:
             slot["elapsed"] = time.time() - t0
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     t = Thread(target=worker, daemon=True)
     t.start()
@@ -92,7 +105,7 @@ def test_bget_blocks_then_unblocks_when_min_count_is_reached():
     # (cursor is an inclusive lower bound: only ts >= cursor qualifies).
     # Each TS.ADD fires SignalKeyAsReady -> reply_cb runs; only the third
     # add commits because that's when qualifying becomes 5.
-    t, slot = _start_bget(env, "ts", 101, 10_000, min_count=5, max_count=5)
+    t, slot = _start_bget(env, "ts", 101, 2_000, min_count=5, max_count=5)
 
     # Give the worker enough time to issue BlockClientOnKeys on the server.
     time.sleep(0.3)
@@ -193,7 +206,7 @@ def test_bget_blocking_min_gate_max_cap():
 
     # cursor = 101 (literal), so the existing sample at 100 doesn't qualify and
     # BGET blocks (0 < MIN_COUNT 2). MAX_COUNT 3 caps whatever we eventually return.
-    t, slot = _start_bget(env, "ts", 101, 10_000, min_count=2, max_count=3)
+    t, slot = _start_bget(env, "ts", 101, 2_000, min_count=2, max_count=3)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(), message="BGET should block until min_count qualifies")
 
@@ -314,7 +327,7 @@ def test_bget_dash_on_empty_series_blocks_until_first_add():
     r = env.getConnection()
     r.execute_command("FLUSHALL")  # key "ts" must not exist for this scenario.
 
-    t, slot = _start_bget(env, "ts", "-", 10_000)
+    t, slot = _start_bget(env, "ts", "-", 2_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET '-' on missing key should block until ADD")
@@ -340,7 +353,7 @@ def test_bget_plus_on_empty_series_blocks_until_first_add():
     r = env.getConnection()
     r.execute_command("FLUSHALL")
 
-    t, slot = _start_bget(env, "ts", "+", 10_000)
+    t, slot = _start_bget(env, "ts", "+", 2_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET '+' on missing key should block until ADD")
@@ -419,7 +432,7 @@ def test_bget_dollar_only_returns_samples_added_after_command():
 
     # '$' resolves to lastTs + 1 = 301. Existing 100/200/300 must NOT qualify;
     # only a future ADD with ts >= 301 should wake us.
-    t, slot = _start_bget(env, "ts", "$", 10_000)
+    t, slot = _start_bget(env, "ts", "$", 2_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET '$' should ignore pre-existing samples and block")
@@ -446,7 +459,7 @@ def test_bget_dollar_on_empty_series_blocks_until_first_add():
     r = env.getConnection()
     r.execute_command("FLUSHALL")
 
-    t, slot = _start_bget(env, "ts", "$", 10_000)
+    t, slot = _start_bget(env, "ts", "$", 2_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET '$' on missing key should block until ADD")
@@ -474,7 +487,7 @@ def test_bget_broadcasts_to_all_blocked_clients():
 
     # cursor = 101 (literal): the existing sample at 100 doesn't qualify, so all
     # clients block until a newer sample arrives.
-    workers = [_start_bget(env, "ts", 101, 10_000) for _ in range(4)]
+    workers = [_start_bget(env, "ts", 101, 2_000) for _ in range(4)]
     time.sleep(0.3)
     for t, _ in workers:
         env.assertTrue(t.is_alive(), message="all clients should be parked")
@@ -506,7 +519,7 @@ def test_bget_on_compaction_destination_wakes_on_bucket_commit():
     assert r.execute_command(
         "TS.CREATERULE", "src", "dst", "AGGREGATION", "avg", 10)
 
-    t, slot = _start_bget(env, "dst", "-", 10_000)
+    t, slot = _start_bget(env, "dst", "-", 2_000)
     time.sleep(0.3)
     env.assertTrue(t.is_alive(),
                    message="BGET on empty dst should be parked")

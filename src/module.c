@@ -1809,7 +1809,16 @@ static int TSDB_bget_reply_callback(RedisModuleCtx *ctx, RedisModuleString **arg
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     const BGetCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
-    if (!TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/true)) {
+    // If the key was deleted (DEL/FLUSHALL/expire/eviction) while we were
+    // parked, the SignalKeyAsReady in FreeSeries wakes us here. Detect the
+    // missing-key case and reply empty instead of re-parking, otherwise the
+    // client would stay blocked until its user-supplied timeout.
+    RedisModuleKey *probe = RedisModule_OpenKey(ctx, priv->key, REDISMODULE_READ);
+    const bool key_gone = (RedisModule_KeyType(probe) == REDISMODULE_KEYTYPE_EMPTY);
+    if (probe) {
+        RedisModule_CloseKey(probe);
+    }
+    if (!TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/!key_gone)) {
         // Stay parked: keep the background timer running so the eventual
         // unblock (next signal or timeout) accounts for the full wait.
         return REDISMODULE_ERR;
