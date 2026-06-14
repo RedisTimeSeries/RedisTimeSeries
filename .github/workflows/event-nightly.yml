@@ -156,6 +156,73 @@ jobs:
       quick: false
     secrets: inherit
 
+  # Coverage analysis on a single platform. `make coverage` builds the module
+  # instrumented (COV=1, lcov/gcov), runs the full test suite, and produces an
+  # lcov report (bin/**/cov.info) plus an HTML report (bin/**/cov/). The report
+  # is uploaded to Codecov (see codecov.yml) and attached as a build artifact.
+  coverage:
+    name: Coverage (x64-jammy)
+    runs-on: ubuntu-latest
+    needs: [prepare-values]
+    timeout-minutes: 240
+    env:
+      REDIS_REF: ${{ needs.prepare-values.outputs.redis-ref }}
+      DOCKER_IMAGE: redistimeseries-jammy-cov:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -f Dockerfile.jammy \
+            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
+            -t ${{ env.DOCKER_IMAGE }} \
+            .
+
+      - name: Build and test with coverage
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            --cap-add=SYS_PTRACE \
+            --security-opt seccomp=unconfined \
+            ${{ env.DOCKER_IMAGE }} \
+            make coverage SHOW=1
+
+      - name: Fix coverage file permissions
+        if: always()
+        run: |
+          sudo chown -R "$(id -u)":"$(id -g)" bin tests || true
+
+      - name: Locate coverage report
+        if: always()
+        id: cov
+        run: |
+          INFO=$(find bin -name 'cov.info' | head -1)
+          echo "info=${INFO}" >> $GITHUB_OUTPUT
+          echo "Coverage info file: ${INFO:-<not found>}"
+
+      - name: Upload coverage to Codecov
+        if: always() && steps.cov.outputs.info != ''
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ steps.cov.outputs.info }}
+          flags: nightly
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-x64-jammy
+          path: bin/**/cov/
+          if-no-files-found: warn
+
   notify-results:
     name: Aggregate Results & Notify
     runs-on: ubuntu-latest
