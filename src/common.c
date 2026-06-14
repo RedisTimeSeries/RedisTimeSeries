@@ -10,11 +10,6 @@ int NotifyCallback(RedisModuleCtx *ctx, int type, const char *event, RedisModule
         strcasecmp(event, "evicted") == 0 || strcasecmp(event, "key_trimmed") == 0 ||
         strcasecmp(event, "trimmed") == 0 // only on enterprise
     ) {
-        // Wake any TS.BGET client parked on this key. Runs on the main
-        // thread (synchronous keyspace notification) before lazy-free can
-        // defer FreeSeries to a background thread, so the parked client is
-        // unblocked deterministically instead of waiting out its timeout.
-        RedisModule_SignalKeyAsReady(ctx, key);
         RemoveIndexedMetric(key);
         return REDISMODULE_OK;
     }

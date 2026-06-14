@@ -48,9 +48,16 @@ RedisModuleBlockedClient *RTS_BlockClientOnKey(RedisModuleCtx *ctx,
     // reply callback fires when the key is deleted (DEL/UNLINK/FLUSHALL/
     // expire/eviction). Without the flag, Redis filters out deletion signals
     // and a parked client only wakes on its user-supplied timeout.
-    RedisModuleBlockedClient *bc = RedisModule_BlockClientOnKeysWithFlags(
-        ctx, reply_callback, timeout_callback, free_privdata, timeout_ms, &key, 1,
-        privdata, REDISMODULE_BLOCK_UNBLOCK_DELETED);
+    RedisModuleBlockedClient *bc =
+        RedisModule_BlockClientOnKeysWithFlags(ctx,
+                                               reply_callback,
+                                               timeout_callback,
+                                               free_privdata,
+                                               timeout_ms,
+                                               &key,
+                                               1,
+                                               privdata,
+                                               REDISMODULE_BLOCK_UNBLOCK_DELETED);
     if (bc && CheckVersionForBlockedClientMeasureTime()) {
         RedisModule_BlockedClientMeasureTimeStart(bc);
     }
