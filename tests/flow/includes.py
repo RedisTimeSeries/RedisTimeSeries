@@ -39,32 +39,26 @@ Defaults.terminate_retries = 20
 Defaults.terminate_retries_secs = 1
 
 
-# Print START/END markers around every RLTest test so a CI hang reveals
-# which test never finished. RLTest is NOT pytest (so pytest conftest hooks
-# don't fire); the runner's [PASS] line prints only AFTER the test ends, so
-# without these markers a hang shows only the PREVIOUS test's [PASS] and the
-# culprit is invisible. We wrap RLTest._EnvScopeGuard's _runTest entry point.
-try:
-    from RLTest.__main__ import RLTest as _RLTestMain
-    if not getattr(_RLTestMain, "_progress_marker_installed", False):
-        _orig_runTest = _RLTestMain._runTest
-        def _runTest_with_markers(self, test, *args, **kwargs):
-            name = getattr(test, "name", repr(test))
-            sys.stderr.write(">>> START %s @%.3f\n" % (name, time.time()))
-            sys.stderr.flush()
-            sys.stdout.write(">>> START %s @%.3f\n" % (name, time.time()))
-            sys.stdout.flush()
-            try:
-                return _orig_runTest(self, test, *args, **kwargs)
-            finally:
-                sys.stderr.write("<<< END   %s @%.3f\n" % (name, time.time()))
-                sys.stderr.flush()
-                sys.stdout.write("<<< END   %s @%.3f\n" % (name, time.time()))
-                sys.stdout.flush()
-        _RLTestMain._runTest = _runTest_with_markers
-        _RLTestMain._progress_marker_installed = True
-except Exception as _e:
-    sys.stderr.write("WARN: could not install RLTest progress markers: %s\n" % _e)
+# Print START/END markers around every test function so a CI hang reveals
+# which test started but never ended. RLTest's [PASS] marker prints only
+# AFTER a test finishes, so without these markers a hang shows only the
+# previous test's [PASS] and the culprit is invisible. Uses sys.setprofile
+# (hooks every Python call/return) so it works regardless of who drives the
+# tests — RLTest, pytest, or any custom runner. Filters on `test_*` names
+# to keep output small.
+def _progress_profile(frame, event, _arg):
+    if event != "call" and event != "return":
+        return
+    name = frame.f_code.co_name
+    if not name.startswith("test_"):
+        return
+    tag = ">>> START" if event == "call" else "<<< END  "
+    line = "%s %s:%s @%.3f\n" % (
+        tag, os.path.basename(frame.f_code.co_filename), name, time.time())
+    sys.stderr.write(line); sys.stderr.flush()
+    sys.stdout.write(line); sys.stdout.flush()
+
+sys.setprofile(_progress_profile)
 
 
 class ShardConnectionTimeoutException(Exception):
