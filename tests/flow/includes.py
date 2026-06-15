@@ -39,6 +39,34 @@ Defaults.terminate_retries = 20
 Defaults.terminate_retries_secs = 1
 
 
+# Print START/END markers around every RLTest test so a CI hang reveals
+# which test never finished. RLTest is NOT pytest (so pytest conftest hooks
+# don't fire); the runner's [PASS] line prints only AFTER the test ends, so
+# without these markers a hang shows only the PREVIOUS test's [PASS] and the
+# culprit is invisible. We wrap RLTest._EnvScopeGuard's _runTest entry point.
+try:
+    from RLTest.__main__ import RLTest as _RLTestMain
+    if not getattr(_RLTestMain, "_progress_marker_installed", False):
+        _orig_runTest = _RLTestMain._runTest
+        def _runTest_with_markers(self, test, *args, **kwargs):
+            name = getattr(test, "name", repr(test))
+            sys.stderr.write(">>> START %s @%.3f\n" % (name, time.time()))
+            sys.stderr.flush()
+            sys.stdout.write(">>> START %s @%.3f\n" % (name, time.time()))
+            sys.stdout.flush()
+            try:
+                return _orig_runTest(self, test, *args, **kwargs)
+            finally:
+                sys.stderr.write("<<< END   %s @%.3f\n" % (name, time.time()))
+                sys.stderr.flush()
+                sys.stdout.write("<<< END   %s @%.3f\n" % (name, time.time()))
+                sys.stdout.flush()
+        _RLTestMain._runTest = _runTest_with_markers
+        _RLTestMain._progress_marker_installed = True
+except Exception as _e:
+    sys.stderr.write("WARN: could not install RLTest progress markers: %s\n" % _e)
+
+
 class ShardConnectionTimeoutException(Exception):
     pass
 
