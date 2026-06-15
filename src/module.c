@@ -1809,7 +1809,12 @@ static int TSDB_bget_reply_callback(RedisModuleCtx *ctx, RedisModuleString **arg
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     const BGetCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
-    if (!TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/true)) {
+    // If the key was deleted while we were parked (Redis wakes us on
+    // DEL/UNLINK/FLUSHDB/FLUSHALL/expire/eviction via the
+    // REDISMODULE_BLOCK_UNBLOCK_DELETED flag set in RTS_BlockClientOnKey),
+    // flush whatever's available (empty) instead of re-parking until timeout.
+    const bool key_gone = !RedisModule_KeyExists(ctx, priv->key);
+    if (!TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/!key_gone)) {
         // Stay parked: keep the background timer running so the eventual
         // unblock (next signal or timeout) accounts for the full wait.
         return REDISMODULE_ERR;
