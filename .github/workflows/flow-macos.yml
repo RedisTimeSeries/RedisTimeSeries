@@ -37,8 +37,12 @@ on:
         description: 'Redis ref to checkout'  # todo change per version/tag
         type: string
         required: true
-      quick: 
+      quick:
         description: 'Run quick tests'
+        type: boolean
+        default: false
+      build_only:
+        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
       beta-version:
@@ -65,8 +69,12 @@ on:
         description: 'Redis ref to checkout'  # todo change per version/tag
         type: string
         required: true
-      quick: 
+      quick:
         description: 'Run quick tests'
+        type: boolean
+        default: false
+      build_only:
+        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
       beta-version:
@@ -159,26 +167,29 @@ jobs:
         with:
           use-venv: '1'
       - name: Run tests
+        if: ${{ !inputs.build_only }}
         uses: ./.github/actions/run-tests
         with:
           use-venv: '1'
           quick: ${{inputs.quick && '1' || '0'}}
       - name: Capture test results
-        if: always()
+        if: ${{ always() && !inputs.build_only }}
         uses: ./.github/actions/capture-test-results
         with:
           os-name: ${{ matrix.os }}
       - name: Upload test artifacts
-        if: failure()
+        if: ${{ failure() && !inputs.build_only }}
         uses: ./.github/actions/upload-artifacts
         with:
           image: ${{ matrix.os }}
       - name: Pack module
+        if: ${{ !inputs.build_only }}
         uses: ./.github/actions/pack-module
         with:
           use-venv: '1'
           beta-version: ${{ inputs.beta-version }}
       - name: Upload artifacts to S3
+        if: ${{ !inputs.build_only }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

@@ -34,7 +34,8 @@ jobs:
     with:
       arch: x64
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      # PR gate runs GEN-only (quick); full topology matrix runs in event-nightly.
+      quick: true
     secrets: inherit
   build-linux-arm64:
     uses: ./.github/workflows/flow-linux.yml
@@ -42,14 +43,18 @@ jobs:
     with:
       arch: arm64
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      # PR gate runs GEN-only (quick); full topology matrix runs in event-nightly.
+      quick: true
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      # macOS tests are serial (PARALLEL=0) and cannot be sharded, making them the
+      # PR wall-clock pole (~3h). On PRs run a compile-only smoke; full macOS tests
+      # run in event-nightly.
+      build_only: true
     secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux.yml
@@ -68,6 +73,7 @@ jobs:
       arch: x64
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      # PR gate runs GEN-only under ASAN; full topology matrix runs in event-nightly.
+      quick: true
       run_sanitizer: true
     secrets: inherit
