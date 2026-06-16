@@ -27,6 +27,7 @@ capabilities:
     - flash
     - ipv6
     - asm
+    - short_form_clusterset
 exclude_commands:
     - timeseries.REFRESHCLUSTER
     - timeseries.INFOCLUSTER
