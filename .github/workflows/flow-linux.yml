@@ -110,17 +110,28 @@ jobs:
               OS="focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie"
             fi
           fi
-          # Convert space-separated list to JSON array
+          # Convert space-separated list to JSON array.
+          # Valgrind is single-threaded and very slow, so instead of running all
+          # test topologies sequentially in one job we shard them across parallel
+          # runners (one topology per job). Other runs keep a single entry per OS.
           MATRIX="["
-          for os in $OS; do
-            MATRIX="${MATRIX}{\"os\": \"${os}\"},"
-          done
+          if [ "${{ inputs.run_valgrind }}" == "true" ]; then
+            for os in $OS; do
+              for topo in gen slaves aof aof_slaves oss_cluster; do
+                MATRIX="${MATRIX}{\"os\": \"${os}\", \"topo\": \"${topo}\"},"
+              done
+            done
+          else
+            for os in $OS; do
+              MATRIX="${MATRIX}{\"os\": \"${os}\"},"
+            done
+          fi
           MATRIX="${MATRIX%,}]"
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "Generated matrix for ${{ inputs.arch }}: ${MATRIX}"
 
   build-linux:
-    name: ${{ inputs.arch }}-${{ matrix.platform.os }}, ${{ needs.setup-environment.outputs.redis-ref }}
+    name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}, ${{ needs.setup-environment.outputs.redis-ref }}
     runs-on: ${{ needs.setup-environment.outputs.runner }}
     needs: setup-environment
     strategy:
@@ -160,9 +171,23 @@ jobs:
             make build
 
       - name: Run tests
+        env:
+          TOPO: ${{ matrix.platform.topo }}
         run: |
           # Capture test output to file for parsing by capture-test-results action
           # The workspace is mounted, so test_output.log will be accessible outside the container
+          #
+          # For valgrind shards (TOPO set) run exactly one test topology per job so
+          # the slow valgrind variants execute in parallel across runners. Empty
+          # TOPO keeps the default behaviour (QUICK selects the variants to run).
+          TOPO_ARGS=""
+          case "${TOPO}" in
+            gen)         TOPO_ARGS="GEN=1 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0" ;;
+            slaves)      TOPO_ARGS="GEN=0 SLAVES=1 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0" ;;
+            aof)         TOPO_ARGS="GEN=0 SLAVES=0 AOF=1 AOF_SLAVES=0 OSS_CLUSTER=0" ;;
+            aof_slaves)  TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=1 OSS_CLUSTER=0" ;;
+            oss_cluster) TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=1" ;;
+          esac
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
@@ -173,7 +198,8 @@ jobs:
             bash -c "make test \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-              QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
+              QUICK=${{ inputs.quick && '1' || '0' }} \
+              ${TOPO_ARGS} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
 
       - name: Fix test log permissions
         if: always()
@@ -186,13 +212,13 @@ jobs:
         if: always()
         uses: ./.github/actions/capture-test-results
         with:
-          os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}
+          os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
 
       - name: Upload test artifacts
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
+          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
           path: |
             tests/**/*.log
 
