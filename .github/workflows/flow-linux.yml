@@ -123,6 +123,8 @@ jobs:
     name: ${{ inputs.arch }}-${{ matrix.platform.os }}, ${{ needs.setup-environment.outputs.redis-ref }}
     runs-on: ${{ needs.setup-environment.outputs.runner }}
     needs: setup-environment
+    # Hang backstop. Healthy legs finish well inside this; valgrind is far slower.
+    timeout-minutes: ${{ inputs.run_valgrind && 300 || 120 }}
     strategy:
       fail-fast: false
       matrix:

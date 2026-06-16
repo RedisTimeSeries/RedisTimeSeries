@@ -103,7 +103,11 @@ jobs:
           if [ -z "${OS}" ]; then
             OS='["macos-14", "macos-15", "macos-26", "macos-14-large", "macos-15-intel", "macos-26-intel"]'
           else
-            OS='["${OS}"]'
+            # Build a JSON array from a space-separated list (e.g. "macos-15"
+            # or "macos-14 macos-15"). Quotes must expand ${OS}, so no single quotes.
+            ARR="["
+            for o in ${OS}; do ARR="${ARR}\"${o}\","; done
+            OS="${ARR%,}]"
           fi
           echo "${OS}"
           echo "os=${OS}" >> $GITHUB_OUTPUT
@@ -116,6 +120,11 @@ jobs:
       PIP_BREAK_SYSTEM_PACKAGES: 1
     runs-on: ${{matrix.os}}
     needs: setup-environment
+    # Hang backstop; only kills genuine hangs. macOS now runs tests in parallel
+    # (RLTest forces the 'fork' start method, so the old "can't pickle local
+    # object" limitation no longer applies). Kept generous for now because the
+    # pinned RLTest predates the parallel-coordinator hang fix (RLTest #248).
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:

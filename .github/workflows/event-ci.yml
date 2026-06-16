@@ -28,28 +28,35 @@ jobs:
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
+  # PR builds run a representative OS subset (glibc/RHEL/musl/Debian) and the
+  # QUICK test suite (general topology only). The exhaustive OS matrix and the
+  # full topology suite (slaves/AOF/AOF+slaves/OSS-cluster) run in
+  # event-nightly.yml.
   build-linux-x64:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
       arch: x64
+      os: jammy rocky9 alpine bookworm
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      quick: true
     secrets: inherit
   build-linux-arm64:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
       arch: arm64
+      os: jammy rocky9
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      quick: true
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
     with:
+      os: macos-15
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      quick: true
     secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux.yml
@@ -58,7 +65,7 @@ jobs:
       arch: x64
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      quick: true
       run_valgrind: true
     secrets: inherit
   linux-sanitizer:
@@ -68,6 +75,6 @@ jobs:
       arch: x64
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
+      quick: true
       run_sanitizer: true
     secrets: inherit
