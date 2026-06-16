@@ -56,16 +56,8 @@ jobs:
       # run in event-nightly.
       build_only: true
     secrets: inherit
-  linux-valgrind:
-    uses: ./.github/workflows/flow-linux.yml
-    needs: [prepare-values]
-    with:
-      arch: x64
-      os: jammy
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
-      run_valgrind: true
-    secrets: inherit
+  # Valgrind runs nightly-only (see event-nightly.yml). ASAN below covers most
+  # memory bugs on PRs; full valgrind across all topologies runs in the nightly.
   linux-sanitizer:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
