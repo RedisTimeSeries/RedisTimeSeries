@@ -1197,7 +1197,10 @@ CompactionRule *NewRule(RedisModuleString *destKey,
         return NULL;
     }
 
-    CompactionRule *rule = malloc(sizeof *rule);
+    CompactionRule *rule = rts_try_alloc(sizeof *rule);
+    if (rule == NULL) {
+        return NULL;
+    }
     rule->aggClass = GetAggClass(aggType);
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext(false);
@@ -1413,7 +1416,9 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             args->aggregationArgs.bucketTS,
                                                             series,
                                                             args->startTimestamp,
-                                                            args->endTimestamp);
+                                                            args->endTimestamp,
+                                                            args->filterByValueArgs,
+                                                            args->filterByTSArgs);
     }
 
     return chain;

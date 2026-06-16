@@ -95,7 +95,7 @@ jobs:
         id: set-runner
         run: |
           if [ "${{ inputs.arch }}" == "arm64" ]; then
-            echo "runner=ubuntu24-arm64-4-16" >> $GITHUB_OUTPUT
+            echo "runner=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
           else
             echo "runner=ubuntu-latest" >> $GITHUB_OUTPUT
           fi
@@ -146,6 +146,7 @@ jobs:
             -f Dockerfile.${{ matrix.platform.os }} \
             --build-arg REDIS_REF=${{ env.REDIS_REF }} \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
+            --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
             -t ${{ env.DOCKER_IMAGE }} \
             .
 

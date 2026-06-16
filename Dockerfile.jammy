@@ -14,10 +14,15 @@ COPY .install /workspace/.install
 RUN bash /workspace/.install/install_script.sh
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
-ARG REDIS_REF=unstable
+# Empty default: install_redis.sh falls back to pack/ramp.yml (single source of truth)
+ARG REDIS_REF=
 ARG SANITIZER=
+# VALGRIND=1 builds Redis without _FORTIFY_SOURCE to avoid Valgrind false
+# positives on fortify-lowered memmove() (see install_redis.sh / RED-195208).
+ARG VALGRIND=
 
-RUN chmod +x /workspace/.install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} /workspace/.install/install_redis.sh
+COPY pack/ramp.yml /workspace/pack/ramp.yml
+RUN chmod +x /workspace/.install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} VALGRIND=${VALGRIND} /workspace/.install/install_redis.sh
 
 # Install uv and Python environment
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh

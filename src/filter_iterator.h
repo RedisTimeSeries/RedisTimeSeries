@@ -59,11 +59,17 @@ typedef struct AggregationIterator
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
     bool hasTwa; // precomputed: any aggregation is TWA
-    bool handled_twa_empty_prefix;
-    bool handled_twa_empty_suffix;
+    bool handled_empty_prefix;
+    bool handled_empty_suffix;
     timestamp_t prev_ts;
     bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
     bool validPerAgg[TS_AGG_TYPES_MAX]; // per-aggregation validity tracking for current bucket
+    // Same sample filters as the query, so neighbor lookups (edge-gap drop, LOCF seed, TWA
+    // interpolation) count only kept samples: a sample removed by FILTER_BY_VALUE/FILTER_BY_TS must
+    // not make an edge gap look interior. Borrowed by value from the query's RangeArgs (which
+    // outlives this iterator); byTsArgs holds a pointer we do not own and must not free.
+    FilterByValueArgs byValueArgs;
+    FilterByTSArgs byTsArgs;
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
@@ -76,7 +82,9 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              BucketTimestamp bucketTS,
                                              Series *series,
                                              api_timestamp_t startTimestamp,
-                                             api_timestamp_t endTimestamp);
+                                             api_timestamp_t endTimestamp,
+                                             FilterByValueArgs byValueArgs,
+                                             FilterByTSArgs byTsArgs);
 EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 
