@@ -174,7 +174,7 @@ jobs:
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
               QUICK=${{ inputs.quick && '1' || '0' }} \
-              PARALLEL=10 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
+              PARALLEL=${{ (inputs.run_valgrind || inputs.run_sanitizer) && '1' || '10' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
 
       - name: Fix test log permissions
         if: always()
