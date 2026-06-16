@@ -28,23 +28,48 @@ jobs:
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
-  build-linux-x64:
+  # One OS per arch runs the FULL suite (all topologies, incl. OSS-cluster /
+  # LibMR), topology-sharded so the five variants run in parallel (~15-20m).
+  # The full 18-OS matrix runs in event-nightly.
+  build-linux-x64-full:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
       arch: x64
+      os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      # PR gate runs GEN-only (quick); full topology matrix runs in event-nightly.
-      quick: true
+      quick: false
+      shard_topologies: true
     secrets: inherit
-  build-linux-arm64:
+  build-linux-arm64-full:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
       arch: arm64
+      os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      # PR gate runs GEN-only (quick); full topology matrix runs in event-nightly.
-      quick: true
+      quick: false
+      shard_topologies: true
+    secrets: inherit
+  # Remaining OSes are a small, toolchain-diverse compile-only smoke set
+  # (musl / old-glibc / Microsoft / RHEL). Full tests for these run nightly.
+  build-linux-x64-smoke:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: alpine amazonlinux2 mariner2 rocky9
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      build_only: true
+    secrets: inherit
+  build-linux-arm64-smoke:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: arm64
+      os: alpine amazonlinux2023 mariner2 rocky9
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      build_only: true
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
