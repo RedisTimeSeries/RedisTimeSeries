@@ -58,7 +58,7 @@ jobs:
     needs: [prepare-values]
     with:
       arch: x64
-      os: alpine amazonlinux2 mariner2 rocky9
+      os: alpine amazonlinux2 azurelinux3 rocky9
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       build_only: true
     secrets: inherit
@@ -67,7 +67,7 @@ jobs:
     needs: [prepare-values]
     with:
       arch: arm64
-      os: alpine amazonlinux2023 mariner2 rocky9
+      os: alpine amazonlinux2023 azurelinux3 rocky9
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       build_only: true
     secrets: inherit
