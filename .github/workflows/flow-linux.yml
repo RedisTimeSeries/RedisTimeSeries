@@ -111,11 +111,13 @@ jobs:
             fi
           fi
           # Convert space-separated list to JSON array.
-          # Valgrind is single-threaded and very slow, so instead of running all
+          # Valgrind and the sanitizer are very slow, so instead of running all
           # test topologies sequentially in one job we shard them across parallel
-          # runners (one topology per job). Other runs keep a single entry per OS.
+          # runners (one topology per job). Only shard full runs: QUICK=1 forces
+          # GEN-only in tests.sh, so sharding a quick run would just duplicate the
+          # GEN topology. Non-sharded runs keep a single entry per OS.
           MATRIX="["
-          if [ "${{ inputs.run_valgrind }}" == "true" ]; then
+          if [ "${{ inputs.quick }}" != "true" ] && { [ "${{ inputs.run_valgrind }}" == "true" ] || [ "${{ inputs.run_sanitizer }}" == "true" ]; }; then
             for os in $OS; do
               for topo in gen slaves aof aof_slaves oss_cluster; do
                 MATRIX="${MATRIX}{\"os\": \"${os}\", \"topo\": \"${topo}\"},"
