@@ -106,12 +106,18 @@ jobs:
           redis-ref: ${{ inputs.redis-ref }}
       - name: Set matrix
         id: set-matrix
+        env:
+          OS_INPUT: ${{ inputs.os }}
         run: |
-          OS="${{ inputs.os }}"
-          if [ -z "${OS}" ]; then
+          if [ -z "$OS_INPUT" ]; then
             OS='["macos-14", "macos-15", "macos-26", "macos-14-large", "macos-15-intel", "macos-26-intel"]'
           else
-            OS='["${OS}"]'
+            # Convert space-separated list to JSON array (supports one or many).
+            OS="["
+            for os in $OS_INPUT; do
+              OS="${OS}\"${os}\","
+            done
+            OS="${OS%,}]"
           fi
           echo "${OS}"
           echo "os=${OS}" >> $GITHUB_OUTPUT

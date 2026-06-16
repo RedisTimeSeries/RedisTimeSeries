@@ -75,10 +75,12 @@ jobs:
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
     with:
+      # macOS tests are serial (PARALLEL=0) and cannot be sharded. On PRs run a
+      # compile-only smoke on a reduced set (one arm + one intel, incl. the
+      # macos-26 SDK path); the full 6-variant macOS test matrix runs in
+      # event-nightly.
+      os: macos-15 macos-26-intel
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      # macOS tests are serial (PARALLEL=0) and cannot be sharded, making them the
-      # PR wall-clock pole (~3h). On PRs run a compile-only smoke; full macOS tests
-      # run in event-nightly.
       build_only: true
     secrets: inherit
   # Valgrind runs nightly-only (see event-nightly.yml). ASAN below covers most
