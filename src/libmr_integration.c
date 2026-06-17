@@ -1,5 +1,7 @@
 #include "libmr_integration.h"
 
+#include <time.h>
+
 #include "LibMR/src/mr.h"
 #include "LibMR/src/record.h"
 #include "common.h"
@@ -761,6 +763,11 @@ static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_S
                                                         .replyParser = SlotRangesReplyParser };
 
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
+    // MOD-14615 diagnostic: time the whole handler so we can correlate the duration
+    // against LibMR's 5000ms max-idle window on the initiator.
+    struct timespec _t0;
+    clock_gettime(CLOCK_MONOTONIC, &_t0);
+
     QueryPredicates_Arg *queryArg = args;
 
     ApplyCtxUser(ctx, queryArg->userName);
@@ -788,11 +795,49 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
 
+    struct timespec _t_qi0;
+    clock_gettime(CLOCK_MONOTONIC, &_t_qi0);
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+    struct timespec _t_qi1;
+    clock_gettime(CLOCK_MONOTONIC, &_t_qi1);
+
+    // Count matched keys for the diagnostic log
+    size_t _key_count = 0;
+    {
+        RedisModuleDictIter *_it = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+        while (RedisModule_DictNextC(_it, NULL, NULL) != NULL)
+            _key_count++;
+        RedisModule_DictIteratorStop(_it);
+    }
+
+    struct timespec _t_rep0;
+    clock_gettime(CLOCK_MONOTONIC, &_t_rep0);
     replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    struct timespec _t_rep1;
+    clock_gettime(CLOCK_MONOTONIC, &_t_rep1);
+
     RedisModule_FreeDict(ctx, qi);
     ReleaseCtxUser(ctx);
+
+    struct timespec _t1;
+    clock_gettime(CLOCK_MONOTONIC, &_t1);
+#define _MOD14615_US(_a, _b)                                                                       \
+    ((long long)((_b).tv_sec - (_a).tv_sec) * 1000000LL +                                          \
+     ((long long)((_b).tv_nsec - (_a).tv_nsec) / 1000LL))
+    long long _total_us = _MOD14615_US(_t0, _t1);
+    long long _qi_us = _MOD14615_US(_t_qi0, _t_qi1);
+    long long _rep_us = _MOD14615_US(_t_rep0, _t_rep1);
+    // Always log: gives baseline cadence under healthy runs.
+    // Highlight at warning level when total > 500ms (potential silence contributor).
+    RedisModule_Log(ctx,
+                    (_total_us > 500000) ? "warning" : "notice",
+                    "MOD-14615-DIAG TS_INTERNAL_MRANGE total=%lldus qi=%lldus reply=%lldus keys=%zu",
+                    _total_us,
+                    _qi_us,
+                    _rep_us,
+                    _key_count);
+#undef _MOD14615_US
 }
 
 static Series *ParseSeries(const redisReply *reply) {

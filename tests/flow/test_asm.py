@@ -1,5 +1,7 @@
 import time
 import random
+import os
+import glob
 from dataclasses import dataclass
 import re
 import threading
@@ -12,6 +14,39 @@ from utils import slot_table
 
 
 MIGRATION_CYCLES = 10
+
+
+# MOD-14615 DIAGNOSTIC (not for merge): when a multi-shard query unexpectedly fails with the
+# LibMR max-idle ("did not reply within the given timeframe") error, dump the tail of every
+# shard's redis log to stdout. CI captures stdout even when RLTest overwrites per-env log files,
+# so this guarantees we see the failing iteration's per-shard ASM handshake timing. That tells us
+# whether an ASM import step *hung* (>5s -> ghost-lock, MOD-15307 fixes it) or merely ran *slowly*
+# (~1-2s -> synchronous handshake blocking the event loop, needs an async fix in cluster_asm.c).
+def _dump_recent_shard_logs(reason: str, lines: int = 200) -> None:
+    try:
+        candidates = []
+        for pat in ("logs/*.log", "*.log", "tests/flow/logs/*.log"):
+            candidates.extend(glob.glob(pat))
+        now = time.time()
+        # Only logs touched in the last 5 minutes (the currently-running env), skip valgrind files.
+        recent = sorted(
+            (f for f in set(candidates)
+             if not f.endswith(".valgrind.log") and (now - os.path.getmtime(f)) < 300),
+            key=os.path.getmtime,
+        )
+        print(f"\n===== MOD-14615-DIAG shard log dump ({reason}) =====", flush=True)
+        print(f"found {len(recent)} recent log files", flush=True)
+        for f in recent:
+            try:
+                with open(f, "r", errors="replace") as fh:
+                    tail = fh.readlines()[-lines:]
+                print(f"\n----- {f} (last {len(tail)} lines) -----", flush=True)
+                print("".join(tail), flush=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"  (could not read {f}: {e})", flush=True)
+        print("===== MOD-14615-DIAG shard log dump end =====\n", flush=True)
+    except Exception as e:  # noqa: BLE001  - diagnostics must never mask the real failure
+        print(f"MOD-14615-DIAG dump failed: {e}", flush=True)
 
 
 def test_asm_without_data():
@@ -67,6 +102,10 @@ def test_asm_with_data_and_queries_during_migrations():
             except redis.exceptions.ResponseError as x:
                 error_message = str(x)
                 # An occasional SLOT_RANGES_ERROR is expected
+                if error_message != SLOT_RANGES_ERROR:
+                    # MOD-14615 DIAGNOSTIC (not for merge): capture both shards' logs before failing
+                    # so the failing iteration's ASM handshake timing is visible in CI stdout.
+                    _dump_recent_shard_logs(f"unexpected query error: {error_message}")
                 assert error_message == SLOT_RANGES_ERROR, error_message
                 continue
             validate_result(result)
@@ -93,6 +132,12 @@ def test_asm_with_data_and_queries_during_migrations():
                 done.set()
                 return
             done.set()
+            # MOD-14615 DIAGNOSTIC (not for merge): capture shard logs for any migration-side timeout too.
+            _dump_recent_shard_logs(f"TimeoutError: {e}")
+            raise
+        except Exception as e:  # MOD-14615 DIAGNOSTIC (not for merge): catch the migrate-thread query path
+            done.set()
+            _dump_recent_shard_logs(f"unexpected exception: {e}")
             raise
 
     # Validate that all is fine after the migrations
