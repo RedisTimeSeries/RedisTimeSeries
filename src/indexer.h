@@ -68,6 +68,7 @@ void RemoveAllIndexedMetrics();
 void RemoveAllIndexedMetrics_generic(RedisModuleDict *_labelsIndex,
                                      RedisModuleDict **_tsLabelIndex);
 int IsKeyIndexed(RedisModuleString *ts_key);
+size_t IndexMemUsage(RedisModuleString *ts_key);
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count,
