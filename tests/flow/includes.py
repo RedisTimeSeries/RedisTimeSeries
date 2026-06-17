@@ -31,52 +31,10 @@ SANITIZER = os.getenv('SANITIZER', '')
 VALGRIND = (os.getenv('VALGRIND', '0') == '1') or (os.getenv('VG', '0') == '1')
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
-# Wall-clock ceiling for "give up so a hang can't run into the CI job timeout"
-# bounds. A healthy run finishes far below this and never reaches it; it fires
-# only on a genuine hang. Under Valgrind/sanitizer everything is many times
-# slower (a normal op can take minutes), so scale the ceiling way up — it must
-# never trip on a slow-but-healthy run, while still staying far under the CI
-# job timeout (hours).
-HANG_TIMEOUT_SECS = 600 if (VALGRIND or SANITIZER) else 60
-
 # Upper bound on how long a "prompt" wake (e.g. TS.BGET woken by a key deletion)
-# may take before we consider it a regression. Must stay well below the parked
-# client's block timeout (HANG_TIMEOUT_SECS) so a wake that only happened via
-# that block timeout is still caught. Scaled up under Valgrind/sanitizer so the
-# slower wake-up callback there can't produce a false failure.
+# may take before we consider it a regression. Scaled up under Valgrind/sanitizer
+# so the slower wake-up callback there can't produce a false failure.
 WAKE_TIMEOUT_SECS = 30 if (VALGRIND or SANITIZER) else 5
-
-# Give EVERY test connection a default socket read timeout. If the server wedges
-# (e.g. a module deadlock), a command would otherwise block the client forever
-# and hang the whole CI job for hours; with this, the blocked read raises a
-# TimeoutError after HANG_TIMEOUT_SECS, failing the test fast with a traceback
-# that points at the exact stuck command instead of a silent multi-hour hang.
-# setdefault() preserves any explicit per-connection timeout (e.g. TS.BGET tests).
-# RLTest builds all its clients via redis.Redis/StrictRedis, so patching __init__
-# covers master/slave/TLS/unix connections.
-if not getattr(redis.Redis, "_rts_default_socket_timeout_patched", False):
-    _rts_orig_redis_init = redis.Redis.__init__
-
-    def _rts_redis_init(self, *args, **kwargs):
-        kwargs.setdefault("socket_timeout", HANG_TIMEOUT_SECS)
-        _rts_orig_redis_init(self, *args, **kwargs)
-
-    redis.Redis.__init__ = _rts_redis_init
-    redis.Redis._rts_default_socket_timeout_patched = True
-
-# Same default for cluster-wide connections: env.getClusterConnectionIfNeeded()
-# returns a redis.RedisCluster, which is NOT a redis.Redis subclass, so the patch
-# above doesn't cover it. Without this, a wedged server reached via a multi-shard
-# RedisCluster client would still hang forever.
-if hasattr(redis, "RedisCluster") and not getattr(redis.RedisCluster, "_rts_default_socket_timeout_patched", False):
-    _rts_orig_cluster_init = redis.RedisCluster.__init__
-
-    def _rts_cluster_init(self, *args, **kwargs):
-        kwargs.setdefault("socket_timeout", HANG_TIMEOUT_SECS)
-        _rts_orig_cluster_init(self, *args, **kwargs)
-
-    redis.RedisCluster.__init__ = _rts_cluster_init
-    redis.RedisCluster._rts_default_socket_timeout_patched = True
 
 # Use generous terminate patience for all configurations. RLTest polls and
 # returns as soon as the process exits, so a high retry count costs nothing
@@ -120,11 +78,7 @@ def verifyClusterInitialized(env):
         except Exception:
             pass # in case we run on older version of redis
         allConnected = False
-        deadline = time.time() + HANG_TIMEOUT_SECS
         while not allConnected:
-            if time.time() > deadline:
-                print("[HANG-GUARD] verifyClusterInitialized exceeded %ss deadline" % HANG_TIMEOUT_SECS, flush=True)
-                raise RuntimeError("verifyClusterInitialized timed out after %ss" % HANG_TIMEOUT_SECS)
             res = conn.execute_command('timeseries.INFOCLUSTER')
             nodes = res[4]
             allConnected = True

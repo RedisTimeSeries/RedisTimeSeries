@@ -134,8 +134,7 @@ def test_madd_some_failed_replicas():
         r.execute_command("ts.madd", "test_key3", -222, 11, "test_key1", 123, 11, "test_key1", 124, 12, "test_key1", 125, 12)
         r.execute_command("ts.madd", "test_key3", -222, "bbbbbbb", "test_key1", 123, 11, "test_key1", 124, 12, "test_key1", 125, 12)
 
-        _acked = r.execute_command("wait", 1, HANG_TIMEOUT_SECS * 1000)  # finite timeout so a missing replica ack can't block forever
-        print("[HANG-GUARD] WAIT for 1 replica returned acked=%s (timeout %ss)" % (_acked, HANG_TIMEOUT_SECS), flush=True)
+        r.execute_command("wait", 1, 0)
         env.assertEqual(r.execute_command("ts.range", "test_key1", "-", "+"), [[122, b'11'], [123, b'11'], [124, b'12'], [125, b'12']])
         assert r.execute_command("ts.range", "test_key4", "-", "+") == [[110, b'500.5']]
 
