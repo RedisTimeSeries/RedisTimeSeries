@@ -191,12 +191,17 @@ setup_rltest() {
 	# this, printing the stuck thread's traceback, instead of letting a hung or
 	# pathologically-slow test run into the multi-hour CI job timeout. It's a
 	# catch-all (deadlock, infinite loop, thread block, runaway-slow test).
-	# Valgrind/sanitizer are far slower, so scale the limit way up there.
 	# Override with TEST_TIMEOUT=<seconds> (0 disables).
 	if [[ -z $TEST_TIMEOUT ]]; then
-		if [[ $VG == 1 || -n $SAN ]]; then
-			TEST_TIMEOUT=1800
+		if [[ $VG == 1 ]]; then
+			# Valgrind is ~20-30x slower. The exhaustive test_max_extensive issues
+			# ~1.6M ops and takes roughly an hour under Valgrind, so give a large
+			# ceiling that lets it complete instead of tripping the timeout, while
+			# still bounding a genuine hang far below the CI job limit.
+			TEST_TIMEOUT=10800
 		else
+			# normal + sanitizer (sanitizer is far less slow than Valgrind, and was
+			# already completing within this limit).
 			TEST_TIMEOUT=1800
 		fi
 	fi
