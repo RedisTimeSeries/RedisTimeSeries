@@ -186,6 +186,26 @@ setup_rltest() {
 		RLTEST_ARGS+=" -i"
 	fi
 	RLTEST_ARGS+=" --enable-debug-command --enable-protected-configs"
+
+	# Per-test wall-clock timeout: RLTest fails any test that runs longer than
+	# this, printing the stuck thread's traceback, instead of letting a hung or
+	# pathologically-slow test run into the multi-hour CI job timeout. It's a
+	# catch-all (deadlock, infinite loop, thread block, runaway-slow test).
+	# Override with TEST_TIMEOUT=<seconds> (0 disables).
+	if [[ -z $TEST_TIMEOUT ]]; then
+		if [[ $VG == 1 ]]; then
+			# Valgrind is ~20-30x slower. The exhaustive test_max_extensive issues
+			# ~1.6M ops and takes roughly an hour under Valgrind, so give a large
+			# ceiling that lets it complete instead of tripping the timeout, while
+			# still bounding a genuine hang far below the CI job limit.
+			TEST_TIMEOUT=10800
+		else
+			# normal + sanitizer (sanitizer is far less slow than Valgrind, and was
+			# already completing within this limit).
+			TEST_TIMEOUT=1800
+		fi
+	fi
+	RLTEST_ARGS+=" --test-timeout $TEST_TIMEOUT"
 }
 
 #----------------------------------------------------------------------------------------------

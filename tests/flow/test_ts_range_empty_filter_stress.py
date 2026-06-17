@@ -16,7 +16,14 @@
 import math
 import random
 
-from RLTest import Env
+# Use the includes Env wrapper (NOT `from RLTest import Env`). RLTest's raw Env
+# constructor assigns terminateRetries directly with no Defaults fallback, so a
+# raw Env gets terminateRetries=None -> _stopProcess() takes the unbounded
+# "send one SIGTERM, then wait forever" branch. If a replica is slow to exit on
+# shutdown, env teardown then hangs until the per-test timeout (~30 min) and the
+# job fails. The includes wrapper passes terminateRetries=20, so teardown
+# escalates to SIGKILL after ~20s instead of hanging.
+from includes import Env
 
 NON_TWA_AGGS = ['avg', 'sum', 'min', 'max', 'range', 'count', 'countAll',
                 'first', 'last', 'std.p', 'std.s', 'var.p', 'var.s']
