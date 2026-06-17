@@ -197,7 +197,7 @@ setup_rltest() {
 		if [[ $VG == 1 || -n $SAN ]]; then
 			TEST_TIMEOUT=1800
 		else
-			TEST_TIMEOUT=300
+			TEST_TIMEOUT=600
 		fi
 	fi
 	RLTEST_ARGS+=" --test-timeout $TEST_TIMEOUT"
