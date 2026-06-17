@@ -303,6 +303,12 @@ int IsKeyIndexed(RedisModuleString *ts_key) {
 //
 // Dict sizes come from RedisModule_MallocSizeDict(), which is itself an approximation,
 // so the result is an estimate.
+//
+// Note: the per-key number is not static — it shifts as other keys with the same
+// label are added or removed, because entries (the denominator) changes. This is
+// intentional: the 1/N slice keeps the sum-over-all-keys invariant correct, which
+// is what matters for capacity estimates. Individual MEMORY USAGE calls on a live
+// system will show small fluctuations as the keyspace changes.
 size_t IndexMemUsage(RedisModuleString *ts_key) {
     if (ts_key == NULL) {
         return 0;
