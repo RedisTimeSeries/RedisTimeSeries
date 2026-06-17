@@ -78,7 +78,8 @@ MultiSeriesSampleIterator *MultiSeriesSampleIterator_New(AbstractSampleIterator 
         MSSample *sample = malloc(sizeof(MSSample));
         if (sample_iter->GetNext(sample_iter, &sample->sample) == CR_OK) {
             sample->iter = sample_iter;
-            assert(heap_offer(&newIter->samples_heap, sample) == 0);
+            int res = heap_offer(&newIter->samples_heap, sample);
+            assert(res == 0);
         } else {
             free(sample);
         }
