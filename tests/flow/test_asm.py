@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
 import redis
 
-from includes import Env, VALGRIND, SANITIZER
+from includes import Env, VALGRIND, SANITIZER, HANG_TIMEOUT_SECS
 from utils import slot_table
 
 
@@ -43,6 +43,13 @@ def test_asm_with_data_and_queries_during_migrations():
     fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
     conn = env.getConnection(0)
+    # Bound the read so a command that stalls mid-migration can't block the
+    # validator thread forever (which would hang the ThreadPoolExecutor join).
+    try:
+        conn.connection_pool.connection_kwargs["socket_timeout"] = HANG_TIMEOUT_SECS
+        print("[HANG-GUARD] asm validator socket_timeout set to %ss" % HANG_TIMEOUT_SECS, flush=True)
+    except Exception:
+        pass
     command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
     def validate_result(result):

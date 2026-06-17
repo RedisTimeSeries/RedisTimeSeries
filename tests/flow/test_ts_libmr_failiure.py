@@ -21,7 +21,11 @@ def verifyClusterInitialized(env):
         except Exception:
             pass # in case we run on older version of redis
         allConnected = False
+        deadline = time.time() + HANG_TIMEOUT_SECS
         while not allConnected:
+            if time.time() > deadline:
+                print("[HANG-GUARD] verifyClusterInitialized exceeded %ss deadline" % HANG_TIMEOUT_SECS, flush=True)
+                raise RuntimeError("verifyClusterInitialized timed out after %ss" % HANG_TIMEOUT_SECS)
             res = conn.execute_command('timeseries.INFOCLUSTER')
             nodes = res[4]
             allConnected = True
@@ -115,14 +119,17 @@ def testLibmr_client_disconnect():
         for i in range(0,20):
             # expect a new connection to arrive
             cons.append(env.getConnection(random.randint(0, env.shardsCount - 1)))
-            threads.append(Thread(target=libmr_query, args=(cons[i], env, start_ts, samples_count)))
+            threads.append(Thread(target=libmr_query, args=(cons[i], env, start_ts, samples_count), daemon=True))
 
         for i in range(len(threads)):
             threads[i].start()
             cons[i].close()
 
-        # wait for processes to join
-        [th.join() for th in threads]
+        # wait for processes to join (bounded so a stuck worker can't hang CI)
+        for th in threads:
+            th.join(timeout=HANG_TIMEOUT_SECS)
+            if th.is_alive():
+                print("[HANG-GUARD] libmr_query worker still alive after %ss join timeout" % HANG_TIMEOUT_SECS, flush=True)
 
         # make sure we did not crash
         r.ping()
@@ -178,12 +185,12 @@ def test_libmr_topology_change_during_mrange():
             pass
 
     # 1. Block remote shard so it can't process internal commands
-    t_sleep = Thread(target=do_sleep_remote)
+    t_sleep = Thread(target=do_sleep_remote, daemon=True)
     t_sleep.start()
     time.sleep(0.3)
 
     # 2. Fire MRANGE — it will block waiting for the sleeping shard
-    t_mrange = Thread(target=do_mrange)
+    t_mrange = Thread(target=do_mrange, daemon=True)
     t_mrange.start()
     time.sleep(0.3)
 
@@ -193,8 +200,12 @@ def test_libmr_topology_change_during_mrange():
     except Exception:
         pass
 
-    t_mrange.join(timeout=30)
-    t_sleep.join(timeout=30)
+    t_mrange.join(timeout=HANG_TIMEOUT_SECS)
+    if t_mrange.is_alive():
+        print("[HANG-GUARD] do_mrange still alive after %ss join timeout" % HANG_TIMEOUT_SECS, flush=True)
+    t_sleep.join(timeout=HANG_TIMEOUT_SECS)
+    if t_sleep.is_alive():
+        print("[HANG-GUARD] do_sleep_remote still alive after %ss join timeout" % HANG_TIMEOUT_SECS, flush=True)
 
     env.assertEqual(
         mrange_error[0],
