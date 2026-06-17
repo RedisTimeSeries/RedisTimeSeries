@@ -560,8 +560,9 @@ const char *SeriesGetCStringLabelValue(const Series *series, const char *labelKe
 
 size_t SeriesMemUsage(const void *value) {
     const Series *series = (const Series *)value;
-    return RedisModule_MallocSize((void *)series) + SeriesRulesSize(series) +
-           SeriesLabelsSize(series) + SeriesChunksSize(series);
+    size_t keyNameSize = series->keyName ? RedisModule_MallocSizeString(series->keyName) : 0;
+    return RedisModule_MallocSize((void *)series) + keyNameSize + SeriesRulesSize(series) +
+           SeriesLabelsSize(series) + SeriesChunksSize(series) + IndexMemUsage(series->keyName);
 }
 
 size_t SeriesGetNumSamples(const Series *series) {
