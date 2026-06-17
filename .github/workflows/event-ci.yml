@@ -76,10 +76,10 @@ jobs:
     needs: [prepare-values]
     with:
       # macOS tests are serial (PARALLEL=0) and cannot be sharded. On PRs run a
-      # compile-only smoke on a reduced set (one arm + one intel, incl. the
-      # macos-26 SDK path); the full 6-variant macOS test matrix runs in
-      # event-nightly.
-      os: macos-15 macos-26-intel
+      # compile-only smoke on the newest macOS only, one per arch: macos-26
+      # (arm) + macos-26-intel (intel). The full 6-variant macOS test matrix
+      # runs in event-nightly.
+      os: macos-26 macos-26-intel
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       build_only: true
     secrets: inherit
@@ -92,7 +92,11 @@ jobs:
       arch: x64
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      # PR gate runs GEN-only under ASAN; full topology matrix runs in event-nightly.
-      quick: true
+      # ASAN runs the full topology suite on PRs, sharded one topology per
+      # runner (run_sanitizer + quick=false triggers the shard gate in
+      # flow-linux). Each ASAN shard lands ~at the full-test pole (~15m), so
+      # this adds replication/AOF/cluster/LibMR ASAN coverage without raising
+      # the overall PR wall-clock.
+      quick: false
       run_sanitizer: true
     secrets: inherit
