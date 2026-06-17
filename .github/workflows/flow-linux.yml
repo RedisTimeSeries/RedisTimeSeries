@@ -33,6 +33,14 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      build_only:
+        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
+        type: boolean
+        default: false
+      shard_topologies:
+        description: 'Run each test topology as a separate parallel job (one per topology)'
+        type: boolean
+        default: false
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -65,6 +73,14 @@ on:
         description: 'Run quick tests'
         type: boolean
         default: false
+      build_only:
+        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
+        type: boolean
+        default: false
+      shard_topologies:
+        description: 'Run each test topology as a separate parallel job (one per topology)'
+        type: boolean
+        default: false
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -93,34 +109,57 @@ jobs:
           redis-ref: ${{ inputs.redis-ref }}
       - name: Set runner
         id: set-runner
+        env:
+          ARCH: ${{ inputs.arch }}
         run: |
-          if [ "${{ inputs.arch }}" == "arm64" ]; then
+          if [ "$ARCH" == "arm64" ]; then
             echo "runner=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
           else
             echo "runner=ubuntu-latest" >> $GITHUB_OUTPUT
           fi
       - name: Set matrix
         id: set-matrix
+        env:
+          ARCH: ${{ inputs.arch }}
+          OS_INPUT: ${{ inputs.os }}
+          QUICK: ${{ inputs.quick }}
+          RUN_VALGRIND: ${{ inputs.run_valgrind }}
+          RUN_SANITIZER: ${{ inputs.run_sanitizer }}
+          SHARD_TOPOLOGIES: ${{ inputs.shard_topologies }}
         run: |
-          OS="${{ inputs.os }}"
+          OS="$OS_INPUT"
           if [ -z "${OS}" ]; then
-            if [ "${{ inputs.arch }}" == "arm64" ]; then
+            if [ "$ARCH" == "arm64" ]; then
               OS="focal jammy rocky9 azurelinux3 amazonlinux2023 alpine noble resolute rocky8 rocky10 alma8 alma9 alma10 bullseye bookworm trixie mariner2"
             else
               OS="focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie"
             fi
           fi
-          # Convert space-separated list to JSON array
+          # Convert space-separated list to JSON array.
+          # Valgrind, the sanitizer, and any explicitly sharded full run are slow,
+          # so instead of running all test topologies sequentially in one job we
+          # shard them across parallel runners (one topology per job). Only shard
+          # full runs: QUICK=1 forces GEN-only in tests.sh, so sharding a quick run
+          # would just duplicate the GEN topology. Non-sharded runs keep a single
+          # entry per OS.
           MATRIX="["
-          for os in $OS; do
-            MATRIX="${MATRIX}{\"os\": \"${os}\"},"
-          done
+          if [ "$QUICK" != "true" ] && { [ "$RUN_VALGRIND" == "true" ] || [ "$RUN_SANITIZER" == "true" ] || [ "$SHARD_TOPOLOGIES" == "true" ]; }; then
+            for os in $OS; do
+              for topo in gen slaves aof aof_slaves oss_cluster; do
+                MATRIX="${MATRIX}{\"os\": \"${os}\", \"topo\": \"${topo}\"},"
+              done
+            done
+          else
+            for os in $OS; do
+              MATRIX="${MATRIX}{\"os\": \"${os}\"},"
+            done
+          fi
           MATRIX="${MATRIX%,}]"
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
-          echo "Generated matrix for ${{ inputs.arch }}: ${MATRIX}"
+          echo "Generated matrix for ${ARCH}: ${MATRIX}"
 
   build-linux:
-    name: ${{ inputs.arch }}-${{ matrix.platform.os }}, ${{ needs.setup-environment.outputs.redis-ref }}
+    name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}, ${{ needs.setup-environment.outputs.redis-ref }}
     runs-on: ${{ needs.setup-environment.outputs.runner }}
     needs: setup-environment
     strategy:
@@ -160,9 +199,24 @@ jobs:
             make build
 
       - name: Run tests
+        if: ${{ !inputs.build_only }}
+        env:
+          TOPO: ${{ matrix.platform.topo }}
         run: |
           # Capture test output to file for parsing by capture-test-results action
           # The workspace is mounted, so test_output.log will be accessible outside the container
+          #
+          # For valgrind shards (TOPO set) run exactly one test topology per job so
+          # the slow valgrind variants execute in parallel across runners. Empty
+          # TOPO keeps the default behaviour (QUICK selects the variants to run).
+          TOPO_ARGS=""
+          case "${TOPO}" in
+            gen)         TOPO_ARGS="GEN=1 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0" ;;
+            slaves)      TOPO_ARGS="GEN=0 SLAVES=1 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0" ;;
+            aof)         TOPO_ARGS="GEN=0 SLAVES=0 AOF=1 AOF_SLAVES=0 OSS_CLUSTER=0" ;;
+            aof_slaves)  TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=1 OSS_CLUSTER=0" ;;
+            oss_cluster) TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=1" ;;
+          esac
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
@@ -173,31 +227,32 @@ jobs:
             bash -c "make test \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-              QUICK=${{ inputs.quick && '1' || '0' }} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
+              QUICK=${{ inputs.quick && '1' || '0' }} \
+              ${TOPO_ARGS} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
 
       - name: Fix test log permissions
-        if: always()
+        if: ${{ always() && !inputs.build_only }}
         run: |
           sudo chown -R "$(id -u)":"$(id -g)" tests || true
           sudo chmod -R a+rX tests || true
           sudo chown "$(id -u)":"$(id -g)" test_output.log || true
 
       - name: Capture test results
-        if: always()
+        if: ${{ always() && !inputs.build_only }}
         uses: ./.github/actions/capture-test-results
         with:
-          os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}
+          os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
 
       - name: Upload test artifacts
-        if: failure()
+        if: ${{ failure() && !inputs.build_only }}
         uses: actions/upload-artifact@v6
         with:
-          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
+          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
           path: |
             tests/**/*.log
 
       - name: Pack module
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && !matrix.platform.topo }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
@@ -209,7 +264,7 @@ jobs:
             make pack SHOW=1
 
       - name: Upload artifacts to S3
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && !matrix.platform.topo }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
