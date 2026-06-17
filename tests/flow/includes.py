@@ -46,6 +46,38 @@ HANG_TIMEOUT_SECS = 600 if (VALGRIND or SANITIZER) else 60
 # slower wake-up callback there can't produce a false failure.
 WAKE_TIMEOUT_SECS = 30 if (VALGRIND or SANITIZER) else 5
 
+# Give EVERY test connection a default socket read timeout. If the server wedges
+# (e.g. a module deadlock), a command would otherwise block the client forever
+# and hang the whole CI job for hours; with this, the blocked read raises a
+# TimeoutError after HANG_TIMEOUT_SECS, failing the test fast with a traceback
+# that points at the exact stuck command instead of a silent multi-hour hang.
+# setdefault() preserves any explicit per-connection timeout (e.g. TS.BGET tests).
+# RLTest builds all its clients via redis.Redis/StrictRedis, so patching __init__
+# covers master/slave/TLS/unix connections.
+if not getattr(redis.Redis, "_rts_default_socket_timeout_patched", False):
+    _rts_orig_redis_init = redis.Redis.__init__
+
+    def _rts_redis_init(self, *args, **kwargs):
+        kwargs.setdefault("socket_timeout", HANG_TIMEOUT_SECS)
+        _rts_orig_redis_init(self, *args, **kwargs)
+
+    redis.Redis.__init__ = _rts_redis_init
+    redis.Redis._rts_default_socket_timeout_patched = True
+
+# Same default for cluster-wide connections: env.getClusterConnectionIfNeeded()
+# returns a redis.RedisCluster, which is NOT a redis.Redis subclass, so the patch
+# above doesn't cover it. Without this, a wedged server reached via a multi-shard
+# RedisCluster client would still hang forever.
+if hasattr(redis, "RedisCluster") and not getattr(redis.RedisCluster, "_rts_default_socket_timeout_patched", False):
+    _rts_orig_cluster_init = redis.RedisCluster.__init__
+
+    def _rts_cluster_init(self, *args, **kwargs):
+        kwargs.setdefault("socket_timeout", HANG_TIMEOUT_SECS)
+        _rts_orig_cluster_init(self, *args, **kwargs)
+
+    redis.RedisCluster.__init__ = _rts_cluster_init
+    redis.RedisCluster._rts_default_socket_timeout_patched = True
+
 # Use generous terminate patience for all configurations. RLTest polls and
 # returns as soon as the process exits, so a high retry count costs nothing
 # when shutdown is fast, but prevents force-kills under Valgrind/sanitizer
