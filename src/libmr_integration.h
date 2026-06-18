@@ -2,6 +2,7 @@
 #include "LibMR/src/utils/arr.h"
 #include "generic_chunk.h"
 #include "indexer.h"
+#include "query_language.h"
 #include "tsdb.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
@@ -30,6 +31,17 @@ typedef struct QueryPredicates_Arg
     RedisModuleString **limitLabels;
     bool latest;
     bool resp3;
+    // Per-shard aggregation fields — only used when hasGroupBy=false
+    bool hasGroupBy;
+    size_t numAggClasses;
+    TS_AGG_TYPES_T aggTypes[TS_AGG_TYPES_MAX];
+    api_timestamp_t aggTimeDelta;
+    BucketTimestamp aggBucketTS;
+    bool aggEmpty;
+    RangeAlignment alignment;
+    timestamp_t timestampAlignment;
+    FilterByValueArgs filterByValueArgs;
+    FilterByTSArgs filterByTSArgs;
 } QueryPredicates_Arg;
 
 typedef struct StringRecord
