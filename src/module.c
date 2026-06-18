@@ -2264,6 +2264,31 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
     }
 }
 
+/* Fired, in OSS cluster mode, whenever the cluster topology changes: on startup,
+ * on resharding (slot ownership / node membership) and on failover (a primary
+ * changed). We simply refresh the LibMR view of the cluster so keyless
+ * multi-shard commands (TS.MGET, TS.MRANGE, TS.MREVRANGE, TS.QUERYINDEX) keep
+ * aggregating across all shards, without the operator having to call the
+ * internal TIMESERIES.REFRESHCLUSTER on every primary. The refresh is a no-op
+ * outside OSS cluster mode (under Enterprise the DMC drives topology via
+ * CLUSTERSET), so it is safe to subscribe unconditionally. */
+void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
+                                   RedisModuleEvent eid,
+                                   uint64_t subevent,
+                                   void *data) {
+    if (eid.id != REDISMODULE_EVENT_CLUSTER_TOPOLOGY_CHANGE) {
+        RedisModule_Log(
+            rts_staticCtx, "warning", "Bad event given (id=%" PRIu64 "), ignored.", eid.id);
+        return;
+    }
+    /* Logged at verbose: a reshard issues CLUSTER SETSLOT per slot, so this can
+     * fire thousands of times; the actual (coalesced) refresh is logged by LibMR. */
+    RedisModule_Log(ctx, "verbose",
+                    "Got cluster topology change event (subevent=%" PRIu64
+                    "), scheduling cluster topology refresh.", subevent);
+    MR_ClusterRefreshTopology();
+}
+
 void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
     if (eid.id != REDISMODULE_EVENT_CLUSTER_SLOT_MIGRATION) {
         RedisModule_Log(
@@ -2667,6 +2692,11 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
             RedisModule_SubscribeToServerEvent(
                 ctx, RedisModuleEvent_ClusterSlotMigrationTrim, ClusterAsmTrimCallback);
         }
+        /* Auto-refresh the cluster topology on OSS cluster topology changes.
+         * Returns an error (ignored) on servers that predate the event. */
+        RedisModule_Log(ctx, "notice", "%s", "Subscribe to cluster topology change events");
+        RedisModule_SubscribeToServerEvent(
+            ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
