@@ -164,10 +164,7 @@ jobs:
   bump-redis-enterprise:
     name: Bump TS beta in Redis-Enterprise
     runs-on: ubuntu-latest
-    # TODO(restore-before-merge): re-add `linux-valgrind` to both `needs:` and the
-    # success check below before this PR lands on master. Temporarily dropped while
-    # validating the auto-bump flow because valgrind on `unstable` is currently flaky.
-    needs: [prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-sanitizer, random-traffic]
+    needs: [prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer, random-traffic]
     # Auto-runs only on the scheduled nightly from master/main when every upstream job is success.
     # For manual runs, the caller has to explicitly opt in via the `bump-enterprise` input —
     # this lets us test the job from any branch without accidentally opening Enterprise PRs
@@ -178,6 +175,7 @@ jobs:
       needs.build-linux-x64.result == 'success' &&
       needs.build-linux-arm64.result == 'success' &&
       needs.macos.result == 'success' &&
+      needs.linux-valgrind.result == 'success' &&
       needs.linux-sanitizer.result == 'success' &&
       needs.random-traffic.result == 'success' &&
       (
@@ -252,10 +250,10 @@ jobs:
           BRANCH="auto/bump-ts-beta-${BETA_VERSION}"
           git config user.name  "redis-datatypes-bot"
           git config user.email "datatypes-bot@redis.com"
-          git checkout -b "$BRANCH"
+          git checkout -B "$BRANCH"  # -B so a partial-failure re-run can reset the branch
           git add modules/modules_99_99.bzl modules/BUILD.bazel modules/modules_build_files_generator.py
           git commit -m "Auto-bump RedisTimeSeries beta to ${BETA_VERSION}"
-          git push -u origin "$BRANCH"
+          git push --force origin "$BRANCH"  # force: branch is bot-owned, single commit
 
           NIGHTLY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           BODY_FILE="$GITHUB_WORKSPACE/pr-body.md"
@@ -271,12 +269,14 @@ jobs:
             echo "_Opened automatically by \`.github/workflows/event-nightly.yml\` in \`${GITHUB_REPOSITORY}\`._"
           } > "$BODY_FILE"
 
+          # Fall back to the existing PR if one is already open for this head (re-run).
           PR_URL=$(gh pr create \
             --repo "${ENTERPRISE_REPO}" \
             --base "${ENTERPRISE_BASE}" \
             --head "$BRANCH" \
             --title "Auto-bump RedisTimeSeries beta to ${BETA_VERSION}" \
-            --body-file "$BODY_FILE")
+            --body-file "$BODY_FILE" \
+            || gh pr view "$BRANCH" --repo "${ENTERPRISE_REPO}" --json url -q .url)
           echo "pr-url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
 
