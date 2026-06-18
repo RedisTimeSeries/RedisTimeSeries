@@ -48,6 +48,9 @@ jobs:
         uses: actions/checkout@v5
         with:
           submodules: 'recursive'
+          # Full history so Codecov can resolve the PR base for accurate
+          # diff-coverage (the per-PR comment).
+          fetch-depth: 0
 
       - name: Resolve redis-ref
         id: redis
