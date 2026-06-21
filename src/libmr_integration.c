@@ -840,10 +840,10 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
 
-    // Apply aggregation and filters on the shard when there is no GROUPBY.
+    // Level 1+2: apply aggregation on shard regardless of GROUPBY.
     // The coordinator will receive pre-aggregated samples and skip re-aggregation.
     AggregationClass *aggClasses[TS_AGG_TYPES_MAX] = { 0 };
-    if (!queryArg->hasGroupBy && queryArg->numAggClasses > 0) {
+    if (queryArg->numAggClasses > 0) {
         for (size_t i = 0; i < queryArg->numAggClasses; i++) {
             aggClasses[i] = GetAggClass(queryArg->aggTypes[i]);
         }

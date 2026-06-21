@@ -181,10 +181,10 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
-    // ponytail: Level 1 opt — shard pre-aggregated; strip agg args so coordinator doesn't re-aggregate.
+    // Level 1+2: shard pre-aggregated; strip agg args so coordinator doesn't re-aggregate.
     // RESP3 `aggregators` metadata will show empty for this path; fix when RESP3+cluster matters.
     RangeArgs coordArgs = args->rangeArgs;
-    if (!args->groupByLabel && coordArgs.aggregationArgs.numClasses > 0) {
+    if (coordArgs.aggregationArgs.numClasses > 0) {
         coordArgs.aggregationArgs.numClasses = 0;
         coordArgs.aggregationArgs.classes = NULL;
         coordArgs.filterByValueArgs.hasValue = false;
@@ -209,8 +209,8 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     });
 
     if (args->groupByLabel) {
-        // Apply the reducer
-        RangeArgs rangeArgs = args->rangeArgs;
+        // Apply the reducer on pre-aggregated data (agg already stripped in coordArgs)
+        RangeArgs rangeArgs = coordArgs;
         rangeArgs.latest = false; // we already handled the latest flag in the client side
         ResultSet_ApplyReducer(ctx, resultset, &rangeArgs, &args->groupByReducerArgs);
 
