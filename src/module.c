@@ -31,16 +31,6 @@
 #include "LibMR/src/mr.h"
 #include "RedisModulesSDK/redismodule.h"
 
-// MOD-15307: pre-fork drain subevents on RedisModuleEvent_ForkChild. Defined here too so the
-// module builds against an older pinned RedisModulesSDK that predates them (redis core sends
-// these values: 2, 3). On a redis core that doesn't fire _PRE, the drain just never triggers
-// (old, unfixed behavior) but the module still loads normally.
-#ifndef REDISMODULE_SUBEVENT_FORK_CHILD_PRE
-#define REDISMODULE_SUBEVENT_FORK_CHILD_PRE 2
-#endif
-#ifndef REDISMODULE_SUBEVENT_FORK_CHILD_CANCELLED
-#define REDISMODULE_SUBEVENT_FORK_CHILD_CANCELLED 3
-#endif
 #include "rmutil/alloc.h"
 #include "rmutil/strings.h"
 #include "rmutil/util.h"
@@ -2282,6 +2272,7 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
 // or FORK_CHILD_CANCELLED (fork did not happen). Removes the migration-time stalls behind
 // MOD-14239/14289 and MOD-14615.
 void ForkChildCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+    REDISMODULE_NOT_USED(ctx);
     REDISMODULE_NOT_USED(eid);
     REDISMODULE_NOT_USED(data);
 
@@ -2289,12 +2280,9 @@ void ForkChildCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subev
         return;
     }
 
-    // MOD-15307: the pre-fork drain matters only for the multi-shard (LibMR cluster) path
-    // exercised during ASM slot migration. In a non-clustered server the LibMR event-loop
-    // thread is idle, so draining it around every fork (RDB / AOF rewrite / replica sync) is
-    // unnecessary -- and disturbing that fork path can do more harm than good. Restrict the
-    // drain to cluster mode, leaving standalone forks exactly as upstream.
-    if ((RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER) == 0) {
+    // The drain only matters when LibMR runs multi-shard (OSS cluster or RE); a standalone
+    // server has an idle event-loop thread, so its forks are left exactly as upstream.
+    if (!MR_ClusterIsInClusterMode()) {
         return;
     }
 

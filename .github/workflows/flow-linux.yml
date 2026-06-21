@@ -244,9 +244,6 @@ jobs:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
 
       - name: Upload test artifacts
-        # MOD-14615: capture every shard's log (all masters AND replicas) on
-        # EVERY run, not just failures, so passing runs still yield the per-shard
-        # diagnostics. retention-days bounds the storage cost of always-on upload.
         if: ${{ always() && !inputs.build_only }}
         uses: actions/upload-artifact@v6
         with:
