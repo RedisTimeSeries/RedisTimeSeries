@@ -198,6 +198,30 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
             SerializationCtxWriteRedisString(sctx, predicate->valuesList[value_index], error);
         }
     }
+
+    // per-shard aggregation fields
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->hasGroupBy, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->numAggClasses, error);
+    for (size_t i = 0; i < predicate_list->numAggClasses; i++) {
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggTypes[i], error);
+    }
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggTimeDelta, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggBucketTS, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggEmpty, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->alignment, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->timestampAlignment, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->filterByValueArgs.hasValue, error);
+    if (predicate_list->filterByValueArgs.hasValue) {
+        MR_SerializationCtxWriteDouble(sctx, predicate_list->filterByValueArgs.min, error);
+        MR_SerializationCtxWriteDouble(sctx, predicate_list->filterByValueArgs.max, error);
+    }
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->filterByTSArgs.hasValue, error);
+    if (predicate_list->filterByTSArgs.hasValue) {
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->filterByTSArgs.count, error);
+        for (size_t i = 0; i < predicate_list->filterByTSArgs.count; i++) {
+            MR_SerializationCtxWriteLongLong(sctx, predicate_list->filterByTSArgs.values[i], error);
+        }
+    }
 }
 
 static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
@@ -299,6 +323,34 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
             }
         }
     }
+    if (unlikely(expect_resp && *error)) {
+        goto err;
+    }
+
+    // per-shard aggregation fields
+    predicates->hasGroupBy = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->numAggClasses = MR_SerializationCtxReadLongLong(sctx, error);
+    for (size_t i = 0; i < predicates->numAggClasses; i++) {
+        predicates->aggTypes[i] = MR_SerializationCtxReadLongLong(sctx, error);
+    }
+    predicates->aggTimeDelta = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->aggBucketTS = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->aggEmpty = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->alignment = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->timestampAlignment = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->filterByValueArgs.hasValue = MR_SerializationCtxReadLongLong(sctx, error);
+    if (predicates->filterByValueArgs.hasValue) {
+        predicates->filterByValueArgs.min = MR_SerializationCtxReadDouble(sctx, error);
+        predicates->filterByValueArgs.max = MR_SerializationCtxReadDouble(sctx, error);
+    }
+    predicates->filterByTSArgs.hasValue = MR_SerializationCtxReadLongLong(sctx, error);
+    if (predicates->filterByTSArgs.hasValue) {
+        predicates->filterByTSArgs.count = MR_SerializationCtxReadLongLong(sctx, error);
+        for (size_t i = 0; i < predicates->filterByTSArgs.count; i++) {
+            predicates->filterByTSArgs.values[i] = MR_SerializationCtxReadLongLong(sctx, error);
+        }
+    }
+
     if (unlikely(expect_resp && *error)) {
         goto err;
     }
@@ -787,6 +839,24 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.aggregationClass = NULL;
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
+
+    // Apply aggregation and filters on the shard when there is no GROUPBY.
+    // The coordinator will receive pre-aggregated samples and skip re-aggregation.
+    AggregationClass *aggClasses[TS_AGG_TYPES_MAX] = { 0 };
+    if (!queryArg->hasGroupBy && queryArg->numAggClasses > 0) {
+        for (size_t i = 0; i < queryArg->numAggClasses; i++) {
+            aggClasses[i] = GetAggClass(queryArg->aggTypes[i]);
+        }
+        mrangeArgs.rangeArgs.aggregationArgs.numClasses = queryArg->numAggClasses;
+        mrangeArgs.rangeArgs.aggregationArgs.classes = aggClasses;
+        mrangeArgs.rangeArgs.aggregationArgs.timeDelta = queryArg->aggTimeDelta;
+        mrangeArgs.rangeArgs.aggregationArgs.bucketTS = queryArg->aggBucketTS;
+        mrangeArgs.rangeArgs.aggregationArgs.empty = queryArg->aggEmpty;
+        mrangeArgs.rangeArgs.filterByValueArgs = queryArg->filterByValueArgs;
+        mrangeArgs.rangeArgs.filterByTSArgs = queryArg->filterByTSArgs;
+        mrangeArgs.rangeArgs.alignment = queryArg->alignment;
+        mrangeArgs.rangeArgs.timestampAlignment = queryArg->timestampAlignment;
+    }
 
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);

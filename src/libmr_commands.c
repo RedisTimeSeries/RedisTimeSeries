@@ -181,6 +181,17 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
+    // ponytail: Level 1 opt — shard pre-aggregated; strip agg args so coordinator doesn't re-aggregate.
+    // RESP3 `aggregators` metadata will show empty for this path; fix when RESP3+cluster matters.
+    RangeArgs coordArgs = args->rangeArgs;
+    if (!args->groupByLabel && coordArgs.aggregationArgs.numClasses > 0) {
+        coordArgs.aggregationArgs.numClasses = 0;
+        coordArgs.aggregationArgs.classes = NULL;
+        coordArgs.filterByValueArgs.hasValue = false;
+        coordArgs.filterByTSArgs.hasValue = false;
+    }
+    const RangeArgs *replyArgs = &coordArgs;
+
     array_foreach(nodesResults, seriesList, {
         array_foreach(seriesList, s, {
             if (args->groupByLabel)
@@ -191,7 +202,7 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
                                     args->withLabels,
                                     args->limitLabels,
                                     args->numLimitLabels,
-                                    &args->rangeArgs,
+                                    replyArgs,
                                     args->reverse,
                                     false);
         });
@@ -603,6 +614,18 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->hasGroupBy = (args.groupByLabel != NULL);
+    queryArg->numAggClasses = args.rangeArgs.aggregationArgs.numClasses;
+    for (size_t i = 0; i < args.rangeArgs.aggregationArgs.numClasses; i++) {
+        queryArg->aggTypes[i] = args.rangeArgs.aggregationArgs.classes[i]->type;
+    }
+    queryArg->aggTimeDelta = args.rangeArgs.aggregationArgs.timeDelta;
+    queryArg->aggBucketTS = args.rangeArgs.aggregationArgs.bucketTS;
+    queryArg->aggEmpty = args.rangeArgs.aggregationArgs.empty;
+    queryArg->alignment = args.rangeArgs.alignment;
+    queryArg->timestampAlignment = args.rangeArgs.timestampAlignment;
+    queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
+    queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;
 
     MRError *err = NULL;
 
