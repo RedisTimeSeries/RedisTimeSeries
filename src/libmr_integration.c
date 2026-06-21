@@ -152,7 +152,7 @@ static void LongRecord_SendReply(RedisModuleCtx *rctx, void *r);
 // Internal command records
 static Record *SlotRangesRecord_Create(RedisModuleSlotRangeArray *slotRanges);
 static void SlotRangesRecord_Free(void *base);
-static Record *SeriesListRecord_Create(ARR(Series *) seriesList);
+static Record *SeriesListRecord_Create(ARR(Series *) seriesList, ARR(Series *) companionList);
 static void SeriesListRecord_Free(void *base);
 static Record *StringListRecord_Create(ARR(RedisModuleString *) stringList);
 static void StringListRecord_Free(void *base);
@@ -201,6 +201,7 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
 
     // per-shard aggregation fields
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->hasGroupBy, error);
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->reducerType, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->numAggClasses, error);
     for (size_t i = 0; i < predicate_list->numAggClasses; i++) {
         MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggTypes[i], error);
@@ -329,6 +330,7 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
 
     // per-shard aggregation fields
     predicates->hasGroupBy = MR_SerializationCtxReadLongLong(sctx, error);
+    predicates->reducerType = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->numAggClasses = MR_SerializationCtxReadLongLong(sctx, error);
     for (size_t i = 0; i < predicates->numAggClasses; i++) {
         predicates->aggTypes[i] = MR_SerializationCtxReadLongLong(sctx, error);
@@ -858,9 +860,38 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
         mrangeArgs.rangeArgs.timestampAlignment = queryArg->timestampAlignment;
     }
 
+    // Non-distributive reducers (avg, std, var, range) need a companion count series per key
+    // so the coordinator can compute the true weighted result (Option B).
+    bool needsCompanions = queryArg->hasGroupBy && queryArg->numAggClasses > 0 &&
+                           (queryArg->reducerType == TS_AGG_AVG ||
+                            queryArg->reducerType == TS_AGG_STD_P ||
+                            queryArg->reducerType == TS_AGG_STD_S ||
+                            queryArg->reducerType == TS_AGG_VAR_P ||
+                            queryArg->reducerType == TS_AGG_VAR_S ||
+                            queryArg->reducerType == TS_AGG_RANGE);
+
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
-    replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+
+    if (needsCompanions) {
+        // Reply [[main_series...], [count_companion_series...]]
+        RedisModule_ReplyWithArray(ctx, 2);
+        replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+
+        // Companion: same time range/alignment/filters but COUNT aggregation
+        AggregationClass *countClass = GetAggClass(TS_AGG_COUNT);
+        AggregationClass *companionClasses[1] = { countClass };
+        MRangeArgs companionArgs = mrangeArgs;
+        companionArgs.rangeArgs.aggregationArgs.numClasses = 1;
+        companionArgs.rangeArgs.aggregationArgs.classes = companionClasses;
+        companionArgs.rangeArgs.aggregationArgs.timeDelta = queryArg->aggTimeDelta;
+        companionArgs.rangeArgs.aggregationArgs.bucketTS = queryArg->aggBucketTS;
+        companionArgs.rangeArgs.aggregationArgs.empty = queryArg->aggEmpty;
+        replyUngroupedMultiRange(ctx, qi, &companionArgs);
+    } else {
+        replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    }
+
     RedisModule_FreeDict(ctx, qi);
     ReleaseCtxUser(ctx);
 }
@@ -946,15 +977,34 @@ static Series *ParseSeries(const redisReply *reply) {
     return result;
 }
 
+static ARR(Series *) ParseSeriesArray(const redisReply *reply) {
+    ARR(Series *) list = array_new(Series *, reply->elements);
+    for (size_t i = 0; i < reply->elements; i++) {
+        list = array_append(list, ParseSeries(reply->element[i]));
+    }
+    return list;
+}
+
 static Record *SeriesListReplyParser(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
-    ARR(Series *) seriesList = array_new(Series *, reply->elements);
-    for (size_t i = 0; i < reply->elements; i++) {
-        Series *series = ParseSeries(reply->element[i]);
-        seriesList = array_append(seriesList, series);
+
+    // Detect companion format: [[main...], [companions...]]
+    // In normal format reply->element[0] is [keyname_string, labels, samples],
+    // so element[0]->element[0]->type == REDIS_REPLY_STRING.
+    // In companion format element[0] is an array of series arrays,
+    // so element[0]->element[0]->type == REDIS_REPLY_ARRAY.
+    bool hasCompanions = reply->elements == 2 &&
+                         reply->element[0]->type == REDIS_REPLY_ARRAY &&
+                         (reply->element[0]->elements == 0 ||
+                          reply->element[0]->element[0]->type == REDIS_REPLY_ARRAY);
+
+    if (hasCompanions) {
+        ARR(Series *) seriesList = ParseSeriesArray(reply->element[0]);
+        ARR(Series *) companionList = ParseSeriesArray(reply->element[1]);
+        return SeriesListRecord_Create(seriesList, companionList);
     }
 
-    return SeriesListRecord_Create(seriesList);
+    return SeriesListRecord_Create(ParseSeriesArray(reply), NULL);
 }
 
 static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
@@ -1637,16 +1687,19 @@ static void SlotRangesRecord_Free(void *base) {
     free(record);
 }
 
-static Record *SeriesListRecord_Create(ARR(Series *) seriesList) {
+static Record *SeriesListRecord_Create(ARR(Series *) seriesList, ARR(Series *) companionList) {
     SeriesListRecord *result =
         (SeriesListRecord *)MR_RecordCreate(SeriesListRecordType, sizeof(*result));
     result->seriesList = seriesList;
+    result->companionList = companionList;
     return &result->base;
 }
 
 static void SeriesListRecord_Free(void *base) {
     SeriesListRecord *record = base;
     array_free_ex(record->seriesList, FreeSeries(*(Series **)ptr));
+    if (record->companionList)
+        array_free_ex(record->companionList, FreeSeries(*(Series **)ptr));
     free(record);
 }
 

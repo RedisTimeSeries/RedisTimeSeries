@@ -31,8 +31,9 @@ typedef struct QueryPredicates_Arg
     RedisModuleString **limitLabels;
     bool latest;
     bool resp3;
-    // Per-shard aggregation fields — only used when hasGroupBy=false
+    // Per-shard aggregation fields
     bool hasGroupBy;
+    TS_AGG_TYPES_T reducerType; // TS_AGG_NONE when no GROUPBY
     size_t numAggClasses;
     TS_AGG_TYPES_T aggTypes[TS_AGG_TYPES_MAX];
     api_timestamp_t aggTimeDelta;
@@ -102,6 +103,7 @@ typedef struct SeriesListRecord
 {
     Record base;
     ARR(Series *) seriesList;
+    ARR(Series *) companionList; // parallel to seriesList; NULL if no companions
 } SeriesListRecord;
 
 typedef struct StringListRecord

@@ -587,6 +587,100 @@ void MultiSeriesReduce(Series *dest,
     iterator->Close(iterator);
 }
 
+// Weighted reduce for non-distributive reducers (avg, std, var, range).
+// Each series[i] holds the pre-aggregated value per bucket; companions[i] holds the count.
+// For REDUCE avg: emits Σ(avg_i * count_i) / Σ(count_i) per bucket using Lior's iterative formula.
+void MultiSeriesWeightedReduce(Series *dest,
+                                Series **series,
+                                Series **companions,
+                                size_t n_series,
+                                const ReducerArgs *groupByReducerArgs,
+                                const RangeArgs *args) {
+    // Collect all bucket timestamps from all series (pre-aggregated, so one sample per bucket).
+    // For each unique timestamp, compute weighted combination.
+
+    // Build a sorted set of (timestamp → (state_avg, state_count)) using n passes.
+    // Simple approach: iterate all series in lockstep using the no-agg raw iterator.
+    // Since series are pre-aggregated they each have one sample per bucket timestamp.
+    // Companion series have the count at the same timestamps.
+
+    // Create raw iterators (no agg — series already aggregated on shard)
+    AbstractSampleIterator **valueIters = malloc(n_series * sizeof *valueIters);
+    AbstractSampleIterator **countIters = malloc(n_series * sizeof *countIters);
+
+    RangeArgs rawArgs = *args;
+    rawArgs.aggregationArgs.numClasses = 0;
+    rawArgs.aggregationArgs.classes = NULL;
+
+    for (size_t i = 0; i < n_series; i++) {
+        valueIters[i] = SeriesCreateSampleIterator(series[i], &rawArgs, false, true);
+        countIters[i] = SeriesCreateSampleIterator(companions[i], &rawArgs, false, true);
+    }
+
+    // Merge-iterate: advance all iters, emit one result per unique timestamp
+    Sample *valueSamples = malloc(n_series * sizeof *valueSamples);
+    Sample *countSamples = malloc(n_series * sizeof *countSamples);
+    bool *valueValid = malloc(n_series * sizeof *valueValid);
+    bool *countValid = malloc(n_series * sizeof *countValid);
+
+    // Prime all iterators
+    for (size_t i = 0; i < n_series; i++) {
+        valueValid[i] = (valueIters[i]->GetNext(valueIters[i], &valueSamples[i]) == CR_OK);
+        countValid[i] = (countIters[i]->GetNext(countIters[i], &countSamples[i]) == CR_OK);
+    }
+
+    while (true) {
+        // Find the minimum timestamp across all active iterators
+        timestamp_t minTs = UINT64_MAX;
+        bool anyValid = false;
+        for (size_t i = 0; i < n_series; i++) {
+            if (valueValid[i]) {
+                if (!anyValid || valueSamples[i].timestamp < minTs) {
+                    minTs = valueSamples[i].timestamp;
+                    anyValid = true;
+                }
+            }
+        }
+        if (!anyValid)
+            break;
+
+        // Collect all series at minTs, compute weighted avg using Lior's iterative formula
+        uint64_t state_count = 0;
+        double state_avg = 0.0;
+        for (size_t i = 0; i < n_series; i++) {
+            if (valueValid[i] && valueSamples[i].timestamp == minTs) {
+                double shard_avg = valueSamples[i].value;
+                double shard_count = (countValid[i] && countSamples[i].timestamp == minTs)
+                                         ? countSamples[i].value
+                                         : 0.0;
+                if (shard_count > 0) {
+                    uint64_t new_count = state_count + (uint64_t)shard_count;
+                    state_avg += (shard_avg - state_avg) * shard_count / new_count;
+                    state_count = new_count;
+                }
+                valueValid[i] = (valueIters[i]->GetNext(valueIters[i], &valueSamples[i]) == CR_OK);
+                if (countValid[i] && countSamples[i].timestamp == minTs)
+                    countValid[i] =
+                        (countIters[i]->GetNext(countIters[i], &countSamples[i]) == CR_OK);
+            }
+        }
+
+        if (state_count > 0)
+            SeriesAddSample(dest, minTs, state_avg);
+    }
+
+    for (size_t i = 0; i < n_series; i++) {
+        valueIters[i]->Close(valueIters[i]);
+        countIters[i]->Close(countIters[i]);
+    }
+    free(valueIters);
+    free(countIters);
+    free(valueSamples);
+    free(countSamples);
+    free(valueValid);
+    free(countValid);
+}
+
 static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
                                    Series *series,
                                    CompactionRule *rule,

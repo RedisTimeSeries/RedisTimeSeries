@@ -131,8 +131,7 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
         nodesResultsType = r->recordType;
 
         if (r->recordType == GetSeriesListRecordType()) {
-            SeriesListRecord *record = (SeriesListRecord *)r;
-            nodesResults = array_append(nodesResults, record->seriesList);
+            nodesResults = array_append(nodesResults, r); // keep full record for companion access
             continue;
         }
         if (r->recordType == GetStringListRecordType()) {
@@ -167,7 +166,7 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     MRangeArgs *args = &data->args;
     RedisModuleBlockedClient *bc = data->bc;
 
-    ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
+    ARR(SeriesListRecord *) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
 
@@ -177,7 +176,7 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ResultSet_GroupbyLabel(resultset, args->groupByLabel);
     } else {
         size_t totalLen = 0;
-        array_foreach(nodesResults, seriesList, totalLen += array_len(seriesList));
+        array_foreach(nodesResults, record, totalLen += array_len(record->seriesList));
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
@@ -192,8 +191,8 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     }
     const RangeArgs *replyArgs = &coordArgs;
 
-    array_foreach(nodesResults, seriesList, {
-        array_foreach(seriesList, s, {
+    array_foreach(nodesResults, record, {
+        array_foreach(record->seriesList, s, {
             if (args->groupByLabel)
                 ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
             else
@@ -207,6 +206,18 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
                                     false);
         });
     });
+
+    // Attach companion (count) series to their groups for weighted reduce (Option B)
+    if (args->groupByLabel) {
+        array_foreach(nodesResults, record, {
+            if (record->companionList) {
+                array_foreach(record->companionList, companion, {
+                    const char *keyname = RedisModule_StringPtrLen(companion->keyName, NULL);
+                    ResultSet_AddCompanion(resultset, keyname, companion);
+                });
+            }
+        });
+    }
 
     if (args->groupByLabel) {
         // Apply the reducer on pre-aggregated data (agg already stripped in coordArgs)
@@ -365,14 +376,14 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 static void mget_done_internal(ExecutionCtx *eCtx,
                                RedisModuleCtx *ctx,
                                RedisModuleBlockedClient *bc) {
-    ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
+    ARR(SeriesListRecord *) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
 
     ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     size_t len = 0;
-    array_foreach(nodesResults, seriesList, {
-        array_foreach(seriesList, s, {
+    array_foreach(nodesResults, record, {
+        array_foreach(record->seriesList, s, {
             if (!_ReplyMap(ctx))
                 RedisModule_ReplyWithArray(ctx, 3); // name, labels, sample
             RedisModule_ReplyWithString(ctx, s->keyName);
@@ -615,6 +626,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
 
     queryArg->userName = CopyCurrentUserName(ctx);
     queryArg->hasGroupBy = (args.groupByLabel != NULL);
+    queryArg->reducerType = args.groupByLabel ? args.groupByReducerArgs.agg_type : TS_AGG_NONE;
     queryArg->numAggClasses = args.rangeArgs.aggregationArgs.numClasses;
     for (size_t i = 0; i < args.rangeArgs.aggregationArgs.numClasses; i++) {
         queryArg->aggTypes[i] = args.rangeArgs.aggregationArgs.classes[i]->type;

@@ -31,6 +31,7 @@ typedef struct TS_GroupList
     char *labelValue;
     size_t count;
     Series **list;
+    Series **companions; // parallel to list; NULL if no companions
 } TS_GroupList;
 
 TS_GroupList *GroupList_Create();
@@ -78,26 +79,34 @@ TS_GroupList *GroupList_Create() {
     g->count = 0;
     g->labelValue = NULL;
     g->list = NULL;
+    g->companions = NULL;
     return g;
 }
 
 void GroupList_Free(TS_GroupList *groupList) {
     for (int i = 0; i < groupList->count; i++) {
         FreeTempSeries(groupList->list[i]);
+        if (groupList->companions && groupList->companions[i])
+            FreeTempSeries(groupList->companions[i]);
     }
     free(groupList->labelValue);
     if (groupList->list)
         free(groupList->list);
+    if (groupList->companions)
+        free(groupList->companions);
     free(groupList);
 }
 
 static void GroupList_AddSeries(TS_GroupList *g, Series *series, const char *name) {
     if (g->list == NULL) {
         g->list = malloc(sizeof *g->list);
+        g->companions = malloc(sizeof *g->companions);
     } else {
         g->list = realloc(g->list, sizeof *g->list * (g->count + 1));
+        g->companions = realloc(g->companions, sizeof *g->companions * (g->count + 1));
     }
     g->list[g->count] = series;
+    g->companions[g->count] = NULL;
     g->count++;
 }
 
@@ -185,7 +194,12 @@ void GroupList_ApplyReducer(RedisModuleCtx *ctx,
     }
     Series *source = NULL;
 
-    MultiSeriesReduce(reduced, group->list, group->count, groupByReducerArgs, args);
+    if (group->companions && group->companions[0] != NULL) {
+        MultiSeriesWeightedReduce(reduced, group->list, group->companions, group->count,
+                                  groupByReducerArgs, args);
+    } else {
+        MultiSeriesReduce(reduced, group->list, group->count, groupByReducerArgs, args);
+    }
 
     // prepare labels
     for (int i = 0; i < group->count; i++) {
@@ -231,6 +245,25 @@ bool ResultSet_AddSeries(TS_ResultSet *r, Series *series, const char *name) {
     }
     GroupList_AddSeries(labelGroup, series, name);
     return true;
+}
+
+// Attach a companion (count) series to the series with the given keyname within its group.
+void ResultSet_AddCompanion(TS_ResultSet *r, const char *keyname, Series *companion) {
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
+    TS_GroupList *group;
+    while (RedisModule_DictNextC(iter, NULL, (void **)&group) != NULL) {
+        for (size_t i = 0; i < group->count; i++) {
+            size_t klen;
+            const char *kname = RedisModule_StringPtrLen(group->list[i]->keyName, &klen);
+            if (strcmp(kname, keyname) == 0) {
+                group->companions[i] = companion;
+                RedisModule_DictIteratorStop(iter);
+                return;
+            }
+        }
+    }
+    RedisModule_DictIteratorStop(iter);
+    FreeSeries(companion); // not matched — discard
 }
 
 void replyResultSet(RedisModuleCtx *ctx,

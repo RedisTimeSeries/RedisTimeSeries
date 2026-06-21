@@ -30,6 +30,7 @@ int parseMultiSeriesReduceArgs(RedisModuleCtx *ctx,
                                ReducerArgs *reducerArgs);
 
 bool ResultSet_AddSeries(TS_ResultSet *r, Series *series, const char *name);
+void ResultSet_AddCompanion(TS_ResultSet *r, const char *keyname, Series *companion);
 
 void replyResultSet(RedisModuleCtx *ctx,
                     TS_ResultSet *r,
@@ -46,5 +47,12 @@ void MultiSeriesReduce(Series *dest,
                        size_t n_series,
                        const ReducerArgs *groupByReducerArgs,
                        const RangeArgs *args);
+
+void MultiSeriesWeightedReduce(Series *dest,
+                                Series **series,
+                                Series **companions,
+                                size_t n_series,
+                                const ReducerArgs *groupByReducerArgs,
+                                const RangeArgs *args);
 
 #endif // REDISTIMESERIES_RESULTSET_H
