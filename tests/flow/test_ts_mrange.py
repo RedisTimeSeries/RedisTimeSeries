@@ -970,3 +970,86 @@ def test_multi_agg_groupby_blocked():
             r1.execute_command(
                 'TS.MRANGE', 0, 29, 'AGGREGATION', 'avg,sum', 10,
                 'FILTER', 'grp=A', 'GROUPBY', 'grp', 'REDUCE', 'avg')
+
+
+# ── MOD-8187: EMPTY gap-filling edge cases via MRANGE ────────────────────────
+# Setup: TS.MADD key 10 100 key 20 110  (two samples)
+#
+# Case 3 — query range entirely between the two samples  (t=11..16)
+# Case 4 — range starts before first sample              (t=8..12)
+# Case 5 — range starts between samples, ends past last  (t=18..22)
+#
+# Each test creates the key-under-test plus two filler series that share the
+# same label, so the MRANGE fan-out touches multiple series.
+# Assertion: MRANGE result for the key-under-test == TS.RANGE result.
+
+_MOD8187_LABEL = 'ticket=mod8187'
+_MOD8187_AGGS  = ['last', 'avg', 'first', 'sum', 'min', 'max', 'count']
+
+
+def _mod8187_create(r, key):
+    r.execute_command('TS.CREATE', key, 'LABELS', 'ticket', 'mod8187')
+    r.execute_command('TS.ADD', key, 10, 100)
+    r.execute_command('TS.ADD', key, 20, 110)
+
+
+def _mod8187_filler(r, key):
+    """Series with same label; data outside all three case ranges."""
+    r.execute_command('TS.CREATE', key, 'LABELS', 'ticket', 'mod8187')
+    r.execute_command('TS.ADD', key, 50, 42)
+    r.execute_command('TS.ADD', key, 60, 43)
+
+
+def _mrange_key_samples(mrange_result, key):
+    for series in mrange_result:
+        if series[0] in (key, key.encode()):
+            return series[2]
+    raise AssertionError(f'{key!r} not found in MRANGE result')
+
+
+def test_mod8187_case3_empty():
+    """Case 3: range entirely between two samples (t=11..16, bucket=1)."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _mod8187_create(r, 'c3key')
+        _mod8187_filler(r, 'c3fill1')
+        _mod8187_filler(r, 'c3fill2')
+
+        for agg in _MOD8187_AGGS:
+            range_res  = r1.execute_command('TS.RANGE',  'c3key', 11, 16, 'AGGREGATION', agg, 1, 'EMPTY')
+            mrange_res = r1.execute_command('TS.MRANGE',         11, 16, 'AGGREGATION', agg, 1, 'EMPTY',
+                                            'FILTER', _MOD8187_LABEL)
+            assert _mrange_key_samples(mrange_res, 'c3key') == range_res, \
+                f'Case 3 mismatch for agg={agg}'
+
+
+def test_mod8187_case4_empty():
+    """Case 4: range starts before first sample (t=8..12, bucket=1)."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _mod8187_create(r, 'c4key')
+        _mod8187_filler(r, 'c4fill1')
+        _mod8187_filler(r, 'c4fill2')
+
+        for agg in _MOD8187_AGGS:
+            range_res  = r1.execute_command('TS.RANGE',  'c4key', 8, 12, 'AGGREGATION', agg, 1, 'EMPTY')
+            mrange_res = r1.execute_command('TS.MRANGE',          8, 12, 'AGGREGATION', agg, 1, 'EMPTY',
+                                            'FILTER', _MOD8187_LABEL)
+            assert _mrange_key_samples(mrange_res, 'c4key') == range_res, \
+                f'Case 4 mismatch for agg={agg}'
+
+
+def test_mod8187_case5_empty():
+    """Case 5: range starts between samples, ends past last (t=18..22, bucket=1)."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _mod8187_create(r, 'c5key')
+        _mod8187_filler(r, 'c5fill1')
+        _mod8187_filler(r, 'c5fill2')
+
+        for agg in _MOD8187_AGGS:
+            range_res  = r1.execute_command('TS.RANGE',  'c5key', 18, 22, 'AGGREGATION', agg, 1, 'EMPTY')
+            mrange_res = r1.execute_command('TS.MRANGE',          18, 22, 'AGGREGATION', agg, 1, 'EMPTY',
+                                            'FILTER', _MOD8187_LABEL)
+            assert _mrange_key_samples(mrange_res, 'c5key') == range_res, \
+                f'Case 5 mismatch for agg={agg}'
