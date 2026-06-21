@@ -1,5 +1,7 @@
 # import pytest
 # import redis
+import math
+import statistics
 import time
 from collections import defaultdict
 from utils import set_hertz
@@ -585,4 +587,236 @@ def test_mrange_nan_handling():
                 if series[0] == 'ts1{a}':
                     assert float(series[2][0][1]) == 30
                 elif series[0] == 'ts2{a}':
-                    assert float(series[2][0][1]) == 200 
+                    assert float(series[2][0][1]) == 200
+
+
+# ── Shard pre-aggregation (Level 1) ──────────────────────────────────────────
+# These tests verify that MRANGE/MREVRANGE with AGGREGATION (no GROUPBY)
+# returns correct results when aggregation is performed on each shard before
+# the coordinator merges the per-series results.
+
+def _setup_shard_agg_data(r):
+    """
+    Two series, each with 6 samples spread across three 10ms buckets:
+      s1: t=0→10, t=5→20, t=10→30, t=15→40, t=20→50, t=25→60
+      s2: t=0→100, t=5→200, t=10→300, t=15→400, t=20→500, t=25→600
+
+    bucket 0–9:  s1=[10,20]  s2=[100,200]
+    bucket 10–19: s1=[30,40]  s2=[300,400]
+    bucket 20–29: s1=[50,60]  s2=[500,600]
+    """
+    r.execute_command('TS.CREATE', 's1', 'LABELS', 'grp', 'A')
+    r.execute_command('TS.CREATE', 's2', 'LABELS', 'grp', 'A')
+    for ts, v in [(0, 10), (5, 20), (10, 30), (15, 40), (20, 50), (25, 60)]:
+        r.execute_command('TS.ADD', 's1', ts, v)
+    for ts, v in [(0, 100), (5, 200), (10, 300), (15, 400), (20, 500), (25, 600)]:
+        r.execute_command('TS.ADD', 's2', ts, v)
+
+
+def _series_values(result, name):
+    for series in result:
+        if series[0] == name.encode() or series[0] == name:
+            return [(int(ts), float(val)) for ts, val in series[2]]
+    raise AssertionError(f"{name!r} not found in result")
+
+
+def test_shard_agg_avg():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'avg', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        assert s1 == [(0, 15.0), (10, 35.0), (20, 55.0)]
+        assert s2 == [(0, 150.0), (10, 350.0), (20, 550.0)]
+
+
+def test_shard_agg_sum():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'sum', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        assert s1 == [(0, 30.0), (10, 70.0), (20, 110.0)]
+        assert s2 == [(0, 300.0), (10, 700.0), (20, 1100.0)]
+
+
+def test_shard_agg_min():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'min', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        assert s1 == [(0, 10.0), (10, 30.0), (20, 50.0)]
+        assert s2 == [(0, 100.0), (10, 300.0), (20, 500.0)]
+
+
+def test_shard_agg_max():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'max', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        assert s1 == [(0, 20.0), (10, 40.0), (20, 60.0)]
+        assert s2 == [(0, 200.0), (10, 400.0), (20, 600.0)]
+
+
+def test_shard_agg_count():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'count', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        assert s1 == [(0, 2.0), (10, 2.0), (20, 2.0)]
+        assert s2 == [(0, 2.0), (10, 2.0), (20, 2.0)]
+
+
+def test_shard_agg_first():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'first', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        assert s1 == [(0, 10.0), (10, 30.0), (20, 50.0)]
+        assert s2 == [(0, 100.0), (10, 300.0), (20, 500.0)]
+
+
+def test_shard_agg_last():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'last', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        assert s1 == [(0, 20.0), (10, 40.0), (20, 60.0)]
+        assert s2 == [(0, 200.0), (10, 400.0), (20, 600.0)]
+
+
+def test_shard_agg_range():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'range', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        # range = max - min per bucket: s1=[20-10,40-30,60-50]=[10,10,10]
+        assert s1 == [(0, 10.0), (10, 10.0), (20, 10.0)]
+        assert s2 == [(0, 100.0), (10, 100.0), (20, 100.0)]
+
+
+def test_shard_agg_std_p():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'std.p', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        for bucket_vals, bucket_result in [([10, 20], s1[0]), ([30, 40], s1[1]), ([50, 60], s1[2])]:
+            assert math.isclose(bucket_result[1], statistics.pstdev(bucket_vals), rel_tol=1e-9)
+        for bucket_vals, bucket_result in [([100, 200], s2[0]), ([300, 400], s2[1]), ([500, 600], s2[2])]:
+            assert math.isclose(bucket_result[1], statistics.pstdev(bucket_vals), rel_tol=1e-9)
+
+
+def test_shard_agg_std_s():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'std.s', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        for bucket_vals, bucket_result in [([10, 20], s1[0]), ([30, 40], s1[1]), ([50, 60], s1[2])]:
+            assert math.isclose(bucket_result[1], statistics.stdev(bucket_vals), rel_tol=1e-9)
+        for bucket_vals, bucket_result in [([100, 200], s2[0]), ([300, 400], s2[1]), ([500, 600], s2[2])]:
+            assert math.isclose(bucket_result[1], statistics.stdev(bucket_vals), rel_tol=1e-9)
+
+
+def test_shard_agg_var_p():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'var.p', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        for bucket_vals, bucket_result in [([10, 20], s1[0]), ([30, 40], s1[1]), ([50, 60], s1[2])]:
+            assert math.isclose(bucket_result[1], statistics.pvariance(bucket_vals), rel_tol=1e-9)
+
+
+def test_shard_agg_var_s():
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'var.s', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        for bucket_vals, bucket_result in [([10, 20], s1[0]), ([30, 40], s1[1]), ([50, 60], s1[2])]:
+            assert math.isclose(bucket_result[1], statistics.variance(bucket_vals), rel_tol=1e-9)
+
+
+def test_shard_agg_mrevrange():
+    """MREVRANGE with aggregation should return buckets in descending order."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MREVRANGE', 0, 29, 'AGGREGATION', 'avg', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        assert s1 == [(20, 55.0), (10, 35.0), (0, 15.0)]
+
+
+def test_shard_agg_count_limit():
+    """COUNT cap applied after shard aggregation."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'sum', 10, 'COUNT', 2, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        assert len(s1) == 2
+        assert s1[0] == (0, 30.0)
+        assert s1[1] == (10, 70.0)
+
+
+def test_shard_agg_time_range():
+    """Partial time range only returns buckets that overlap the range."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        # Only request bucket 10–19
+        res = r1.execute_command('TS.MRANGE', 10, 19, 'AGGREGATION', 'avg', 10, 'FILTER', 'grp=A')
+        s1 = _series_values(res, 's1')
+        s2 = _series_values(res, 's2')
+        assert s1 == [(10, 35.0)]
+        assert s2 == [(10, 350.0)]
+
+
+def test_shard_agg_single_sample_per_bucket():
+    """When each bucket has exactly one sample, all agg types return that sample."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'solo', 'LABELS', 'type', 'single')
+        for ts, v in [(0, 42), (10, 99), (20, 7)]:
+            r.execute_command('TS.ADD', 'solo', ts, v)
+        for agg in ['avg', 'sum', 'min', 'max', 'first', 'last']:
+            res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', agg, 10, 'FILTER', 'type=single')
+            vals = _series_values(res, 'solo')
+            assert vals == [(0, 42.0), (10, 99.0), (20, 7.0)], f"failed for agg={agg}"
+
+
+def test_shard_agg_multiple_series_independent():
+    """Each series is aggregated independently — no cross-series interference."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        # s_high has large values, s_low has small values — min of s_high should never equal s_low
+        r.execute_command('TS.CREATE', 's_high', 'LABELS', 'band', 'test')
+        r.execute_command('TS.CREATE', 's_low', 'LABELS', 'band', 'test')
+        for ts in [0, 5]:
+            r.execute_command('TS.ADD', 's_high', ts, 1000 + ts)
+            r.execute_command('TS.ADD', 's_low', ts, ts + 1)
+        res = r1.execute_command('TS.MRANGE', 0, 9, 'AGGREGATION', 'min', 10, 'FILTER', 'band=test')
+        high = _series_values(res, 's_high')
+        low = _series_values(res, 's_low')
+        assert high == [(0, 1000.0)]
+        assert low == [(0, 1.0)]
