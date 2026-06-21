@@ -1,5 +1,5 @@
-# import pytest
-# import redis
+import pytest
+import redis
 import math
 import statistics
 import time
@@ -820,3 +820,153 @@ def test_shard_agg_multiple_series_independent():
         low = _series_values(res, 's_low')
         assert high == [(0, 1000.0)]
         assert low == [(0, 1.0)]
+
+
+# ── GROUPBY + shard pre-aggregation (Option A) ───────────────────────────────
+# Option A: avg-of-per-series-avgs (not a true weighted average).
+# To distinguish Option A from Option B we use unequal sample counts per series
+# within the same bucket:
+#   s1: [10]          → avg=10,  count=1
+#   s2: [100, 200]    → avg=150, count=2
+#
+# Option A: avg(10, 150) = 80
+# Option B: (10+100+200)/3 ≈ 103.33
+#
+# The correct result for our implementation is 80.
+
+
+def _setup_groupby_unequal_data(r):
+    """s1 and s2 share label grp=X, bucket 0–9, unequal sample counts."""
+    r.execute_command('TS.CREATE', 'g1', 'LABELS', 'grp', 'X')
+    r.execute_command('TS.CREATE', 'g2', 'LABELS', 'grp', 'X')
+    r.execute_command('TS.ADD', 'g1', 0, 10)
+    r.execute_command('TS.ADD', 'g2', 0, 100)
+    r.execute_command('TS.ADD', 'g2', 5, 200)
+
+
+def test_groupby_agg_option_a_avg():
+    """GROUPBY REDUCE avg with unequal bucket sizes confirms Option A (avg-of-avgs)."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_groupby_unequal_data(r)
+        res = r1.execute_command(
+            'TS.MRANGE', 0, 9, 'AGGREGATION', 'avg', 10,
+            'WITHLABELS', 'FILTER', 'grp=X', 'GROUPBY', 'grp', 'REDUCE', 'avg')
+        assert len(res) == 1
+        vals = [(int(ts), float(v)) for ts, v in res[0][2]]
+        # Option A: avg(10, 150) = 80  (NOT 103.33 which would be Option B)
+        assert vals == [(0, 80.0)]
+
+
+def test_groupby_agg_sum():
+    """GROUPBY REDUCE sum: sum of per-series sums per bucket."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_groupby_unequal_data(r)
+        res = r1.execute_command(
+            'TS.MRANGE', 0, 9, 'AGGREGATION', 'sum', 10,
+            'WITHLABELS', 'FILTER', 'grp=X', 'GROUPBY', 'grp', 'REDUCE', 'sum')
+        vals = [(int(ts), float(v)) for ts, v in res[0][2]]
+        # g1 sum=10, g2 sum=300 → REDUCE sum = 310
+        assert vals == [(0, 310.0)]
+
+
+def test_groupby_agg_max():
+    """GROUPBY REDUCE max: max of per-series maxes per bucket."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_groupby_unequal_data(r)
+        res = r1.execute_command(
+            'TS.MRANGE', 0, 9, 'AGGREGATION', 'max', 10,
+            'WITHLABELS', 'FILTER', 'grp=X', 'GROUPBY', 'grp', 'REDUCE', 'max')
+        vals = [(int(ts), float(v)) for ts, v in res[0][2]]
+        # g1 max=10, g2 max=200 → REDUCE max = 200
+        assert vals == [(0, 200.0)]
+
+
+def test_groupby_agg_min():
+    """GROUPBY REDUCE min: min of per-series mins per bucket."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_groupby_unequal_data(r)
+        res = r1.execute_command(
+            'TS.MRANGE', 0, 9, 'AGGREGATION', 'min', 10,
+            'WITHLABELS', 'FILTER', 'grp=X', 'GROUPBY', 'grp', 'REDUCE', 'min')
+        vals = [(int(ts), float(v)) for ts, v in res[0][2]]
+        # g1 min=10, g2 min=100 → REDUCE min = 10
+        assert vals == [(0, 10.0)]
+
+
+def test_groupby_agg_multiple_buckets():
+    """GROUPBY REDUCE avg across multiple buckets to verify per-bucket correctness."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'mb1', 'LABELS', 'grp', 'Y')
+        r.execute_command('TS.CREATE', 'mb2', 'LABELS', 'grp', 'Y')
+        # bucket 0: mb1=[10,20] avg=15, mb2=[30,40] avg=35
+        # bucket 10: mb1=[50] avg=50, mb2=[60,70] avg=65
+        for ts, v in [(0, 10), (5, 20), (10, 50)]:
+            r.execute_command('TS.ADD', 'mb1', ts, v)
+        for ts, v in [(0, 30), (5, 40), (10, 60), (15, 70)]:
+            r.execute_command('TS.ADD', 'mb2', ts, v)
+        res = r1.execute_command(
+            'TS.MRANGE', 0, 19, 'AGGREGATION', 'avg', 10,
+            'WITHLABELS', 'FILTER', 'grp=Y', 'GROUPBY', 'grp', 'REDUCE', 'avg')
+        vals = {int(ts): float(v) for ts, v in res[0][2]}
+        assert vals[0] == 25.0   # avg(15, 35) = 25
+        assert vals[10] == 57.5  # avg(50, 65) = 57.5
+
+
+# ── Multi-aggregator (no GROUPBY) ────────────────────────────────────────────
+# AGGREGATION avg,sum 10  → each sample is [ts, avg_val, sum_val]
+
+
+def _series_multi_values(result, name):
+    """Return list of (ts, [v1, v2, ...]) tuples from a multi-agg result."""
+    for series in result:
+        if series[0] == name.encode() or series[0] == name:
+            return [(int(sample[0]), [float(v) for v in sample[1:]]) for sample in series[2]]
+    raise AssertionError(f"{name!r} not found in result")
+
+
+def test_multi_agg_avg_sum():
+    """AGGREGATION avg,sum 10 returns [ts, avg, sum] per sample."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 29, 'AGGREGATION', 'avg,sum', 10, 'FILTER', 'grp=A')
+        s1 = _series_multi_values(res, 's1')
+        # bucket 0: avg=15, sum=30; bucket 10: avg=35, sum=70; bucket 20: avg=55, sum=110
+        assert s1 == [(0, [15.0, 30.0]), (10, [35.0, 70.0]), (20, [55.0, 110.0])]
+
+
+def test_multi_agg_min_max_count():
+    """AGGREGATION min,max,count 10 returns [ts, min, max, count] per sample."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MRANGE', 0, 9, 'AGGREGATION', 'min,max,count', 10, 'FILTER', 'grp=A')
+        s1 = _series_multi_values(res, 's1')
+        # bucket 0: min=10, max=20, count=2
+        assert s1 == [(0, [10.0, 20.0, 2.0])]
+
+
+def test_multi_agg_mrevrange():
+    """Multi-agg with MREVRANGE returns buckets in descending order."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        res = r1.execute_command('TS.MREVRANGE', 0, 29, 'AGGREGATION', 'avg,sum', 10, 'FILTER', 'grp=A')
+        s1 = _series_multi_values(res, 's1')
+        assert s1 == [(20, [55.0, 110.0]), (10, [35.0, 70.0]), (0, [15.0, 30.0])]
+
+
+def test_multi_agg_groupby_blocked():
+    """Multiple aggregators with GROUPBY should return an error."""
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        _setup_shard_agg_data(r)
+        with pytest.raises(redis.ResponseError):
+            r1.execute_command(
+                'TS.MRANGE', 0, 29, 'AGGREGATION', 'avg,sum', 10,
+                'FILTER', 'grp=A', 'GROUPBY', 'grp', 'REDUCE', 'avg')
