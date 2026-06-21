@@ -31,8 +31,7 @@ typedef struct QueryPredicates_Arg
     RedisModuleString **limitLabels;
     bool latest;
     bool resp3;
-    // Per-shard aggregation fields — only used when hasGroupBy=false
-    bool hasGroupBy;
+    // Per-shard aggregation fields — applied on shards for both GROUPBY and non-GROUPBY paths
     size_t numAggClasses;
     TS_AGG_TYPES_T aggTypes[TS_AGG_TYPES_MAX];
     api_timestamp_t aggTimeDelta;

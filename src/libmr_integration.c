@@ -200,7 +200,6 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
     }
 
     // per-shard aggregation fields
-    MR_SerializationCtxWriteLongLong(sctx, predicate_list->hasGroupBy, error);
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->numAggClasses, error);
     for (size_t i = 0; i < predicate_list->numAggClasses; i++) {
         MR_SerializationCtxWriteLongLong(sctx, predicate_list->aggTypes[i], error);
@@ -328,7 +327,6 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
     }
 
     // per-shard aggregation fields
-    predicates->hasGroupBy = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->numAggClasses = MR_SerializationCtxReadLongLong(sctx, error);
     for (size_t i = 0; i < predicates->numAggClasses; i++) {
         predicates->aggTypes[i] = MR_SerializationCtxReadLongLong(sctx, error);

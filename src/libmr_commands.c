@@ -614,7 +614,6 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     queryArg->userName = CopyCurrentUserName(ctx);
-    queryArg->hasGroupBy = (args.groupByLabel != NULL);
     queryArg->numAggClasses = args.rangeArgs.aggregationArgs.numClasses;
     for (size_t i = 0; i < args.rangeArgs.aggregationArgs.numClasses; i++) {
         queryArg->aggTypes[i] = args.rangeArgs.aggregationArgs.classes[i]->type;
