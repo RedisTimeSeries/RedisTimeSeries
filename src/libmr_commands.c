@@ -199,17 +199,17 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
 
     array_foreach(nodesResults, record, {
         ARR(Series *) sl = record->seriesList;
-        size_t N = (preAgg && record->numAggClasses > 1) ? record->numAggClasses : 1;
-        size_t numKeys = array_len(sl) / N;
+        size_t numAggTypes = (preAgg && record->numAggClasses > 1) ? record->numAggClasses : 1;
+        size_t numKeys = array_len(sl) / numAggTypes;
         for (size_t k = 0; k < numKeys; k++) {
-            Series **group = &sl[k * N];
+            Series **group = &sl[k * numAggTypes];
             if (args->groupByLabel) {
                 ResultSet_AddSeries(
                     resultset, group[0], RedisModule_StringPtrLen(group[0]->keyName, NULL));
-            } else if (N > 1) {
+            } else if (numAggTypes > 1) {
                 ReplyMultiAggSeriesGroup(ctx,
                                          group,
-                                         N,
+                                         numAggTypes,
                                          args->withLabels,
                                          args->limitLabels,
                                          args->numLimitLabels,

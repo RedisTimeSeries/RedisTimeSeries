@@ -11,6 +11,7 @@
 
 #include "enriched_chunk.h"
 #include "query_language.h"
+#include "sample_iterator.h"
 #include "series_iterator.h"
 #include "tsdb.h"
 
@@ -244,7 +245,7 @@ void ReplyWithMultiAggSample(RedisModuleCtx *ctx,
 
 int ReplyMultiAggSeriesGroup(RedisModuleCtx *ctx,
                              Series **group,
-                             size_t N,
+                             size_t numAggTypes,
                              bool withLabels,
                              RedisModuleString *limitLabels[],
                              uint16_t limitLabelsSize,
@@ -269,54 +270,38 @@ int ReplyMultiAggSeriesGroup(RedisModuleCtx *ctx,
         RedisModule_ReplyWithArray(ctx, 0); // pre-aggregated; agg types already embedded in data
     }
 
-    // Collect flat sample arrays from each series, then zip into multi-agg reply.
-    // ponytail: O(samples * N) allocation; acceptable for shard result sizes.
     RangeArgs rawArgs = *args;
     rawArgs.aggregationArgs.numClasses = 0;
     rawArgs.aggregationArgs.classes = NULL;
     rawArgs.filterByValueArgs.hasValue = false;
     rawArgs.filterByTSArgs.hasValue = false;
 
-    size_t numSamples = 0;
-    timestamp_t *timestamps = NULL;
-    double *values[TS_AGG_TYPES_MAX];
-    memset(values, 0, sizeof(values));
+    // All series share the same timestamps — advance N sample iterators in lockstep and emit
+    // directly.
+    AbstractSampleIterator *iters[TS_AGG_TYPES_MAX];
+    for (size_t aggIdx = 0; aggIdx < numAggTypes; aggIdx++)
+        iters[aggIdx] = (AbstractSampleIterator *)SeriesSampleIterator_New(
+            SeriesQuery(group[aggIdx], &rawArgs, rev, true));
 
-    for (size_t a = 0; a < N; a++) {
-        AbstractIterator *iter = SeriesQuery(group[a], &rawArgs, rev, true);
-        size_t count = 0;
-        EnrichedChunk *chunk;
-        while ((chunk = iter->GetNext(iter))) {
-            size_t ns = chunk->samples.num_samples;
-            if (a == 0) {
-                timestamps = realloc(timestamps, (count + ns) * sizeof(timestamp_t));
-                for (size_t i = 0; i < ns; i++)
-                    timestamps[count + i] = chunk->samples.timestamps[i];
-                numSamples = count + ns;
-            }
-            values[a] = realloc(values[a], (count + ns) * sizeof(double));
-            for (size_t i = 0; i < ns; i++)
-                values[a][count + i] = Samples_value_at(&chunk->samples, i, 0);
-            count += ns;
-        }
-        iter->Close(iter);
-    }
-
-    long long _count = (args->count != -1) ? args->count : (long long)numSamples;
-    long long emit = (long long)numSamples < _count ? (long long)numSamples : _count;
-
+    long long limit = (args->count != -1) ? args->count : LLONG_MAX;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    long long emitted = 0;
+    Sample lead;
     double row[TS_AGG_TYPES_MAX];
-    for (long long i = 0; i < emit; i++) {
-        for (size_t a = 0; a < N; a++)
-            row[a] = values[a][i];
-        ReplyWithMultiAggSample(ctx, timestamps[i], row, N);
+    while (emitted < limit && iters[0]->GetNext(iters[0], &lead) == CR_OK) {
+        row[0] = lead.value;
+        for (size_t aggIdx = 1; aggIdx < numAggTypes; aggIdx++) {
+            Sample s;
+            iters[aggIdx]->GetNext(iters[aggIdx], &s);
+            row[aggIdx] = s.value;
+        }
+        ReplyWithMultiAggSample(ctx, lead.timestamp, row, numAggTypes);
+        emitted++;
     }
-    RedisModule_ReplySetArrayLength(ctx, emit);
+    RedisModule_ReplySetArrayLength(ctx, emitted);
 
-    free(timestamps);
-    for (size_t a = 0; a < N; a++)
-        free(values[a]);
+    for (size_t aggIdx = 0; aggIdx < numAggTypes; aggIdx++)
+        iters[aggIdx]->Close(iters[aggIdx]);
 
     return REDISMODULE_OK;
 }
