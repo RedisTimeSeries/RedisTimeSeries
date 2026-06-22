@@ -12,6 +12,10 @@
 
 #include "rmutil/alloc.h"
 
+// PROBE (throwaway, mod15307-vg-maxidle-probe): widen LibMR's 5s max-idle so we can tell
+// "slow under valgrind" (passes with headroom) from a genuine hang (still times out).
+#define RTS_PROBE_MAX_IDLE_MS 60000
+
 // RedisModule_GetCurrentUserName allocates a copy but registers it on the context's auto-memory,
 // so it gets freed when the context ends. We re-copy with NULL ctx to detach from auto-memory,
 // since the string must survive serialization to other shards via LibMR.
@@ -569,6 +573,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
+    MR_ExecutionSetMaxIdle(exec, RTS_PROBE_MAX_IDLE_MS);
 
     MR_Run(exec);
     MR_FreeExecution(exec);
@@ -636,6 +641,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     data->bc = bc;
     data->args = args;
     MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
+    MR_ExecutionSetMaxIdle(exec, RTS_PROBE_MAX_IDLE_MS);
 
     MR_Run(exec);
     MR_FreeExecution(exec);
@@ -688,6 +694,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
+    MR_ExecutionSetMaxIdle(exec, RTS_PROBE_MAX_IDLE_MS);
 
     MR_Run(exec);
     MR_FreeExecution(exec);
