@@ -910,6 +910,17 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply) {
                 RedisModule_FreeString(rts_staticCtx, argv[i]);
     }
 
+    const redisReply *samplesElement = reply->element[2];
+    RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
+
+    // Detect numAgg from first sample: [ts, v0, v1, ...] → elements-1; compact [ts,val] → 1.
+    size_t numAgg = 1;
+    if (samplesElement->elements > 0) {
+        const redisReply *first = samplesElement->element[0];
+        if (first->type == REDIS_REPLY_ARRAY && first->elements > 2)
+            numAgg = first->elements - 1;
+    }
+
     // Build N Series — only series[0] carries labels.
     ARR(Series *) result = array_new(Series *, numAgg);
     for (size_t a = 0; a < numAgg; a++) {
@@ -928,24 +939,12 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply) {
         }
     }
 
-    const redisReply *samplesElement = reply->element[2];
-    RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
-
-    // Detect numAgg from first sample: [ts, v0, v1, ...] → elements-1; compact [ts,val] → 1.
-    size_t numAgg = 1;
-    if (samplesElement->elements > 0) {
-        const redisReply *first = samplesElement->element[0];
-        if (first->type == REDIS_REPLY_ARRAY && first->elements > 2)
-            numAgg = first->elements - 1;
-    }
-
     // Compact single-sample form [ts, value] only exists for single-agg/raw.
     if (numAgg == 1 && samplesElement->elements == 2 &&
         samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
         api_timestamp_t ts = samplesElement->element[0]->integer;
         double val;
-        parse_double_cstr(
-            samplesElement->element[1]->str, samplesElement->element[1]->len, &val);
+        parse_double_cstr(samplesElement->element[1]->str, samplesElement->element[1]->len, &val);
         SeriesAddSample(result[0], ts, val);
         return result;
     }

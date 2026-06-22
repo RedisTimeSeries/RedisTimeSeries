@@ -22,9 +22,9 @@
 #include <math.h> // NAN
 
 // MRANGE reply structure element counts
-#define MRANGE_RESP2_ENTRY_ELEMENTS   3  // [name, labels, samples]
-#define MRANGE_RESP3_VALUE_ELEMENTS   3  // [labels, aggregators, samples]
-#define MRANGE_RESP3_REDUCED_ELEMENTS 4  // [labels, reducers, sources, samples]
+#define MRANGE_RESP2_ENTRY_ELEMENTS 3   // [name, labels, samples]
+#define MRANGE_RESP3_VALUE_ELEMENTS 3   // [labels, aggregators, samples]
+#define MRANGE_RESP3_REDUCED_ELEMENTS 4 // [labels, reducers, sources, samples]
 
 // double string presentation requires 15 digit integers +
 // '.' + "e+" or "e-" + 3 digits of exponent
@@ -84,8 +84,8 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     }
     RedisModule_ReplyWithString(ctx, s->keyName);
     if (_ReplyMap(ctx)) {
-        RedisModule_ReplyWithArray(ctx, print_reduced ? MRANGE_RESP3_REDUCED_ELEMENTS
-                                                      : MRANGE_RESP3_VALUE_ELEMENTS);
+        RedisModule_ReplyWithArray(
+            ctx, print_reduced ? MRANGE_RESP3_REDUCED_ELEMENTS : MRANGE_RESP3_VALUE_ELEMENTS);
     }
     if (withlabels) {
         if (_ReplyMap(ctx) && print_reduced) {
@@ -243,13 +243,13 @@ void ReplyWithMultiAggSample(RedisModuleCtx *ctx,
 }
 
 int ReplyMultiAggSeriesGroup(RedisModuleCtx *ctx,
-                              Series **group,
-                              size_t N,
-                              bool withLabels,
-                              RedisModuleString *limitLabels[],
-                              uint16_t limitLabelsSize,
-                              const RangeArgs *args,
-                              bool rev) {
+                             Series **group,
+                             size_t N,
+                             bool withLabels,
+                             RedisModuleString *limitLabels[],
+                             uint16_t limitLabelsSize,
+                             const RangeArgs *args,
+                             bool rev) {
     if (!_ReplyMap(ctx))
         RedisModule_ReplyWithArray(ctx, MRANGE_RESP2_ENTRY_ELEMENTS);
     RedisModule_ReplyWithString(ctx, group[0]->keyName);

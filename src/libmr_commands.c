@@ -204,8 +204,8 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         for (size_t k = 0; k < numKeys; k++) {
             Series **group = &sl[k * N];
             if (args->groupByLabel) {
-                ResultSet_AddSeries(resultset, group[0],
-                                    RedisModule_StringPtrLen(group[0]->keyName, NULL));
+                ResultSet_AddSeries(
+                    resultset, group[0], RedisModule_StringPtrLen(group[0]->keyName, NULL));
             } else if (N > 1) {
                 ReplyMultiAggSeriesGroup(ctx,
                                          group,
