@@ -101,6 +101,7 @@ typedef struct SeriesListRecord
 {
     Record base;
     ARR(Series *) seriesList;
+    size_t numAggClasses; // >1: seriesList has numAggClasses Series per key (multi-agg pre-agg)
 } SeriesListRecord;
 
 typedef struct StringListRecord

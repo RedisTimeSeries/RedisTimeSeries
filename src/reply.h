@@ -76,4 +76,15 @@ void ReplyWithMultiAggSample(RedisModuleCtx *ctx,
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
 
+// Reply for N pre-aggregated Series that share a key (multi-agg cluster path).
+// group[0] provides the key name and labels; group[0..N-1] provide one value each per bucket.
+int ReplyMultiAggSeriesGroup(RedisModuleCtx *ctx,
+                              Series **group,
+                              size_t N,
+                              bool withLabels,
+                              RedisModuleString *limitLabels[],
+                              uint16_t limitLabelsSize,
+                              const RangeArgs *args,
+                              bool rev);
+
 #endif // REDISTIMESERIES_REPLY_H

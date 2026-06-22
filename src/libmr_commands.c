@@ -131,8 +131,7 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
         nodesResultsType = r->recordType;
 
         if (r->recordType == GetSeriesListRecordType()) {
-            SeriesListRecord *record = (SeriesListRecord *)r;
-            nodesResults = array_append(nodesResults, record->seriesList);
+            nodesResults = array_append(nodesResults, r); // keep full record for numAggClasses
             continue;
         }
         if (r->recordType == GetStringListRecordType()) {
@@ -167,9 +166,12 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     MRangeArgs *args = &data->args;
     RedisModuleBlockedClient *bc = data->bc;
 
-    ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
+    ARR(SeriesListRecord *) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
+
+    // Shards pre-aggregate whenever any aggregation was requested (single or multi-agg).
+    bool preAgg = args->rangeArgs.aggregationArgs.numClasses > 0;
 
     TS_ResultSet *resultset = NULL;
     if (args->groupByLabel) {
@@ -177,14 +179,17 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ResultSet_GroupbyLabel(resultset, args->groupByLabel);
     } else {
         size_t totalLen = 0;
-        array_foreach(nodesResults, seriesList, totalLen += array_len(seriesList));
+        array_foreach(nodesResults, record, {
+            size_t N = (preAgg && record->numAggClasses > 1) ? record->numAggClasses : 1;
+            totalLen += array_len(record->seriesList) / N;
+        });
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
-    // Level 1+2: shard pre-aggregated; strip agg args so coordinator doesn't re-aggregate.
-    // RESP3 `aggregators` metadata will show empty for this path; fix when RESP3+cluster matters.
+    // Strip coordinator agg args so it doesn't re-aggregate pre-aggregated data.
+    // RESP3 `aggregators` metadata will be empty for this path.
     RangeArgs coordArgs = args->rangeArgs;
-    if (coordArgs.aggregationArgs.numClasses > 0) {
+    if (preAgg) {
         coordArgs.aggregationArgs.numClasses = 0;
         coordArgs.aggregationArgs.classes = NULL;
         coordArgs.filterByValueArgs.hasValue = false;
@@ -192,20 +197,35 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     }
     const RangeArgs *replyArgs = &coordArgs;
 
-    array_foreach(nodesResults, seriesList, {
-        array_foreach(seriesList, s, {
-            if (args->groupByLabel)
-                ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
-            else
+    array_foreach(nodesResults, record, {
+        ARR(Series *) sl = record->seriesList;
+        size_t N = (preAgg && record->numAggClasses > 1) ? record->numAggClasses : 1;
+        size_t numKeys = array_len(sl) / N;
+        for (size_t k = 0; k < numKeys; k++) {
+            Series **group = &sl[k * N];
+            if (args->groupByLabel) {
+                ResultSet_AddSeries(resultset, group[0],
+                                    RedisModule_StringPtrLen(group[0]->keyName, NULL));
+            } else if (N > 1) {
+                ReplyMultiAggSeriesGroup(ctx,
+                                         group,
+                                         N,
+                                         args->withLabels,
+                                         args->limitLabels,
+                                         args->numLimitLabels,
+                                         replyArgs,
+                                         args->reverse);
+            } else {
                 ReplySeriesArrayPos(ctx,
-                                    s,
+                                    group[0],
                                     args->withLabels,
                                     args->limitLabels,
                                     args->numLimitLabels,
                                     replyArgs,
                                     args->reverse,
                                     false);
-        });
+            }
+        }
     });
 
     if (args->groupByLabel) {
@@ -365,14 +385,14 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 static void mget_done_internal(ExecutionCtx *eCtx,
                                RedisModuleCtx *ctx,
                                RedisModuleBlockedClient *bc) {
-    ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
+    ARR(SeriesListRecord *) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
 
     ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     size_t len = 0;
-    array_foreach(nodesResults, seriesList, {
-        array_foreach(seriesList, s, {
+    array_foreach(nodesResults, record, {
+        array_foreach(record->seriesList, s, {
             if (!_ReplyMap(ctx))
                 RedisModule_ReplyWithArray(ctx, 3); // name, labels, sample
             RedisModule_ReplyWithString(ctx, s->keyName);
@@ -550,6 +570,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     queryArg->resp3 = _ReplyMap(ctx);
     queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->numAggClasses = 0;
 
     MRError *err = NULL;
 
@@ -614,17 +635,22 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     queryArg->userName = CopyCurrentUserName(ctx);
-    queryArg->numAggClasses = args.rangeArgs.aggregationArgs.numClasses;
-    for (size_t i = 0; i < args.rangeArgs.aggregationArgs.numClasses; i++) {
-        queryArg->aggTypes[i] = args.rangeArgs.aggregationArgs.classes[i]->type;
+    // Push aggregation to every shard for all cases (single-agg and multi-agg).
+    // Multi-agg + GROUPBY is rejected at parse time, so no special case is needed.
+    if (args.rangeArgs.aggregationArgs.numClasses > 0) {
+        queryArg->numAggClasses = args.rangeArgs.aggregationArgs.numClasses;
+        for (size_t i = 0; i < args.rangeArgs.aggregationArgs.numClasses; i++)
+            queryArg->aggTypes[i] = args.rangeArgs.aggregationArgs.classes[i]->type;
+        queryArg->aggTimeDelta = args.rangeArgs.aggregationArgs.timeDelta;
+        queryArg->aggBucketTS = args.rangeArgs.aggregationArgs.bucketTS;
+        queryArg->aggEmpty = args.rangeArgs.aggregationArgs.empty;
+        queryArg->alignment = args.rangeArgs.alignment;
+        queryArg->timestampAlignment = args.rangeArgs.timestampAlignment;
+        queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
+        queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;
+    } else {
+        queryArg->numAggClasses = 0;
     }
-    queryArg->aggTimeDelta = args.rangeArgs.aggregationArgs.timeDelta;
-    queryArg->aggBucketTS = args.rangeArgs.aggregationArgs.bucketTS;
-    queryArg->aggEmpty = args.rangeArgs.aggregationArgs.empty;
-    queryArg->alignment = args.rangeArgs.alignment;
-    queryArg->timestampAlignment = args.rangeArgs.timestampAlignment;
-    queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
-    queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;
 
     MRError *err = NULL;
 
@@ -678,8 +704,8 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
-
     queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->numAggClasses = 0;
 
     MRError *err = NULL;
 

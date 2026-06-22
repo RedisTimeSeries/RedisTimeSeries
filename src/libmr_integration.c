@@ -152,7 +152,7 @@ static void LongRecord_SendReply(RedisModuleCtx *rctx, void *r);
 // Internal command records
 static Record *SlotRangesRecord_Create(RedisModuleSlotRangeArray *slotRanges);
 static void SlotRangesRecord_Free(void *base);
-static Record *SeriesListRecord_Create(ARR(Series *) seriesList);
+static Record *SeriesListRecord_Create(ARR(Series *) seriesList, size_t numAggClasses);
 static void SeriesListRecord_Free(void *base);
 static Record *StringListRecord_Create(ARR(RedisModuleString *) stringList);
 static void StringListRecord_Free(void *base);
@@ -863,96 +863,125 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     ReleaseCtxUser(ctx);
 }
 
-static Series *ParseSeries(const redisReply *reply) {
+// Parse one shard reply element into N Series (one per agg type).
+// numAgg is detected from the first sample's element count — no caller knowledge needed.
+// Only series[0] carries labels; series[1..N-1] have key name only.
+static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
     RedisModule_Assert(reply->elements == 3); // name, labels, samples
 
     const redisReply *nameElement = reply->element[0];
     RedisModule_Assert(nameElement->type == REDIS_REPLY_STRING);
-    RedisModuleString *name =
-        RedisModule_CreateString(rts_staticCtx, nameElement->str, nameElement->len);
 
     CreateCtx cCtx = { 0 };
     cCtx.chunkSizeBytes = TSGlobalConfig.chunkSizeBytes;
     cCtx.options = SERIES_OPT_COMPRESSED_GORILLA;
     cCtx.duplicatePolicy = DP_NONE;
-    cCtx.labelsCount = 0;
-    cCtx.labels = NULL;
 
     const redisReply *labelsElement = reply->element[1];
     RedisModule_Assert(labelsElement->type == REDIS_REPLY_ARRAY);
     if (labelsElement->elements > 0) {
-        static RedisModuleString *LABELS = NULL; // Use as the LABELS keyword for the parsing
+        static RedisModuleString *LABELS = NULL;
         if (LABELS == NULL)
             LABELS = RedisModule_CreateString(rts_staticCtx, "LABELS", 6);
-        // We already have a parser for the labels from argv/argc, so let's use it
         size_t argc = 1 + 2 * labelsElement->elements;
         RedisModuleString *argv[argc];
         argv[0] = LABELS;
         for (size_t i = 0; i < labelsElement->elements; i++) {
             const redisReply *labelElement = labelsElement->element[i];
             RedisModule_Assert(labelElement->type == REDIS_REPLY_ARRAY);
-            RedisModule_Assert(labelElement->elements == 2); // name and value (which can be null)
+            RedisModule_Assert(labelElement->elements == 2);
             RedisModule_Assert(labelElement->element[0]->type == REDIS_REPLY_STRING &&
                                (labelElement->element[1]->type == REDIS_REPLY_STRING ||
                                 labelElement->element[1]->type == REDIS_REPLY_NIL));
-            RedisModuleString *name = RedisModule_CreateString(
+            RedisModuleString *lname = RedisModule_CreateString(
                 rts_staticCtx, labelElement->element[0]->str, labelElement->element[0]->len);
-            RedisModuleString *value = NULL;
+            RedisModuleString *lvalue = NULL;
             if (labelElement->element[1]->type == REDIS_REPLY_STRING)
-                value = RedisModule_CreateString(
+                lvalue = RedisModule_CreateString(
                     rts_staticCtx, labelElement->element[1]->str, labelElement->element[1]->len);
-            argv[1 + 2 * i] = name;
-            argv[2 + 2 * i] = value;
+            argv[1 + 2 * i] = lname;
+            argv[2 + 2 * i] = lvalue;
         }
         int r = parseLabelsFromArgs(argv, argc, &cCtx.labelsCount, &cCtx.labels, true);
         RedisModule_Assert(r == REDISMODULE_OK);
-        for (size_t i = 1 /* Don't free the LABELS "keyword" */; i < argc; i++)
+        for (size_t i = 1; i < argc; i++)
             if (argv[i] != NULL)
                 RedisModule_FreeString(rts_staticCtx, argv[i]);
     }
 
-    Series *result = NewSeries(name, &cCtx);
+    // Build N Series — only series[0] carries labels.
+    ARR(Series *) result = array_new(Series *, numAgg);
+    for (size_t a = 0; a < numAgg; a++) {
+        RedisModuleString *sname =
+            RedisModule_CreateString(rts_staticCtx, nameElement->str, nameElement->len);
+        if (a == 0) {
+            result = array_append(result, NewSeries(sname, &cCtx));
+            // cCtx.labels now owned by series[0]; clear so later iterations don't share it.
+            cCtx.labels = NULL;
+            cCtx.labelsCount = 0;
+        } else {
+            CreateCtx emptyCCtx = { .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
+                                    .options = SERIES_OPT_COMPRESSED_GORILLA,
+                                    .duplicatePolicy = DP_NONE };
+            result = array_append(result, NewSeries(sname, &emptyCCtx));
+        }
+    }
 
     const redisReply *samplesElement = reply->element[2];
     RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
-    api_timestamp_t timestamp;
-    double value;
-    if (samplesElement->elements == 2) {
-        // This could be the compact way for a single sample, in which case we simply extract it
-        if (samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
-            timestamp = samplesElement->element[0]->integer;
-            parse_double_cstr(
-                samplesElement->element[1]->str, samplesElement->element[1]->len, &value);
-            SeriesAddSample(result, timestamp, value);
-            return result;
-        }
+
+    // Detect numAgg from first sample: [ts, v0, v1, ...] → elements-1; compact [ts,val] → 1.
+    size_t numAgg = 1;
+    if (samplesElement->elements > 0) {
+        const redisReply *first = samplesElement->element[0];
+        if (first->type == REDIS_REPLY_ARRAY && first->elements > 2)
+            numAgg = first->elements - 1;
+    }
+
+    // Compact single-sample form [ts, value] only exists for single-agg/raw.
+    if (numAgg == 1 && samplesElement->elements == 2 &&
+        samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
+        api_timestamp_t ts = samplesElement->element[0]->integer;
+        double val;
+        parse_double_cstr(
+            samplesElement->element[1]->str, samplesElement->element[1]->len, &val);
+        SeriesAddSample(result[0], ts, val);
+        return result;
     }
 
     for (size_t i = 0; i < samplesElement->elements; i++) {
         const redisReply *sampleElement = samplesElement->element[i];
         RedisModule_Assert(sampleElement->type == REDIS_REPLY_ARRAY);
-        RedisModule_Assert(sampleElement->elements == 2);
+        RedisModule_Assert(sampleElement->elements >= 1 + numAgg);
         RedisModule_Assert(sampleElement->element[0]->type == REDIS_REPLY_INTEGER);
-        // Unfortunately we cannot assume that the second element's type is a (simple) string
-        // because it could start with a '+' or a '-' which confuses the type detection.
-        timestamp = sampleElement->element[0]->integer;
-        parse_double_cstr(sampleElement->element[1]->str, sampleElement->element[1]->len, &value);
-        SeriesAddSample(result, timestamp, value);
+        api_timestamp_t ts = sampleElement->element[0]->integer;
+        for (size_t a = 0; a < numAgg; a++) {
+            double val;
+            // element type may appear as status string for values starting with '+'/'-'
+            parse_double_cstr(
+                sampleElement->element[1 + a]->str, sampleElement->element[1 + a]->len, &val);
+            SeriesAddSample(result[a], ts, val);
+        }
     }
-
     return result;
 }
 
 static Record *SeriesListReplyParser(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+
     ARR(Series *) seriesList = array_new(Series *, reply->elements);
+    size_t numAgg = 1;
     for (size_t i = 0; i < reply->elements; i++) {
-        Series *series = ParseSeries(reply->element[i]);
-        seriesList = array_append(seriesList, series);
+        ARR(Series *) group = ParseSeriesAllAggs(reply->element[i]);
+        if (array_len(group) > numAgg)
+            numAgg = array_len(group); // capture from first non-empty series
+        for (size_t a = 0; a < array_len(group); a++)
+            seriesList = array_append(seriesList, group[a]);
+        array_free(group); // free wrapper only; Series pointers are now in seriesList
     }
 
-    return SeriesListRecord_Create(seriesList);
+    return SeriesListRecord_Create(seriesList, numAgg);
 }
 
 static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
@@ -1635,10 +1664,11 @@ static void SlotRangesRecord_Free(void *base) {
     free(record);
 }
 
-static Record *SeriesListRecord_Create(ARR(Series *) seriesList) {
+static Record *SeriesListRecord_Create(ARR(Series *) seriesList, size_t numAggClasses) {
     SeriesListRecord *result =
         (SeriesListRecord *)MR_RecordCreate(SeriesListRecordType, sizeof(*result));
     result->seriesList = seriesList;
+    result->numAggClasses = numAggClasses;
     return &result->base;
 }
 

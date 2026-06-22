@@ -21,6 +21,11 @@
 
 #include <math.h> // NAN
 
+// MRANGE reply structure element counts
+#define MRANGE_RESP2_ENTRY_ELEMENTS   3  // [name, labels, samples]
+#define MRANGE_RESP3_VALUE_ELEMENTS   3  // [labels, aggregators, samples]
+#define MRANGE_RESP3_REDUCED_ELEMENTS 4  // [labels, reducers, sources, samples]
+
 // double string presentation requires 15 digit integers +
 // '.' + "e+" or "e-" + 3 digits of exponent
 #define MAX_VAL_LEN 24
@@ -75,11 +80,12 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         bool rev,
                         bool print_reduced) {
     if (!_ReplyMap(ctx)) {
-        RedisModule_ReplyWithArray(ctx, 3);
+        RedisModule_ReplyWithArray(ctx, MRANGE_RESP2_ENTRY_ELEMENTS);
     }
     RedisModule_ReplyWithString(ctx, s->keyName);
     if (_ReplyMap(ctx)) {
-        RedisModule_ReplyWithArray(ctx, print_reduced ? 4 : 3);
+        RedisModule_ReplyWithArray(ctx, print_reduced ? MRANGE_RESP3_REDUCED_ELEMENTS
+                                                      : MRANGE_RESP3_VALUE_ELEMENTS);
     }
     if (withlabels) {
         if (_ReplyMap(ctx) && print_reduced) {
@@ -234,6 +240,85 @@ void ReplyWithMultiAggSample(RedisModuleCtx *ctx,
     for (size_t i = 0; i < num_values; i++) {
         ReplyWithDoubleOrString(ctx, values[i]);
     }
+}
+
+int ReplyMultiAggSeriesGroup(RedisModuleCtx *ctx,
+                              Series **group,
+                              size_t N,
+                              bool withLabels,
+                              RedisModuleString *limitLabels[],
+                              uint16_t limitLabelsSize,
+                              const RangeArgs *args,
+                              bool rev) {
+    if (!_ReplyMap(ctx))
+        RedisModule_ReplyWithArray(ctx, MRANGE_RESP2_ENTRY_ELEMENTS);
+    RedisModule_ReplyWithString(ctx, group[0]->keyName);
+    if (_ReplyMap(ctx))
+        RedisModule_ReplyWithArray(ctx, MRANGE_RESP3_VALUE_ELEMENTS);
+
+    if (withLabels)
+        ReplyWithSeriesLabels(ctx, group[0]);
+    else if (limitLabelsSize > 0)
+        ReplyWithSeriesLabelsWithLimit(ctx, group[0], limitLabels, limitLabelsSize);
+    else
+        ReplyWithMapOrArray(ctx, 0, false);
+
+    if (_ReplyMap(ctx)) {
+        RedisModule_ReplyWithMap(ctx, 1);
+        RedisModule_ReplyWithCString(ctx, "aggregators");
+        RedisModule_ReplyWithArray(ctx, 0); // pre-aggregated; agg types already embedded in data
+    }
+
+    // Collect flat sample arrays from each series, then zip into multi-agg reply.
+    // ponytail: O(samples * N) allocation; acceptable for shard result sizes.
+    RangeArgs rawArgs = *args;
+    rawArgs.aggregationArgs.numClasses = 0;
+    rawArgs.aggregationArgs.classes = NULL;
+    rawArgs.filterByValueArgs.hasValue = false;
+    rawArgs.filterByTSArgs.hasValue = false;
+
+    size_t numSamples = 0;
+    timestamp_t *timestamps = NULL;
+    double *values[TS_AGG_TYPES_MAX];
+    memset(values, 0, sizeof(values));
+
+    for (size_t a = 0; a < N; a++) {
+        AbstractIterator *iter = SeriesQuery(group[a], &rawArgs, rev, true);
+        size_t count = 0;
+        EnrichedChunk *chunk;
+        while ((chunk = iter->GetNext(iter))) {
+            size_t ns = chunk->samples.num_samples;
+            if (a == 0) {
+                timestamps = realloc(timestamps, (count + ns) * sizeof(timestamp_t));
+                for (size_t i = 0; i < ns; i++)
+                    timestamps[count + i] = chunk->samples.timestamps[i];
+                numSamples = count + ns;
+            }
+            values[a] = realloc(values[a], (count + ns) * sizeof(double));
+            for (size_t i = 0; i < ns; i++)
+                values[a][count + i] = Samples_value_at(&chunk->samples, i, 0);
+            count += ns;
+        }
+        iter->Close(iter);
+    }
+
+    long long _count = (args->count != -1) ? args->count : (long long)numSamples;
+    long long emit = (long long)numSamples < _count ? (long long)numSamples : _count;
+
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    double row[TS_AGG_TYPES_MAX];
+    for (long long i = 0; i < emit; i++) {
+        for (size_t a = 0; a < N; a++)
+            row[a] = values[a][i];
+        ReplyWithMultiAggSample(ctx, timestamps[i], row, N);
+    }
+    RedisModule_ReplySetArrayLength(ctx, emit);
+
+    free(timestamps);
+    for (size_t a = 0; a < N; a++)
+        free(values[a]);
+
+    return REDISMODULE_OK;
 }
 
 void ReplyWithPivotSample(RedisModuleCtx *ctx,
