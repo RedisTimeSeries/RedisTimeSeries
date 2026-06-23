@@ -193,6 +193,13 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         coordArgs.skipAggregation = true;
         coordArgs.filterByValueArgs.hasValue = false;
         coordArgs.filterByTSArgs.hasValue = false;
+        // The shards already applied the original [startTimestamp, endTimestamp] filter.
+        // Pre-aggregated bucket timestamps may land before startTimestamp due to bucket-boundary
+        // alignment (e.g. query starts at t=9 with bucket size 5 → first bucket timestamp is t=5).
+        // Clearing the bounds here prevents the coordinator's sample iterator from clipping
+        // those leading buckets. It is safe because the shard already owns the time-range gate.
+        coordArgs.startTimestamp = 0;
+        coordArgs.endTimestamp = UINT64_MAX;
     }
     const RangeArgs *replyArgs = &coordArgs;
 
