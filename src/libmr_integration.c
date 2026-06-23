@@ -834,6 +834,7 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.rangeArgs.filterByTSArgs.hasValue = false;
     mrangeArgs.rangeArgs.alignment = DefaultAlignment;
     mrangeArgs.rangeArgs.timestampAlignment = 0;
+    mrangeArgs.rangeArgs.skipAggregation = false;
     // Include all the labels because the aggregated result might be grouped by a label (in
     // mrange_done)
     mrangeArgs.withLabels = true;
