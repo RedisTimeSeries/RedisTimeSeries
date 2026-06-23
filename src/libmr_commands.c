@@ -606,7 +606,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
     args.reverse = reverse;
 
-    QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
