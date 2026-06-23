@@ -7,14 +7,18 @@ The "old" module (without TS.INTERNAL_MRANGE_AGG) is acquired automatically:
 
 Scenarios
 ---------
-a. Old coordinator + new shard:
+a. Old coordinator + old shard:
      coordinator sends TS.INTERNAL_MRANGE (no shard pre-agg), aggregates at coordinator.
      TS.MRANGE result must be correct.
 
 b. New coordinator + old shard:
      coordinator sends TS.INTERNAL_MRANGE_AGG; old shard does not have that command.
      TS.MRANGE must return an error.
+
+RLTest calls every test function as test(env) — env is RLTest's Env object.
+Tests skip via env.skip() when not running in cluster mode.
 """
+import atexit
 import multiprocessing
 import os
 import shutil
@@ -23,15 +27,9 @@ import subprocess
 import tempfile
 import time
 
-import pytest
 import redis
 
 _ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-
-# These tests spin up their own cluster nodes — only relevant in cluster test runs.
-_IN_CLUSTER_MODE = os.environ.get("OSS_CLUSTER", "0") == "1"
-
-# Can be overridden by env var; otherwise auto-built from origin/master.
 _OLD_MODULE_ENV = os.environ.get("OLD_MODULE_PATH", "")
 
 # Session-level cache so the master build runs at most once.
@@ -47,11 +45,7 @@ def _find_so(base):
     return None
 
 
-def _find_new_module():
-    return _find_so(_ROOT)
-
-
-NEW_MODULE = _find_new_module()
+NEW_MODULE = _find_so(_ROOT)
 
 
 def _remove_worktree(worktree):
@@ -62,26 +56,22 @@ def _remove_worktree(worktree):
         )
     except Exception:
         pass
-    # Always remove the directory — git worktree remove may leave it behind on error.
     shutil.rmtree(worktree, ignore_errors=True)
 
 
 def _ensure_old_module():
     """
     Return the path to the old module .so, building from origin/master if needed.
-    Calls pytest.skip() if not in cluster mode or if the module cannot be acquired.
+    Raises RuntimeError if the module cannot be acquired (caller converts to env.skip()).
     """
     global _old_module_path, _old_module_worktree
-
-    if not _IN_CLUSTER_MODE:
-        pytest.skip("mixed-version tests only run in cluster mode (OSS_CLUSTER=1)")
 
     if _old_module_path:
         return _old_module_path
 
     if _OLD_MODULE_ENV:
         if not os.path.exists(_OLD_MODULE_ENV):
-            pytest.skip(f"OLD_MODULE_PATH={_OLD_MODULE_ENV!r} does not exist")
+            raise RuntimeError(f"OLD_MODULE_PATH={_OLD_MODULE_ENV!r} does not exist")
         _old_module_path = _OLD_MODULE_ENV
         return _old_module_path
 
@@ -105,31 +95,19 @@ def _ensure_old_module():
             ["make", "build", f"-j{jobs}"],
             cwd=worktree, check=True, capture_output=True, timeout=900,
         )
-    except subprocess.CalledProcessError as e:
-        _remove_worktree(worktree)
-        pytest.skip(
-            f"Could not build old module from origin/master: "
-            f"{e.stderr.decode(errors='replace')[:300]}"
-        )
     except Exception as e:
         _remove_worktree(worktree)
-        pytest.skip(f"Could not acquire old module: {e}")
+        raise RuntimeError(f"Could not build old module from origin/master: {e}")
 
     so = _find_so(worktree)
     if not so:
         _remove_worktree(worktree)
-        pytest.skip("Built old module .so not found in worktree")
+        raise RuntimeError("Built old module .so not found in worktree")
 
     _old_module_path = so
     _old_module_worktree = worktree
+    atexit.register(_remove_worktree, worktree)
     return _old_module_path
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _cleanup_old_module_worktree():
-    yield
-    if _old_module_worktree:
-        _remove_worktree(_old_module_worktree)
 
 
 # ---- cluster helpers ----
@@ -196,109 +174,116 @@ def _form_cluster(r_coord, coord_port, r_shard, shard_port):
     raise RuntimeError("Cluster did not reach ok state within 15s")
 
 
-def _key_on_coord(r_coord, prefix):
-    """Return the first 'prefix_N' key whose hash slot falls in the coord range [0, 8191]."""
+def _key_in_slots(r, prefix, lo, hi):
+    """Return the first 'prefix_N' key whose hash slot is in [lo, hi)."""
     for i in range(10000):
         key = f"{prefix}_{i}"
-        if int(r_coord.execute_command("CLUSTER", "KEYSLOT", key)) < 8192:
+        slot = int(r.execute_command("CLUSTER", "KEYSLOT", key))
+        if lo <= slot < hi:
             return key
-    raise RuntimeError(f"No key for prefix '{prefix}' hashed to coord slot range")
+    raise RuntimeError(f"No key for prefix '{prefix}' found in slot range [{lo}, {hi})")
 
 
-def _populate(r_coord, label):
-    """Create two TS series on the coordinator shard and fill with samples t=10..190."""
-    keys = [_key_on_coord(r_coord, f"ts_{label}_{i}") for i in range(2)]
-    for key in keys:
-        r_coord.execute_command("TS.CREATE", key, "LABELS", "group", label)
-        for t in range(10, 200, 10):
-            r_coord.execute_command("TS.ADD", key, t, t // 10)
-    return keys
+def _populate(r_coord, r_shard, label):
+    """Create TS series on BOTH shards so cross-shard LibMR is exercised."""
+    coord_keys = [_key_in_slots(r_coord, f"ts_{label}_c{i}", 0, 8192) for i in range(2)]
+    shard_keys = [_key_in_slots(r_shard, f"ts_{label}_s{i}", 8192, 16384) for i in range(2)]
+    for r, keys in ((r_coord, coord_keys), (r_shard, shard_keys)):
+        for key in keys:
+            r.execute_command("TS.CREATE", key, "LABELS", "group", label)
+            for t in range(10, 200, 10):
+                r.execute_command("TS.ADD", key, t, t // 10)
+    return coord_keys + shard_keys
 
 
-# ---- fixtures ----
-
-@pytest.fixture
-def cluster_old_coord_old_shard():
-    """Both nodes run the OLD module (no TS.INTERNAL_MRANGE_AGG)."""
-    old = _ensure_old_module()
-    tmpdir = tempfile.mkdtemp(prefix="ts_mixed_a_")
-    coord_port, shard_port = _free_port(), _free_port()
-    procs = []
-    try:
-        p1, r_coord = _start_node(coord_port, old, tmpdir)
-        p2, r_shard = _start_node(shard_port, old, tmpdir)
-        procs = [p1, p2]
-        _form_cluster(r_coord, coord_port, r_shard, shard_port)
-        yield r_coord, r_shard
-    finally:
-        for p in procs:
-            p.terminate()
-            try:
-                p.wait(timeout=5)
-            except Exception:
-                p.kill()
-        shutil.rmtree(tmpdir, ignore_errors=True)
-
-
-@pytest.fixture
-def cluster_new_coord_old_shard():
-    """coord=NEW module, shard=OLD module (no TS.INTERNAL_MRANGE_AGG)."""
-    old = _ensure_old_module()
-    if not NEW_MODULE:
-        pytest.skip("New module binary not found in bin/")
-    tmpdir = tempfile.mkdtemp(prefix="ts_mixed_b_")
-    coord_port, shard_port = _free_port(), _free_port()
-    procs = []
-    try:
-        p1, r_coord = _start_node(coord_port, NEW_MODULE, tmpdir)
-        p2, r_shard = _start_node(shard_port, old, tmpdir)
-        procs = [p1, p2]
-        _form_cluster(r_coord, coord_port, r_shard, shard_port)
-        yield r_coord, r_shard
-    finally:
-        for p in procs:
-            p.terminate()
-            try:
-                p.wait(timeout=5)
-            except Exception:
-                p.kill()
-        shutil.rmtree(tmpdir, ignore_errors=True)
+def _stop_procs(procs):
+    for p in procs:
+        p.terminate()
+        try:
+            p.wait(timeout=5)
+        except Exception:
+            p.kill()
 
 
 # ---- tests ----
+# RLTest calls test functions as test(env). env.skip() signals a skip to the runner.
 
-def test_old_coordinator_old_shard_aggregation_correct(cluster_old_coord_old_shard):
+def test_old_coordinator_old_shard_aggregation_correct(env):
     """
     Scenario a: old coordinator + old shards (no TS.INTERNAL_MRANGE_AGG on either side).
     Coordinator sends TS.INTERNAL_MRANGE, aggregates raw shard data itself.
     Result must be correct — verifies the old code path is not broken by our changes.
     """
-    r_coord, _ = cluster_old_coord_old_shard
-    _populate(r_coord, "grp_a")
+    if not env.is_cluster():
+        env.skip("mixed-version tests only run in cluster mode")
 
-    result = r_coord.execute_command(
-        "TS.MRANGE", 10, 190, "AGGREGATION", "SUM", 50, "FILTER", "group=grp_a"
-    )
+    try:
+        old = _ensure_old_module()
+    except RuntimeError as e:
+        env.skip(str(e))
 
-    print(f"\nScenario a response:\n{result}")
-    assert result is not None
-    assert len(result) == 2, f"Expected 2 series, got {len(result)}"
-    for _key, _labels, samples in result:
-        assert len(samples) > 0, "Expected aggregated samples, got none"
-        for ts, _val in samples:
-            assert ts % 50 == 0, f"Bucket timestamp {ts} is not aligned to bucket size 50"
+    tmpdir = tempfile.mkdtemp(prefix="ts_mixed_a_")
+    procs = []
+    try:
+        coord_port, shard_port = _free_port(), _free_port()
+        p1, r_coord = _start_node(coord_port, old, tmpdir)
+        p2, r_shard = _start_node(shard_port, old, tmpdir)
+        procs = [p1, p2]
+        _form_cluster(r_coord, coord_port, r_shard, shard_port)
+        _populate(r_coord, r_shard, "grp_a")
+
+        result = r_coord.execute_command(
+            "TS.MRANGE", 10, 190, "AGGREGATION", "SUM", 50, "FILTER", "group=grp_a"
+        )
+
+        print(f"\nScenario a response:\n{result}")
+        assert result is not None
+        assert len(result) == 4, f"Expected 4 series (2 per shard), got {len(result)}"
+        for _key, _labels, samples in result:
+            assert len(samples) > 0, "Expected aggregated samples, got none"
+            for ts, _val in samples:
+                assert ts % 50 == 0, f"Bucket timestamp {ts} is not aligned to bucket size 50"
+    finally:
+        _stop_procs(procs)
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def test_new_coordinator_old_shard_returns_error(cluster_new_coord_old_shard):
+def test_new_coordinator_old_shard_returns_error(env):
     """
     Scenario b: new coordinator sends TS.INTERNAL_MRANGE_AGG; old shard does not have it.
     TS.MRANGE must return an error — not a partial or silent result.
     """
-    r_coord, _ = cluster_new_coord_old_shard
-    _populate(r_coord, "grp_b")
+    if not env.is_cluster():
+        env.skip("mixed-version tests only run in cluster mode")
 
-    with pytest.raises(redis.exceptions.ResponseError) as exc_info:
-        r_coord.execute_command(
-            "TS.MRANGE", 10, 190, "AGGREGATION", "SUM", 50, "FILTER", "group=grp_b"
-        )
-    print(f"\nScenario b error response:\n{exc_info.value}")
+    if not NEW_MODULE:
+        env.skip("New module binary not found in bin/")
+
+    try:
+        old = _ensure_old_module()
+    except RuntimeError as e:
+        env.skip(str(e))
+
+    tmpdir = tempfile.mkdtemp(prefix="ts_mixed_b_")
+    procs = []
+    try:
+        coord_port, shard_port = _free_port(), _free_port()
+        p1, r_coord = _start_node(coord_port, NEW_MODULE, tmpdir)
+        p2, r_shard = _start_node(shard_port, old, tmpdir)
+        procs = [p1, p2]
+        _form_cluster(r_coord, coord_port, r_shard, shard_port)
+        _populate(r_coord, r_shard, "grp_b")
+
+        error_raised = False
+        try:
+            result = r_coord.execute_command(
+                "TS.MRANGE", 10, 190, "AGGREGATION", "SUM", 50, "FILTER", "group=grp_b"
+            )
+            print(f"\nScenario b response (expected error, got): {result}")
+        except redis.exceptions.ResponseError as e:
+            error_raised = True
+            print(f"\nScenario b error response (expected):\n{e}")
+        assert error_raised, "Expected ResponseError but TS.MRANGE succeeded"
+    finally:
+        _stop_procs(procs)
+        shutil.rmtree(tmpdir, ignore_errors=True)
