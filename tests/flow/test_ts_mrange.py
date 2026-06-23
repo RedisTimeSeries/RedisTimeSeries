@@ -1017,7 +1017,7 @@ def test_mrange_empty_fill_range_between_samples():
         _empty_fill_filler(r, 'ef_between_f2')
 
         for agg in _EMPTY_FILL_AGGS:
-            range_res  = r1.execute_command('TS.RANGE',  'ef_between', 11, 16, 'AGGREGATION', agg, 1, 'EMPTY')
+            range_res  = r.execute_command('TS.RANGE',  'ef_between', 11, 16, 'AGGREGATION', agg, 1, 'EMPTY')
             mrange_res = r1.execute_command('TS.MRANGE',              11, 16, 'AGGREGATION', agg, 1, 'EMPTY',
                                             'FILTER', _EMPTY_FILL_LABEL)
             assert _mrange_key_samples(mrange_res, 'ef_between') == range_res, \
@@ -1033,7 +1033,7 @@ def test_mrange_empty_fill_range_starts_before_first_sample():
         _empty_fill_filler(r, 'ef_before_f2')
 
         for agg in _EMPTY_FILL_AGGS:
-            range_res  = r1.execute_command('TS.RANGE',  'ef_before', 8, 12, 'AGGREGATION', agg, 1, 'EMPTY')
+            range_res  = r.execute_command('TS.RANGE',  'ef_before', 8, 12, 'AGGREGATION', agg, 1, 'EMPTY')
             mrange_res = r1.execute_command('TS.MRANGE',             8, 12, 'AGGREGATION', agg, 1, 'EMPTY',
                                             'FILTER', _EMPTY_FILL_LABEL)
             assert _mrange_key_samples(mrange_res, 'ef_before') == range_res, \
@@ -1049,7 +1049,7 @@ def test_mrange_empty_fill_range_ends_after_last_sample():
         _empty_fill_filler(r, 'ef_after_f2')
 
         for agg in _EMPTY_FILL_AGGS:
-            range_res  = r1.execute_command('TS.RANGE',  'ef_after', 18, 22, 'AGGREGATION', agg, 1, 'EMPTY')
+            range_res  = r.execute_command('TS.RANGE',  'ef_after', 18, 22, 'AGGREGATION', agg, 1, 'EMPTY')
             mrange_res = r1.execute_command('TS.MRANGE',            18, 22, 'AGGREGATION', agg, 1, 'EMPTY',
                                             'FILTER', _EMPTY_FILL_LABEL)
             assert _mrange_key_samples(mrange_res, 'ef_after') == range_res, \
