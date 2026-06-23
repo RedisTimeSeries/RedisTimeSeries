@@ -267,12 +267,18 @@ int ReplyMultiAggSeriesGroup(RedisModuleCtx *ctx,
     if (_ReplyMap(ctx)) {
         RedisModule_ReplyWithMap(ctx, 1);
         RedisModule_ReplyWithCString(ctx, "aggregators");
-        RedisModule_ReplyWithArray(ctx, 0); // pre-aggregated; agg types already embedded in data
+        if (args->aggregationArgs.numClasses == 0) {
+            RedisModule_ReplyWithArray(ctx, 0);
+        } else {
+            RedisModule_ReplyWithArray(ctx, args->aggregationArgs.numClasses);
+            for (size_t i = 0; i < args->aggregationArgs.numClasses; i++) {
+                RedisModule_ReplyWithCString(
+                    ctx, AggTypeEnumToStringLowerCase(args->aggregationArgs.classes[i]->type));
+            }
+        }
     }
 
     RangeArgs rawArgs = *args;
-    rawArgs.aggregationArgs.numClasses = 0;
-    rawArgs.aggregationArgs.classes = NULL;
     rawArgs.filterByValueArgs.hasValue = false;
     rawArgs.filterByTSArgs.hasValue = false;
 

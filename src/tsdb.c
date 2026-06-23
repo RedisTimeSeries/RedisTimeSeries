@@ -1406,7 +1406,7 @@ AbstractIterator *SeriesQuery(Series *series,
             break;
     }
 
-    if (args->aggregationArgs.numClasses > 0) {
+    if (args->aggregationArgs.numClasses > 0 && !args->skipAggregation) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
                                                             args->aggregationArgs.numClasses,
                                                             args->aggregationArgs.classes,

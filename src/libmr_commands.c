@@ -186,12 +186,11 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
-    // Strip coordinator agg args so it doesn't re-aggregate pre-aggregated data.
-    // RESP3 `aggregators` metadata will be empty for this path.
+    // In the pre-agg path the coordinator must not re-aggregate or re-filter shard data.
+    // Keep agg info intact so RESP3 can display the aggregator names.
     RangeArgs coordArgs = args->rangeArgs;
     if (preAgg) {
-        coordArgs.aggregationArgs.numClasses = 0;
-        coordArgs.aggregationArgs.classes = NULL;
+        coordArgs.skipAggregation = true;
         coordArgs.filterByValueArgs.hasValue = false;
         coordArgs.filterByTSArgs.hasValue = false;
     }
@@ -235,15 +234,7 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ResultSet_ApplyReducer(ctx, resultset, &rangeArgs, &args->groupByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
-        RangeArgs minimizedArgs = args->rangeArgs;
-        minimizedArgs.startTimestamp = 0;
-        minimizedArgs.endTimestamp = UINT64_MAX;
-        minimizedArgs.aggregationArgs.numClasses = 0;
-        minimizedArgs.aggregationArgs.classes = NULL;
-        minimizedArgs.aggregationArgs.timeDelta = 0;
-        minimizedArgs.filterByTSArgs.hasValue = false;
-        minimizedArgs.filterByValueArgs.hasValue = false;
-        minimizedArgs.latest = false;
+        RangeArgs minimizedArgs = RangeArgs_ZeroProcessing(&coordArgs);
 
         replyResultSet(ctx,
                        resultset,
@@ -550,7 +541,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
@@ -692,7 +683,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
 }
 
 int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof(QueryPredicates_Arg));
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = queries->count;

@@ -380,20 +380,10 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
     }
     RedisModule_DictIteratorStop(iter);
 
-    // todo: this is duplicated in resultset.c
-    // Apply the reducer
     ResultSet_ApplyReducer(ctx, resultset, &args->rangeArgs, &args->groupByReducerArgs);
 
     // Do not apply the aggregation on the resultset, do apply max results on the final result
-    RangeArgs minimizedArgs = args->rangeArgs;
-    minimizedArgs.startTimestamp = 0;
-    minimizedArgs.endTimestamp = UINT64_MAX;
-    minimizedArgs.aggregationArgs.numClasses = 0;
-    minimizedArgs.aggregationArgs.classes = NULL;
-    minimizedArgs.aggregationArgs.timeDelta = 0;
-    minimizedArgs.filterByTSArgs.hasValue = false;
-    minimizedArgs.filterByValueArgs.hasValue = false;
-    minimizedArgs.latest = false;
+    RangeArgs minimizedArgs = RangeArgs_ZeroProcessing(&args->rangeArgs);
 
     replyResultSet(ctx,
                    resultset,

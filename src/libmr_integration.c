@@ -328,6 +328,9 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
 
     // per-shard aggregation fields
     predicates->numAggClasses = MR_SerializationCtxReadLongLong(sctx, error);
+    if (predicates->numAggClasses > TS_AGG_TYPES_MAX) {
+        goto err;
+    }
     for (size_t i = 0; i < predicates->numAggClasses; i++) {
         predicates->aggTypes[i] = MR_SerializationCtxReadLongLong(sctx, error);
     }
@@ -344,6 +347,9 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
     predicates->filterByTSArgs.hasValue = MR_SerializationCtxReadLongLong(sctx, error);
     if (predicates->filterByTSArgs.hasValue) {
         predicates->filterByTSArgs.count = MR_SerializationCtxReadLongLong(sctx, error);
+        if (predicates->filterByTSArgs.count > MAX_TS_VALUES_FILTER) {
+            goto err;
+        }
         for (size_t i = 0; i < predicates->filterByTSArgs.count; i++) {
             predicates->filterByTSArgs.values[i] = MR_SerializationCtxReadLongLong(sctx, error);
         }
