@@ -162,6 +162,18 @@ __error:
     return NULL;
 }
 
+// Build coordinator RangeArgs from the original args, opening the time window and disabling
+// filters so the coordinator doesn't re-aggregate or re-filter pre-aggregated shard data.
+static RangeArgs RangeArgsSkipReAggregation(const RangeArgs *src) {
+    RangeArgs a = *src;
+    a.skipAggregation = true;
+    a.filterByValueArgs.hasValue = false;
+    a.filterByTSArgs.hasValue = false;
+    a.startTimestamp = 0;
+    a.endTimestamp = UINT64_MAX;
+    return a;
+}
+
 static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
     MRangeArgs *args = &data->args;
     RedisModuleBlockedClient *bc = data->bc;
@@ -170,8 +182,7 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     if (!nodesResults)
         goto __done;
 
-    // Shards pre-aggregate whenever any aggregation was requested (single or multi-agg).
-    bool preAgg = args->rangeArgs.aggregationArgs.numClasses > 0;
+    bool preAgg = data->preAgg;
 
     TS_ResultSet *resultset = NULL;
     if (args->groupByLabel) {
@@ -188,19 +199,7 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
 
     // In the pre-agg path the coordinator must not re-aggregate or re-filter shard data.
     // Keep agg info intact so RESP3 can display the aggregator names.
-    RangeArgs coordArgs = args->rangeArgs;
-    if (preAgg) {
-        coordArgs.skipAggregation = true;
-        coordArgs.filterByValueArgs.hasValue = false;
-        coordArgs.filterByTSArgs.hasValue = false;
-        // The shards already applied the original [startTimestamp, endTimestamp] filter.
-        // Pre-aggregated bucket timestamps may land before startTimestamp due to bucket-boundary
-        // alignment (e.g. query starts at t=9 with bucket size 5 → first bucket timestamp is t=5).
-        // Clearing the bounds here prevents the coordinator's sample iterator from clipping
-        // those leading buckets. It is safe because the shard already owns the time-range gate.
-        coordArgs.startTimestamp = 0;
-        coordArgs.endTimestamp = UINT64_MAX;
-    }
+    RangeArgs coordArgs = preAgg ? RangeArgsSkipReAggregation(&args->rangeArgs) : args->rangeArgs;
     const RangeArgs *replyArgs = &coordArgs;
 
     array_foreach(nodesResults, record, {
@@ -660,9 +659,11 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
             break;
         }
         case LIBMR_PROTOCOL_INTERNAL: {
+            bool usePreAgg = queryArg->numAggClasses > 0;
             builder = MR_CreateEmptyExecutionBuilder();
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
-            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
+            MR_ExecutionBuilderInternalCommand(
+                builder, usePreAgg ? "TS.INTERNAL_MRANGE_AGG" : "TS.INTERNAL_MRANGE", queryArg);
             break;
         }
         default: {
@@ -681,6 +682,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     MRangeData *data = malloc(sizeof(struct MRangeData)); // freed by mrange_done
     data->bc = bc;
     data->args = args;
+    data->preAgg = (queryArg->numAggClasses > 0);
     MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
 
     MR_Run(exec);

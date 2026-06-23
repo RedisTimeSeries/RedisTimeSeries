@@ -9,6 +9,7 @@ typedef struct MRangeData
 {
     RedisModuleBlockedClient *bc;
     MRangeArgs args;
+    bool preAgg; // true when inner shards ran aggregation via TS_INTERNAL_MRANGE_AGG
 } MRangeData;
 
 typedef struct MData
