@@ -215,12 +215,12 @@ def test_old_coordinator_old_shard_aggregation_correct(env):
     Result must be correct — verifies the old code path is not broken by our changes.
     """
     if not env.is_cluster():
-        env.skip("mixed-version tests only run in cluster mode")
+        env.skip()
 
     try:
         old = _ensure_old_module()
-    except RuntimeError as e:
-        env.skip(str(e))
+    except RuntimeError:
+        env.skip()
 
     tmpdir = tempfile.mkdtemp(prefix="ts_mixed_a_")
     procs = []
@@ -254,15 +254,15 @@ def test_new_coordinator_old_shard_returns_error(env):
     TS.MRANGE must return an error — not a partial or silent result.
     """
     if not env.is_cluster():
-        env.skip("mixed-version tests only run in cluster mode")
+        env.skip()
 
     if not NEW_MODULE:
-        env.skip("New module binary not found in bin/")
+        env.skip()
 
     try:
         old = _ensure_old_module()
-    except RuntimeError as e:
-        env.skip(str(e))
+    except RuntimeError:
+        env.skip()
 
     tmpdir = tempfile.mkdtemp(prefix="ts_mixed_b_")
     procs = []
