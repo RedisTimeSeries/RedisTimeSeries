@@ -1,21 +1,24 @@
 """
 Mixed-version cluster backward-compatibility tests for TS.MRANGE pre-aggregation.
 
-The "old" module (without TS.INTERNAL_MRANGE_AGG) is acquired automatically:
-  1. If OLD_MODULE_PATH env var is set, that path is used directly.
-  2. Otherwise origin/master is built in a temporary git worktree (once per session).
+Two separate builds happen once per process (in parallel threads) and are cached:
+  1. Redis 8.8.0 redis-server binary  — used for "old" nodes.
+  2. Old module .so from origin/master — loaded by the 8.8 redis-server.
+
+The "new" coord node uses the module already built by the CI at _ROOT and the
+unstable redis-server binary that's already in PATH.
 
 Scenarios
 ---------
-a. Old coordinator + old shard:
-     coordinator sends TS.INTERNAL_MRANGE (no shard pre-agg), aggregates at coordinator.
-     TS.MRANGE result must be correct.
+a. Both coord and shard run OLD module on Redis 8.8.
+     Coordinator sends TS.INTERNAL_MRANGE (no shard pre-agg); coordinator aggregates.
+     TS.MRANGE with AGGREGATION must return correct results.
 
-b. New coordinator + old shard:
-     coordinator sends TS.INTERNAL_MRANGE_AGG; old shard does not have that command.
+b. Coordinator runs NEW module on unstable redis-server; shard runs OLD module on Redis 8.8.
+     Coordinator dispatches TS.INTERNAL_MRANGE_AGG; old shard does not have that command.
      TS.MRANGE must return an error.
 
-RLTest calls every test function as test(env) — env is RLTest's Env object.
+RLTest convention: all test functions accept env as first positional argument.
 Tests skip via env.skip() when not running in cluster mode.
 """
 import atexit
@@ -25,17 +28,28 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 
 import redis
 
 _ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-_OLD_MODULE_ENV = os.environ.get("OLD_MODULE_PATH", "")
 
-# Session-level cache so the master build runs at most once.
+_OLD_MODULE_ENV = os.environ.get("OLD_MODULE_PATH", "")
+_OLD_REDIS_ENV = os.environ.get("OLD_REDIS_SERVER", "")
+
+# Session-level cache — populated once, reused across tests.
 _old_module_path = None
 _old_module_worktree = None
+_old_redis_bin = None
+_old_redis_dir = None
+_setup_lock = threading.Lock()
+_setup_error = None   # RuntimeError set if the parallel build failed
 
+
+# ---------------------------------------------------------------------------
+# Module / binary discovery helpers
+# ---------------------------------------------------------------------------
 
 def _find_so(base):
     for plat in ("linux-x86_64-release", "linux-arm64v8-release", "macos-arm64v8-release"):
@@ -48,21 +62,77 @@ def _find_so(base):
 NEW_MODULE = _find_so(_ROOT)
 
 
-def _remove_worktree(worktree):
+def _remove_worktree(path):
     try:
         subprocess.run(
-            ["git", "worktree", "remove", "--force", worktree],
+            ["git", "worktree", "remove", "--force", path],
             cwd=_ROOT, capture_output=True,
         )
     except Exception:
         pass
-    shutil.rmtree(worktree, ignore_errors=True)
+    shutil.rmtree(path, ignore_errors=True)
 
 
-def _ensure_old_module():
+# ---------------------------------------------------------------------------
+# Build Redis 8.8
+# ---------------------------------------------------------------------------
+
+_REDIS_OLD_TAG = "8.8.0"
+
+
+def _build_old_redis():
     """
-    Return the path to the old module .so, building from origin/master if needed.
-    Raises RuntimeError if the module cannot be acquired (caller converts to env.skip()).
+    Build Redis 8.8.0 from source.  Returns path to the redis-server binary.
+    Caches the result in _old_redis_bin; raises RuntimeError on failure.
+    """
+    global _old_redis_bin, _old_redis_dir
+
+    if _old_redis_bin:
+        return _old_redis_bin
+
+    if _OLD_REDIS_ENV:
+        if not os.path.isfile(_OLD_REDIS_ENV):
+            raise RuntimeError(f"OLD_REDIS_SERVER={_OLD_REDIS_ENV!r} is not a file")
+        _old_redis_bin = _OLD_REDIS_ENV
+        return _old_redis_bin
+
+    tmpdir = tempfile.mkdtemp(prefix="redis_88_")
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth=1", "--branch", _REDIS_OLD_TAG,
+             "https://github.com/redis/redis.git", tmpdir],
+            check=True, capture_output=True, timeout=300,
+        )
+        jobs = max(1, multiprocessing.cpu_count() - 1)
+        subprocess.run(
+            ["make", f"-j{jobs}"],
+            cwd=tmpdir, check=True, capture_output=True, timeout=600,
+        )
+    except Exception as e:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise RuntimeError(f"Could not build Redis {_REDIS_OLD_TAG}: {e}")
+
+    binary = os.path.join(tmpdir, "src", "redis-server")
+    if not os.path.isfile(binary):
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise RuntimeError(f"redis-server not found after building Redis {_REDIS_OLD_TAG}")
+
+    _old_redis_bin = binary
+    _old_redis_dir = tmpdir
+    atexit.register(shutil.rmtree, tmpdir, True)
+    return _old_redis_bin
+
+
+# ---------------------------------------------------------------------------
+# Build origin/master module
+# ---------------------------------------------------------------------------
+
+def _build_old_module():
+    """
+    Build the TimeSeries module from origin/master.  Returns path to .so.
+    Origin/master's own deps/RedisModulesSDK headers are for the 8.x era and
+    are compatible with the Redis 8.8 binary — no header patching needed.
+    Caches the result in _old_module_path; raises RuntimeError on failure.
     """
     global _old_module_path, _old_module_worktree
 
@@ -70,12 +140,11 @@ def _ensure_old_module():
         return _old_module_path
 
     if _OLD_MODULE_ENV:
-        if not os.path.exists(_OLD_MODULE_ENV):
-            raise RuntimeError(f"OLD_MODULE_PATH={_OLD_MODULE_ENV!r} does not exist")
+        if not os.path.isfile(_OLD_MODULE_ENV):
+            raise RuntimeError(f"OLD_MODULE_PATH={_OLD_MODULE_ENV!r} is not a file")
         _old_module_path = _OLD_MODULE_ENV
         return _old_module_path
 
-    # Auto-build from origin/master in a temporary worktree.
     worktree = tempfile.mkdtemp(prefix="ts_old_master_")
     try:
         subprocess.run(
@@ -102,7 +171,7 @@ def _ensure_old_module():
     so = _find_so(worktree)
     if not so:
         _remove_worktree(worktree)
-        raise RuntimeError("Built old module .so not found in worktree")
+        raise RuntimeError("origin/master .so not found after build")
 
     _old_module_path = so
     _old_module_worktree = worktree
@@ -110,7 +179,55 @@ def _ensure_old_module():
     return _old_module_path
 
 
-# ---- cluster helpers ----
+# ---------------------------------------------------------------------------
+# Parallel setup: build Redis 8.8 + old module concurrently
+# ---------------------------------------------------------------------------
+
+def _ensure_old_setup():
+    """
+    Ensure Redis 8.8 binary and old module .so are ready.
+    Runs both builds in parallel threads; caches results for subsequent calls.
+    Raises RuntimeError (stored in _setup_error) if either build fails.
+    """
+    global _setup_error
+
+    with _setup_lock:
+        # Already succeeded
+        if _old_redis_bin and _old_module_path:
+            return
+        # Already failed
+        if _setup_error:
+            raise _setup_error
+
+        errors = []
+
+        def _build_redis_thread():
+            try:
+                _build_old_redis()
+            except RuntimeError as e:
+                errors.append(e)
+
+        def _build_module_thread():
+            try:
+                _build_old_module()
+            except RuntimeError as e:
+                errors.append(e)
+
+        t1 = threading.Thread(target=_build_redis_thread, daemon=True)
+        t2 = threading.Thread(target=_build_module_thread, daemon=True)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        if errors:
+            _setup_error = errors[0]
+            raise _setup_error
+
+
+# ---------------------------------------------------------------------------
+# Cluster helpers
+# ---------------------------------------------------------------------------
 
 def _free_port():
     with socket.socket() as s:
@@ -118,10 +235,10 @@ def _free_port():
         return s.getsockname()[1]
 
 
-def _start_node(port, module_path, tmpdir):
+def _start_node(port, module_path, tmpdir, redis_bin="redis-server"):
     proc = subprocess.Popen(
         [
-            "redis-server",
+            redis_bin,
             "--port", str(port),
             "--cluster-enabled", "yes",
             "--cluster-config-file", os.path.join(tmpdir, f"nodes-{port}.conf"),
@@ -144,14 +261,25 @@ def _start_node(port, module_path, tmpdir):
         except Exception:
             time.sleep(0.1)
     proc.terminate()
-    raise RuntimeError(f"Redis did not start on port {port}")
+    try:
+        proc.wait(timeout=3)
+    except Exception:
+        proc.kill()
+    log_path = os.path.join(tmpdir, f"{port}.log")
+    try:
+        with open(log_path) as f:
+            log_tail = f.read()[-800:]
+    except Exception:
+        log_tail = "(no log)"
+    raise RuntimeError(
+        f"Redis did not start on port {port} "
+        f"(bin={os.path.basename(redis_bin)}, mod={os.path.basename(module_path)}). "
+        f"Log tail:\n{log_tail}"
+    )
 
 
 def _form_cluster(r_coord, coord_port, r_shard, shard_port):
-    """
-    Form a 2-node cluster.
-    coord owns slots 0-8191; shard owns 8192-16383.
-    """
+    """Form a 2-node cluster: coord owns slots 0-8191; shard owns 8192-16383."""
     r_coord.execute_command("CLUSTER", "MEET", "127.0.0.1", str(shard_port))
     time.sleep(0.5)
     r_coord.execute_command("CLUSTER", "ADDSLOTSRANGE", 0, 8191)
@@ -175,13 +303,12 @@ def _form_cluster(r_coord, coord_port, r_shard, shard_port):
 
 
 def _key_in_slots(r, prefix, lo, hi):
-    """Return the first 'prefix_N' key whose hash slot is in [lo, hi)."""
+    """Return first 'prefix_N' key whose hash slot is in [lo, hi)."""
     for i in range(10000):
         key = f"{prefix}_{i}"
-        slot = int(r.execute_command("CLUSTER", "KEYSLOT", key))
-        if lo <= slot < hi:
+        if lo <= int(r.execute_command("CLUSTER", "KEYSLOT", key)) < hi:
             return key
-    raise RuntimeError(f"No key for prefix '{prefix}' found in slot range [{lo}, {hi})")
+    raise RuntimeError(f"No key for prefix '{prefix}' in slot range [{lo}, {hi})")
 
 
 def _populate(r_coord, r_shard, label):
@@ -205,29 +332,33 @@ def _stop_procs(procs):
             p.kill()
 
 
-# ---- tests ----
-# RLTest calls test functions as test(env). env.skip() signals a skip to the runner.
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+# RLTest calls test functions as test(env). env.skip() signals a skip.
 
 def test_old_coordinator_old_shard_aggregation_correct(env):
     """
-    Scenario a: old coordinator + old shards (no TS.INTERNAL_MRANGE_AGG on either side).
-    Coordinator sends TS.INTERNAL_MRANGE, aggregates raw shard data itself.
+    Scenario a: Redis 8.8 + old module on both nodes.
+    Coordinator sends TS.INTERNAL_MRANGE (no shard pre-agg) and aggregates at coordinator.
     Result must be correct — verifies the old code path is not broken by our changes.
     """
     if not env.is_cluster():
         env.skip()
 
     try:
-        old = _ensure_old_module()
+        _ensure_old_setup()
     except RuntimeError:
         env.skip()
 
+    old_so = _old_module_path
+    old_bin = _old_redis_bin
     tmpdir = tempfile.mkdtemp(prefix="ts_mixed_a_")
     procs = []
     try:
         coord_port, shard_port = _free_port(), _free_port()
-        p1, r_coord = _start_node(coord_port, old, tmpdir)
-        p2, r_shard = _start_node(shard_port, old, tmpdir)
+        p1, r_coord = _start_node(coord_port, old_so, tmpdir, redis_bin=old_bin)
+        p2, r_shard = _start_node(shard_port, old_so, tmpdir, redis_bin=old_bin)
         procs = [p1, p2]
         _form_cluster(r_coord, coord_port, r_shard, shard_port)
         _populate(r_coord, r_shard, "grp_a")
@@ -242,7 +373,7 @@ def test_old_coordinator_old_shard_aggregation_correct(env):
         for _key, _labels, samples in result:
             assert len(samples) > 0, "Expected aggregated samples, got none"
             for ts, _val in samples:
-                assert ts % 50 == 0, f"Bucket timestamp {ts} is not aligned to bucket size 50"
+                assert ts % 50 == 0, f"Bucket timestamp {ts} not aligned to bucket size 50"
     finally:
         _stop_procs(procs)
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -250,7 +381,8 @@ def test_old_coordinator_old_shard_aggregation_correct(env):
 
 def test_new_coordinator_old_shard_returns_error(env):
     """
-    Scenario b: new coordinator sends TS.INTERNAL_MRANGE_AGG; old shard does not have it.
+    Scenario b: new coordinator (unstable redis-server + NEW module) + old shard (Redis 8.8 + OLD module).
+    Coordinator dispatches TS.INTERNAL_MRANGE_AGG; old shard does not have that command.
     TS.MRANGE must return an error — not a partial or silent result.
     """
     if not env.is_cluster():
@@ -260,16 +392,20 @@ def test_new_coordinator_old_shard_returns_error(env):
         env.skip()
 
     try:
-        old = _ensure_old_module()
+        _ensure_old_setup()
     except RuntimeError:
         env.skip()
 
+    old_so = _old_module_path
+    old_bin = _old_redis_bin
     tmpdir = tempfile.mkdtemp(prefix="ts_mixed_b_")
     procs = []
     try:
         coord_port, shard_port = _free_port(), _free_port()
+        # coord: CI's unstable redis-server + our new module
         p1, r_coord = _start_node(coord_port, NEW_MODULE, tmpdir)
-        p2, r_shard = _start_node(shard_port, old, tmpdir)
+        # shard: Redis 8.8 redis-server + origin/master module (no TS.INTERNAL_MRANGE_AGG)
+        p2, r_shard = _start_node(shard_port, old_so, tmpdir, redis_bin=old_bin)
         procs = [p1, p2]
         _form_cluster(r_coord, coord_port, r_shard, shard_port)
         _populate(r_coord, r_shard, "grp_b")
