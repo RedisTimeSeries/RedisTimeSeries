@@ -17,7 +17,7 @@ on:
         required: true
         default: 'x64'
       os:
-        description: 'OS to build on (space-separated, e.g. "jammy noble resolute rocky10")'
+        description: 'OS to build on (space-separated, e.g. "jammy rocky9")'
         type: string
         required: false
         default: ''
@@ -31,6 +31,10 @@ on:
         default: false
       quick:
         description: 'Run quick tests'
+        type: boolean
+        default: false
+      bigredis_tests:
+        description: 'Run tests with bigredis-enabled (Flex leg)'
         type: boolean
         default: false
       beta-version:
@@ -49,7 +53,7 @@ on:
         type: string
         required: true
       os:
-        description: 'OS to build on (space-separated, e.g. "jammy noble resolute rocky10")'
+        description: 'OS to build on (space-separated, e.g. "jammy rocky9")'
         type: string
         required: false
         default: ''
@@ -63,6 +67,10 @@ on:
         default: false
       quick:
         description: 'Run quick tests'
+        type: boolean
+        default: false
+      bigredis_tests:
+        description: 'Run tests with bigredis-enabled (Flex leg)'
         type: boolean
         default: false
       beta-version:
@@ -95,7 +103,7 @@ jobs:
         id: set-runner
         run: |
           if [ "${{ inputs.arch }}" == "arm64" ]; then
-            echo "runner=ubuntu24-arm64-4-16" >> $GITHUB_OUTPUT
+            echo "runner=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
           else
             echo "runner=ubuntu-latest" >> $GITHUB_OUTPUT
           fi
@@ -105,9 +113,9 @@ jobs:
           OS="${{ inputs.os }}"
           if [ -z "${OS}" ]; then
             if [ "${{ inputs.arch }}" == "arm64" ]; then
-              OS="bionic focal jammy rocky9 azurelinux3 amazonlinux2023 alpine noble resolute rocky8 rocky10 alma8 alma9 alma10 bullseye bookworm trixie mariner2"
+              OS="focal jammy rocky9 azurelinux3 amazonlinux2023 rocky8"
             else
-              OS="bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie"
+              OS="focal jammy rocky8 rocky9 amazonlinux2 amazonlinux2023 azurelinux3"
             fi
           fi
           # Convert space-separated list to JSON array
@@ -140,11 +148,29 @@ jobs:
         with:
           submodules: 'recursive'
 
+      - name: Create Github App Token
+        id: generate_token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.REDIS_ENTERPRISE_COMPONENTS_CLIENT_ID }}
+          private-key: ${{ secrets.REDIS_ENTERPRISE_COMPONENTS_PRIVATE_KEY }}
+          owner: redislabsdev
+
+      - name: Checkout redislabsdev/Redis
+        uses: actions/checkout@v4
+        with:
+          repository: redislabsdev/Redis
+          ref: ${{ env.REDIS_REF }}
+          token: ${{ steps.generate_token.outputs.token }}
+          path: redis-src
+          submodules: recursive
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Build Docker Image
         run: |
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
-            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
             -t ${{ env.DOCKER_IMAGE }} \
             .
@@ -156,7 +182,7 @@ jobs:
             -w /workspace \
             -e SAN=${{ inputs.run_sanitizer && 'address' || '' }} \
             ${{ env.DOCKER_IMAGE }} \
-            make build
+            make build -j$(nproc)
 
       - name: Run tests
         run: |
@@ -166,6 +192,7 @@ jobs:
             --cap-add=SYS_PTRACE \
             --security-opt seccomp=unconfined \
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
+            -e BIGREDIS_TESTS=${{ inputs.bigredis_tests && '1' || '0' }} \
             ${{ env.DOCKER_IMAGE }} \
             make test \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
@@ -182,14 +209,17 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
+          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ inputs.bigredis_tests && '-bigredis' || '' }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
           path: |
             logs/
             tests/**/logs/
             tests/**/*.log
 
+      # Flex leg builds the same redistimeseries.so as the non-flex leg
+      # (module code is redis-build-agnostic). Skip pack + S3 upload here to
+      # avoid the duplicate + potential overwrite race with the non-flex leg.
       - name: Pack module
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.bigredis_tests }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
@@ -201,7 +231,7 @@ jobs:
             make pack SHOW=1
 
       - name: Upload artifacts to S3
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer }}
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.bigredis_tests }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

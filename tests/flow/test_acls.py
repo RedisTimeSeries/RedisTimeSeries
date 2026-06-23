@@ -203,6 +203,16 @@ def test_libmr_with_internal_secret_support(env):
 
 @skip(onVersionLowerThan='8.0.0')
 def test_libmr_internal_commands_is_not_allowed(env):
+    # OSS Redis 8+ registers these commands with the `internal` flag, which
+    # makes them invisible to clients (returning "unknown command"). On
+    # Enterprise builds the hiding happens at the RLEC proxy layer instead
+    # (cluster.c:1420 — _proxy-filtered) and we can't reach the proxy from
+    # CI's direct redis connection. Empirically the redis-private binary
+    # also doesn't set _proxy-filtered on the command itself, so there's no
+    # in-CI way to verify the property. Skip on enterprise builds; revisit
+    # if/when we run tests through an RLEC proxy.
+    if is_enterprise(env):
+        env.skip()
     env.expect('timeseries.INNERCOMMUNICATION').error().contains('unknown command')
     env.expect('timeseries.HELLO').error().contains('unknown command')
     env.expect('timeseries.CLUSTERSETFROMSHARD').error().contains('unknown command')

@@ -6,7 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
 
-from includes import Env, VALGRIND, SANITIZER
+from includes import Env, VALGRIND, SANITIZER, BIGREDIS_TESTS
 from utils import slot_table
 
 
@@ -17,6 +17,11 @@ def test_asm_without_data():
     env = Env(shardsCount=2, decodeResponses=True)
     if env.env != "oss-cluster":  # TODO: convert to a proper fixture (here and below)
         env.skip()
+    if BIGREDIS_TESTS:
+        # The redis core panics "bigredis doesn't yet support ASM"
+        # (cluster_asm.c), so atomic slot migration can't run on a
+        # flex/bigredis build. Skip until the core adds ASM+bigredis support.
+        env.skip()
 
     for _ in range(MIGRATION_CYCLES):
         migrate_slots_back_and_forth(env)
@@ -25,6 +30,11 @@ def test_asm_without_data():
 def test_asm_with_data():
     env = Env(shardsCount=2, decodeResponses=True)
     if env.env != "oss-cluster":
+        env.skip()
+    if BIGREDIS_TESTS:
+        # The redis core panics "bigredis doesn't yet support ASM"
+        # (cluster_asm.c), so atomic slot migration can't run on a
+        # flex/bigredis build. Skip until the core adds ASM+bigredis support.
         env.skip()
 
     fill_some_data(env, number_of_keys=100, samples_per_key=10, label="test")
@@ -35,6 +45,11 @@ def test_asm_with_data():
 def test_asm_with_data_and_queries_during_migrations():
     env = Env(shardsCount=2, decodeResponses=True)
     if env.env != "oss-cluster":
+        env.skip()
+    if BIGREDIS_TESTS:
+        # The redis core panics "bigredis doesn't yet support ASM"
+        # (cluster_asm.c), so atomic slot migration can't run on a
+        # flex/bigredis build. Skip until the core adds ASM+bigredis support.
         env.skip()
 
     number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
@@ -89,6 +104,11 @@ def test_asm_with_data_and_queries_during_migrations():
 def test_asm_multishard_queryindex_is_consistent_or_retryable():
     env = Env(shardsCount=2, decodeResponses=True)
     if env.env != "oss-cluster":
+        env.skip()
+    if BIGREDIS_TESTS:
+        # The redis core panics "bigredis doesn't yet support ASM"
+        # (cluster_asm.c), so atomic slot migration can't run on a
+        # flex/bigredis build. Skip until the core adds ASM+bigredis support.
         env.skip()
 
     number_of_keys = 500 if not (VALGRIND or SANITIZER) else 100

@@ -15,14 +15,19 @@ on:
       - '[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
+      redis-ref-flex:
+        description: 'Redis ref for the Flex (Big-Redis) leg (redislabsdev/Redis)'
+        required: true
+        default: 'rl_big2_8.6'
       redis-ref:
-        description: 'Redis ref to checkout'
+        description: 'Default redis branch — Linux jobs consume it as `rl_${ref}` on redislabsdev/Redis, macOS consumes it as `${ref}` on redis/redis (OSS). Use an unprefixed branch name so the same value resolves on both forks.'
         required: true
         default: 'unstable'
 jobs:
   prepare-values:
     runs-on: ubuntu-latest
     outputs:
+      redis-ref-flex: ${{ steps.set-env.outputs.redis-ref-flex }}
       redis-ref: ${{ steps.set-env.outputs.redis-ref }}
       beta-timestamp: ${{ steps.set-env.outputs.beta-timestamp }}
       beta-version: ${{ steps.set-env.outputs.beta-version }}
@@ -35,13 +40,14 @@ jobs:
       - name: set env
         id: set-env
         run: |
+          echo "redis-ref-flex=${{ inputs.redis-ref-flex || 'rl_big2_8.6' }}" >> $GITHUB_OUTPUT
           echo "redis-ref=${{ inputs.redis-ref || 'unstable' }}" >> $GITHUB_OUTPUT
-          
+
           # Generate timestamp at workflow start for consistent beta versioning
           TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
           WORKFLOW_NUM=${{ github.run_number }}
           BETA_VERSION="99.99.99.${TIMESTAMP}.${WORKFLOW_NUM}"
-          
+
           echo "beta-timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
           echo "beta-version=${BETA_VERSION}" >> $GITHUB_OUTPUT
           echo "Generated beta version: ${BETA_VERSION}"
@@ -78,7 +84,7 @@ jobs:
         env:
           SNAPSHOT_TEMPLATE: ${{ steps.set-env.outputs.snapshot-template }}
           MODULE_VERSION: ${{ steps.get-version.outputs.module-version }}
-  
+
       - name: Upload build metadata
         uses: actions/upload-artifact@v4
         with:
@@ -87,13 +93,61 @@ jobs:
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
+
+  # --- Flex (Big-Redis) leg: rl_big2_8.6 ---
+  build-linux-x64-flex:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: focal jammy rocky8 rocky9 amazonlinux2 amazonlinux2023 azurelinux3
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref-flex}}
+      bigredis_tests: true
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      quick: false
+    secrets: inherit
+  build-linux-arm64-flex:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: arm64
+      os: focal jammy rocky9 azurelinux3 amazonlinux2023 rocky8
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref-flex}}
+      bigredis_tests: true
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      quick: false
+    secrets: inherit
+  linux-valgrind-flex:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref-flex}}
+      bigredis_tests: true
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      run_valgrind: true
+    secrets: inherit
+  linux-sanitizer-flex:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref-flex}}
+      bigredis_tests: true
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      run_sanitizer: true
+    secrets: inherit
+
+  # --- Default Linux leg: rl_${redis-ref} on the private fork ---
   build-linux-x64:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
       arch: x64
-      os: bionic focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      os: focal jammy rocky8 rocky9 amazonlinux2 amazonlinux2023 azurelinux3
+      redis-ref: rl_${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
@@ -102,16 +156,8 @@ jobs:
     needs: [prepare-values]
     with:
       arch: arm64
-      os: bionic focal jammy rocky9 azurelinux3 amazonlinux2023 alpine noble resolute rocky8 rocky10 alma8 alma9 alma10 bullseye bookworm trixie mariner2
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      beta-version: ${{needs.prepare-values.outputs.beta-version}}
-      quick: false
-    secrets: inherit
-  macos:
-    uses: ./.github/workflows/flow-macos.yml
-    needs: [prepare-values]
-    with:
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      os: focal jammy rocky9 azurelinux3 amazonlinux2023 rocky8
+      redis-ref: rl_${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
@@ -121,7 +167,7 @@ jobs:
     with:
       arch: x64
       os: jammy
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      redis-ref: rl_${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       run_valgrind: true
     secrets: inherit
@@ -131,7 +177,17 @@ jobs:
     with:
       arch: x64
       os: jammy
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      redis-ref: rl_${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       run_sanitizer: true
+    secrets: inherit
+
+  # macOS stays on OSS (redis/redis) per migration plan — not on the private fork.
+  macos:
+    uses: ./.github/workflows/flow-macos.yml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      beta-version: ${{needs.prepare-values.outputs.beta-version}}
+      quick: false
     secrets: inherit

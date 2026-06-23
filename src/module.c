@@ -17,12 +17,16 @@
 #include "indexer.h"
 #include "libmr_commands.h"
 #include "libmr_integration.h"
+#include "prefetch.h"
+#include "prefetch_commands.h"
 #include "query_language.h"
 #include "rdb.h"
 #include "reply.h"
 #include "resultset.h"
 #include "short_read.h"
+#include "streaming_resultset.h"
 #include "tsdb.h"
+#include "utils/blocked_client.h"
 #include "version.h"
 
 #include "fast_double_parser_c/fast_double_parser_c.h"
@@ -308,98 +312,6 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-// multi-series groupby logic
-static int replyGroupedMultiRange(RedisModuleCtx *ctx,
-                                  TS_ResultSet *resultset,
-                                  RedisModuleDict *result,
-                                  const MRangeArgs *args) {
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey = NULL;
-    size_t currentKeyLen;
-    Series *series = NULL;
-    int exitStatus = REDISMODULE_OK;
-    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
-
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        const GetSeriesResult status =
-            GetSeries(ctx,
-                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                      &key,
-                      &series,
-                      REDISMODULE_READ,
-                      flags);
-
-        switch (status) {
-            case GetSeriesResult_Success:
-                RedisModule_CloseKey(key);
-
-                break;
-            case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
-
-                continue;
-            case GetSeriesResult_PermissionError:
-                RedisModule_Log(ctx,
-                                "warning",
-                                "The user lacks the required permissions for the key, stopping.");
-                exitStatus = REDISMODULE_ERR;
-
-                goto exit;
-        }
-    }
-
-    RedisModule_DictIteratorStop(iter);
-    iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        const GetSeriesResult status =
-            GetSeries(ctx,
-                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                      &key,
-                      &series,
-                      REDISMODULE_READ,
-                      flags);
-        if (status != GetSeriesResult_Success) {
-            // The iterator may have been invalidated, stop and restart from after the current
-            // key.
-            RedisModule_DictIteratorStop(iter);
-            iter = RedisModule_DictIteratorStartC(result, ">", currentKey, currentKeyLen);
-            continue;
-        }
-
-        ResultSet_AddSerie(resultset, series, RedisModule_StringPtrLen(series->keyName, NULL));
-        RedisModule_CloseKey(key);
-    }
-    RedisModule_DictIteratorStop(iter);
-
-    // todo: this is duplicated in resultset.c
-    // Apply the reducer
-    ResultSet_ApplyReducer(ctx, resultset, &args->rangeArgs, &args->gropuByReducerArgs);
-
-    // Do not apply the aggregation on the resultset, do apply max results on the final result
-    RangeArgs minimizedArgs = args->rangeArgs;
-    minimizedArgs.startTimestamp = 0;
-    minimizedArgs.endTimestamp = UINT64_MAX;
-    minimizedArgs.aggregationArgs.aggregationClass = NULL;
-    minimizedArgs.aggregationArgs.timeDelta = 0;
-    minimizedArgs.filterByTSArgs.hasValue = false;
-    minimizedArgs.filterByValueArgs.hasValue = false;
-    minimizedArgs.latest = false;
-
-    replyResultSet(ctx,
-                   resultset,
-                   args->withLabels,
-                   (RedisModuleString **)args->limitLabels,
-                   args->numLimitLabels,
-                   &minimizedArgs,
-                   args->reverse);
-exit:
-    ResultSet_Free(resultset);
-    return exitStatus;
-}
-
 // Previous multirange reply logic ( unchanged )
 static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                                     RedisModuleDict *result,
@@ -477,6 +389,103 @@ exit:
     return exitStatus;
 }
 
+// Streaming grouped path — sync. Feed each matched series into the
+// StreamingResultSet then close+release the key immediately. After the dict
+// is drained, finalize+emit. Unsupported reducers (TWA/FIRST/LAST/NONE) are
+// rejected at parse time by parseMultiSeriesReduceArgs, so this only ever
+// runs for streamable reducers.
+static int replyGroupedMultiRangeStreaming(RedisModuleCtx *ctx,
+                                           TS_StreamingResultSet *rs,
+                                           RedisModuleDict *result,
+                                           const MRangeArgs *args,
+                                           RedisModuleString *async_user_name) {
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    const GetSeriesFlags flags =
+        async_user_name ? GetSeriesFlags_SilentOperation
+                        : (GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls);
+    int exitStatus = REDISMODULE_OK;
+
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleString *keyStr = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        if (async_user_name &&
+            !CheckKeyIsAllowedByAclsForUser(async_user_name, keyStr, REDISMODULE_CMD_KEY_ACCESS)) {
+            RedisModule_Log(
+                ctx, "warning", "The user lacks the required permissions for the key, stopping.");
+            exitStatus = REDISMODULE_ERR;
+            break;
+        }
+        RedisModuleKey *key;
+        Series *series;
+        const GetSeriesResult status =
+            GetSeries(ctx, keyStr, &key, &series, REDISMODULE_READ, flags);
+        switch (status) {
+            case GetSeriesResult_Success:
+                StreamingResultSet_FeedSeries(rs, series);
+                RedisModule_CloseKey(key);
+                break;
+            case GetSeriesResult_GenericError:
+                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
+                continue;
+            case GetSeriesResult_PermissionError:
+                RedisModule_Log(ctx,
+                                "warning",
+                                "The user lacks the required permissions for the key, stopping.");
+                exitStatus = REDISMODULE_ERR;
+                goto done;
+        }
+    }
+done:
+    RedisModule_DictIteratorStop(iter);
+
+    if (exitStatus != REDISMODULE_OK) {
+        StreamingResultSet_Free(rs);
+        return RTS_ReplyKeyPermissionsError(ctx);
+    }
+
+    StreamingResultSet_FinalizeAndReply(ctx,
+                                        rs,
+                                        args->withLabels,
+                                        (RedisModuleString **)args->limitLabels,
+                                        args->numLimitLabels,
+                                        args->reverse);
+    return REDISMODULE_OK;
+}
+
+// Whether the multi-key TS commands can take the async/prefetch path. Async
+// requires:
+//   (a) the RoF prefetch APIs are linked,
+//   (b) bigredis is actually enabled at runtime,
+//   (c) the caller permits blocking (no LUA / MULTI / DENY_BLOCKING).
+static bool can_use_async_prefetch(RedisModuleCtx *ctx) {
+    if (RedisModule_SwapPrefetchKey == NULL || RedisModule_IsKeyInRam == NULL ||
+        !bigredis_enabled) {
+        return false;
+    }
+    int flags = RedisModule_GetContextFlags(ctx);
+    return !(flags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                      REDISMODULE_CTX_FLAGS_DENY_BLOCKING));
+}
+
+// SYNC mrange — walk the result dict directly through the existing reply
+// helpers. args->limitLabels and groupByLabel stay ctx-tied (AutoMemory cleans
+// them up on return); no heap MRangeAsyncCtx needed. Takes ownership of
+// `resultSeries` and `args` (frees both before returning).
+static int reply_mrange_sync(RedisModuleCtx *ctx, RedisModuleDict *resultSeries, MRangeArgs *args) {
+    int result;
+    if (args->groupByLabel) {
+        TS_StreamingResultSet *rs = StreamingResultSet_Create(
+            args->groupByLabel, &args->gropuByReducerArgs, &args->rangeArgs);
+        result = replyGroupedMultiRangeStreaming(ctx, rs, resultSeries, args, NULL);
+    } else {
+        result = replyUngroupedMultiRange(ctx, resultSeries, args);
+    }
+    RedisModule_FreeDict(ctx, resultSeries);
+    MRangeArgs_Free(args);
+    return result;
+}
+
 int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     RedisModule_AutoMemory(ctx);
 
@@ -492,22 +501,16 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 
     if (hasPermissionError) {
         MRangeArgs_Free(&args);
+        if (resultSeries)
+            RedisModule_FreeDict(ctx, resultSeries);
         RTS_ReplyKeyPermissionsError(ctx);
         return REDISMODULE_ERR;
     }
 
-    int result = REDISMODULE_OK;
-    if (args.groupByLabel) {
-        TS_ResultSet *resultset = ResultSet_Create();
-        ResultSet_GroupbyLabel(resultset, args.groupByLabel);
-
-        result = replyGroupedMultiRange(ctx, resultset, resultSeries, &args);
-    } else {
-        result = replyUngroupedMultiRange(ctx, resultSeries, &args);
+    if (!can_use_async_prefetch(ctx)) {
+        return reply_mrange_sync(ctx, resultSeries, &args);
     }
-
-    MRangeArgs_Free(&args);
-    return result;
+    return MRange_ReplyAsync(ctx, resultSeries, &args);
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -1237,6 +1240,98 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+// Emits the reply for a single matched key against a free-floating set of
+// inputs (key string, args view, running reply counter).
+// `async_user_name` is non-NULL when called from the async batch path
+// (reply_ctx has no client → ctx-based ACL would warn-and-allow). NULL on
+// the sync path — original ctx-based ACL via GetSeries flag.
+// Non-static: also called by the async batch path in prefetch_commands.c
+// (declared in prefetch_commands.h).
+void mget_emit_for_key(RedisModuleCtx *ctx,
+                       RedisModuleString *key,
+                       const MGetArgs *args,
+                       long long *replylen,
+                       RedisModuleString *async_user_name) {
+    if (async_user_name &&
+        !CheckKeyIsAllowedByAclsForUser(async_user_name, key, REDISMODULE_CMD_KEY_ACCESS)) {
+        RedisModule_Log(
+            ctx, "warning", "The user lacks the required permissions for the key, skipping.");
+        return;
+    }
+    const GetSeriesFlags flags =
+        async_user_name ? GetSeriesFlags_SilentOperation
+                        : (GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls);
+    RedisModuleKey *rkey;
+    Series *series;
+    const GetSeriesResult status = GetSeries(ctx, key, &rkey, &series, REDISMODULE_READ, flags);
+    if (status == GetSeriesResult_PermissionError) {
+        // The reply was already started with POSTPONED_ARRAY_LEN, so we can't
+        // bail with an error the way the legacy ACL pre-check did. Log + skip
+        // so the ACL-revoked-mid-query race is observable in the server log.
+        RedisModule_Log(
+            ctx, "warning", "The user lacks the required permissions for the key, skipping.");
+        return;
+    }
+    if (status != GetSeriesResult_Success)
+        return;
+
+    if (!_ReplyMap(ctx)) {
+        RedisModule_ReplyWithArray(ctx, 3);
+    }
+    size_t klen;
+    const char *kbuf = RedisModule_StringPtrLen(key, &klen);
+    RedisModule_ReplyWithStringBuffer(ctx, kbuf, klen);
+    if (_ReplyMap(ctx)) {
+        RedisModule_ReplyWithArray(ctx, 2);
+    }
+    if (args->withLabels) {
+        ReplyWithSeriesLabels(ctx, series);
+    } else if (args->numLimitLabels > 0) {
+        ReplyWithSeriesLabelsWithLimit(
+            ctx, series, (RedisModuleString **)args->limitLabels, args->numLimitLabels);
+    } else {
+        RedisModule_ReplyWithMapOrArray(ctx, 0, false);
+    }
+    // LATEST is ignored for a series that is not a compaction.
+    bool should_finalize_last_bucket = should_finalize_last_bucket_get(args->latest, series);
+    if (should_finalize_last_bucket) {
+        Sample sample;
+        Sample *sample_ptr = &sample;
+        calculate_latest_sample(&sample_ptr, series);
+        if (sample_ptr) {
+            ReplyWithSample(ctx, sample.timestamp, sample.value);
+        } else {
+            ReplyWithSeriesLastDatapoint(ctx, series);
+        }
+    } else {
+        ReplyWithSeriesLastDatapoint(ctx, series);
+    }
+    (*replylen)++;
+    RedisModule_CloseKey(rkey);
+}
+
+// SYNC mget — walk the result dict directly. args->limitLabels stay ctx-tied
+// (AutoMemory frees on return). Takes ownership of `result` and `args` (frees
+// both before returning).
+static int mget_reply_sync(RedisModuleCtx *ctx, RedisModuleDict *result, MGetArgs *args) {
+    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    long long replylen = 0;
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleString *keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        mget_emit_for_key(ctx, keyName, args, &replylen, NULL);
+        // keyName freed by AutoMemory teardown when the command returns.
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
+
+    RedisModule_FreeDict(ctx, result);
+    MGetArgs_Free(args);
+    return REDISMODULE_OK;
+}
+
 int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (IsMRCluster()) {
         if (!IsCurrentUserAllowedToReadAllTheKeys(ctx)) {
@@ -1262,119 +1357,24 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    const char **limitLabelsStr = calloc(args.numLimitLabels, sizeof(char *));
-    for (int i = 0; i < args.numLimitLabels; i++) {
-        limitLabelsStr[i] = RedisModule_StringPtrLen(args.limitLabels[i], NULL);
-    }
-
     bool hasPermissionError = false;
     RedisModuleDict *result = QueryIndex(
         ctx, args.queryPredicates->list, args.queryPredicates->count, &hasPermissionError);
 
     if (hasPermissionError) {
-        free(limitLabelsStr);
         MGetArgs_Free(&args);
         RedisModule_FreeDict(ctx, result);
         RTS_ReplyKeyPermissionsError(ctx);
         return REDISMODULE_ERR;
     }
 
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
-    Series *series;
-    int exitStatus = REDISMODULE_OK;
-    const GetSeriesFlags checkFlags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    // ACL filtering for the result dict already happened inside QueryIndex via
+    // the `&hasPermissionError` channel above
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        const GetSeriesResult status =
-            GetSeries(ctx,
-                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                      &key,
-                      &series,
-                      REDISMODULE_READ,
-                      checkFlags);
-
-        switch (status) {
-            case GetSeriesResult_Success:
-                RedisModule_CloseKey(key);
-                break;
-            case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
-                break;
-            case GetSeriesResult_PermissionError:
-                RedisModule_Log(ctx,
-                                "warning",
-                                "The user lacks the required permissions for the key, stopping.");
-
-                RTS_ReplyKeyPermissionsError(ctx);
-
-                exitStatus = REDISMODULE_ERR;
-                goto exit;
-        }
+    if (!can_use_async_prefetch(ctx)) {
+        return mget_reply_sync(ctx, result, &args);
     }
-
-    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
-    RedisModule_DictIteratorStop(iter);
-    iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-
-        const GetSeriesResult status =
-            GetSeries(ctx,
-                      RedisModule_CreateString(ctx, currentKey, currentKeyLen),
-                      &key,
-                      &series,
-                      REDISMODULE_READ,
-                      GetSeriesFlags_SilentOperation);
-
-        if (status != GetSeriesResult_Success) {
-            continue;
-        }
-
-        if (!_ReplyMap(ctx)) {
-            RedisModule_ReplyWithArray(ctx, 3);
-        }
-        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
-        if (_ReplyMap(ctx)) {
-            RedisModule_ReplyWithArray(ctx, 2);
-        }
-        if (args.withLabels) {
-            ReplyWithSeriesLabels(ctx, series);
-        } else if (args.numLimitLabels > 0) {
-            ReplyWithSeriesLabelsWithLimitC(ctx, series, limitLabelsStr, args.numLimitLabels);
-        } else {
-            RedisModule_ReplyWithMapOrArray(ctx, 0, false);
-        }
-        // LATEST is ignored for a series that is not a compaction.
-        bool should_finalize_last_bucket = should_finalize_last_bucket_get(args.latest, series);
-        if (should_finalize_last_bucket) {
-            Sample sample;
-            Sample *sample_ptr = &sample;
-            calculate_latest_sample(&sample_ptr, series);
-            if (sample_ptr) {
-                ReplyWithSample(ctx, sample.timestamp, sample.value);
-            } else {
-                ReplyWithSeriesLastDatapoint(ctx, series);
-            }
-        } else {
-            ReplyWithSeriesLastDatapoint(ctx, series);
-        }
-        replylen++;
-        RedisModule_CloseKey(key);
-    }
-
-exit:
-    if (exitStatus == REDISMODULE_OK) {
-        RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
-    }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(ctx, result);
-    MGetArgs_Free(&args);
-    free(limitLabelsStr);
-    return exitStatus;
+    return MGet_ReplyAsync(ctx, result, &args);
 }
 
 static inline bool is_obsolete(timestamp_t ts,
@@ -1700,6 +1700,38 @@ __attribute__((weak)) int (*RedisModule_SetDataTypeExtensions)(
     RedisModuleType *mt,
     RedisModuleTypeExtMethods *typemethods) REDISMODULE_ATTR = NULL;
 
+__attribute__((weak)) int (*RedisModule_SwapPrefetchKey)(RedisModuleCtx *ctx,
+                                                         RedisModuleString *keyname,
+                                                         RedisModuleSwapPrefetchCB fn,
+                                                         void *user_data,
+                                                         int flags) REDISMODULE_ATTR = NULL;
+
+__attribute__((weak)) int (*RedisModule_IsKeyInRam)(RedisModuleCtx *ctx,
+                                                    RedisModuleString *key) REDISMODULE_ATTR = NULL;
+
+// Sampled once at module load (see detect_bigredis_enabled). bigredis-enabled is
+// a deployment-time setting on Redis Enterprise — not runtime-toggleable via
+// CONFIG SET — so the one-shot probe is never refreshed.
+bool bigredis_enabled = false;
+
+static bool detect_bigredis_enabled(RedisModuleCtx *ctx) {
+    RedisModuleCallReply *reply = RedisModule_Call(ctx, "CONFIG", "cc", "GET", "bigredis-enabled");
+    if (!reply)
+        return false;
+    bool enabled = false;
+    if (RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_ARRAY &&
+        RedisModule_CallReplyLength(reply) == 2) {
+        RedisModuleCallReply *val = RedisModule_CallReplyArrayElement(reply, 1);
+        size_t len = 0;
+        const char *str = RedisModule_CallReplyStringPtr(val, &len);
+        // CONFIG GET returns the canonical lowercase boolean ("yes"/"no"), so an
+        // exact-bytes compare is safe — no need to handle "YES"/"Yes".
+        enabled = (str && len == 3 && memcmp(str, "yes", 3) == 0);
+    }
+    RedisModule_FreeCallReply(reply);
+    return enabled;
+}
+
 int RedisModule_OnUnload(RedisModuleCtx *ctx) {
     if (rts_staticCtx) {
         FreeConfigAndStaticCtx();
@@ -1769,6 +1801,15 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                         RTS_RlecPatchVersion,
                         RTS_RlecBuild);
     }
+
+    bigredis_enabled = detect_bigredis_enabled(ctx);
+    RedisModule_Log(ctx,
+                    "notice",
+                    "Flex prefetch APIs available: SwapPrefetchKey=%s "
+                    "IsKeyInRam=%s bigredis_enabled=%s",
+                    RedisModule_SwapPrefetchKey ? "yes" : "no",
+                    RedisModule_IsKeyInRam ? "yes" : "no",
+                    bigredis_enabled ? "yes" : "no");
 
     if (RTS_CheckSupportedVestion() != REDISMODULE_OK) {
         RedisModule_Log(ctx,

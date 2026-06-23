@@ -24,6 +24,12 @@ def enableDefrag(env):
 def testDefrag(env):
     if VALGRIND:
         env.skip()
+    if BIGREDIS_TESTS:
+        # Flex stores most data on flash with bigredis-max-ram-keys=5 (see
+        # includes.py). The in-RAM working set is too small to produce
+        # meaningful jemalloc fragmentation, making the tight threshold
+        # check flaky (observed: 1.02 vs 1.018 expected).
+        env.skip()
     enableDefrag(env)
 
 

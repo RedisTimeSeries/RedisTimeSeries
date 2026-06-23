@@ -25,6 +25,9 @@
 #define IGNORE_MAX_TIME_DIFF_MAX LLONG_MAX
 #define IGNORE_MAX_VAL_DIFF_MIN 0.0
 #define IGNORE_MAX_VAL_DIFF_MAX DBL_MAX
+#define DEFAULT_PREFETCH_BATCH_SIZE 4
+#define PREFETCH_BATCH_SIZE_MIN 1
+#define PREFETCH_BATCH_SIZE_MAX 128
 
 typedef struct
 {
@@ -40,6 +43,7 @@ typedef struct
     bool dontAssertOnFailure;    // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample
     double ignoreMaxValDiff;     // Insert filter max value diff with the last sample
+    long long prefetchBatchSize; // Flex prefetch fan-in cap
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;

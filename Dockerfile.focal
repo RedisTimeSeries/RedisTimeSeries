@@ -5,17 +5,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update -qq \
     && apt upgrade -yqq \
-    && apt install -yqq wget make clang-format gcc lcov git openssl libssl-dev \
+    && apt install -yqq wget make clang-format gcc lcov git openssl libssl-dev zlib1g-dev \
     unzip rsync build-essential gcc-10 g++-10 cargo libclang-dev clang curl cmake jq automake libtool \
     && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 60 --slave /usr/bin/g++ g++ /usr/bin/g++-10
 
 COPY .install /workspace/.install
 
 # Install Redis (SANITIZER can be 'address' for ASAN builds)
-ARG REDIS_REF=unstable
 ARG SANITIZER=
 
-RUN chmod +x .install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} .install/install_redis.sh
+COPY redis-src /workspace/redis
+RUN chmod +x .install/install_redis.sh && \
+    SANITIZER=${SANITIZER} .install/install_redis.sh
+ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Install uv and Python environment
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh

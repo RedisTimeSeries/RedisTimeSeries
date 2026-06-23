@@ -24,6 +24,7 @@ capabilities:
     - intershard_tls
     - intershard_tls_pass
     - flash
+    - bigstore_version_2
     - ipv6
 exclude_commands:
     - timeseries.REFRESHCLUSTER

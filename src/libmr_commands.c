@@ -8,6 +8,7 @@
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
+#include "streaming_resultset.h"
 #include "utils/blocked_client.h"
 
 #include "rmutil/alloc.h"
@@ -329,7 +330,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
     long long len = MR_ExecutionCtxGetResultsLen(eCtx);
 
-    TS_ResultSet *resultset = NULL;
+    TS_StreamingResultSet *streaming_rs = NULL;
 
     // First pass: validate slot ownership metadata and compute total length if needed
     // (non-groupby).
@@ -363,14 +364,26 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         goto __done;
     }
 
+    // Grouped queries stream each shard's Series into a per-group accumulator
+    // and free it immediately, so coordinator-side heap stays bounded for wide
+    // cluster queries. Only streamable reducers can reach here —
+    // parseMultiSeriesReduceArgs (query_language.c) rejects TWA/FIRST/LAST up
+    // front — so no non-streaming fallback is needed.
     if (data->args.groupByLabel) {
-        resultset = ResultSet_Create();
-        ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
+        RangeArgs rargs = data->args.rangeArgs;
+        rargs.latest = false; // already handled on client side
+        streaming_rs = StreamingResultSet_Create(
+            data->args.groupByLabel, &data->args.gropuByReducerArgs, &rargs);
     } else {
         RedisModule_ReplyWithMapOrArray(rctx, total_len, false);
     }
 
-    Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
+    // tempSeries keeps ungrouped Series alive across the reply iteration.
+    // Grouped (streaming) frees each Series immediately after feeding.
+    Series **tempSeries = NULL;
+    if (!data->args.groupByLabel)
+        tempSeries = array_new(Record *, len);
+
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
@@ -390,11 +403,12 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                 continue;
             }
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
-            tempSeries = array_append(tempSeries, s);
 
             if (data->args.groupByLabel) {
-                ResultSet_AddSerie(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
+                StreamingResultSet_FeedSeries(streaming_rs, s);
+                FreeSeries(s); // Done with this series; release coordinator heap.
             } else {
+                tempSeries = array_append(tempSeries, s);
                 ReplySeriesArrayPos(rctx,
                                     s,
                                     data->args.withLabels,
@@ -408,33 +422,18 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     }
 
     if (data->args.groupByLabel) {
-        // Apply the reducer
-        RangeArgs args = data->args.rangeArgs;
-        args.latest = false; // we already handled the latest flag in the client side
-        ResultSet_ApplyReducer(rctx, resultset, &args, &data->args.gropuByReducerArgs);
-
-        // Do not apply the aggregation on the resultset, do apply max results on the final result
-        RangeArgs minimizedArgs = data->args.rangeArgs;
-        minimizedArgs.startTimestamp = 0;
-        minimizedArgs.endTimestamp = UINT64_MAX;
-        minimizedArgs.aggregationArgs.aggregationClass = NULL;
-        minimizedArgs.aggregationArgs.timeDelta = 0;
-        minimizedArgs.filterByTSArgs.hasValue = false;
-        minimizedArgs.filterByValueArgs.hasValue = false;
-        minimizedArgs.latest = false;
-
-        replyResultSet(rctx,
-                       resultset,
-                       data->args.withLabels,
-                       data->args.limitLabels,
-                       data->args.numLimitLabels,
-                       &minimizedArgs,
-                       data->args.reverse);
-
-        ResultSet_Free(resultset);
+        StreamingResultSet_FinalizeAndReply(rctx,
+                                            streaming_rs,
+                                            data->args.withLabels,
+                                            data->args.limitLabels,
+                                            data->args.numLimitLabels,
+                                            data->args.reverse);
+        // FinalizeAndReply freed streaming_rs.
     }
-    array_foreach(tempSeries, x, FreeSeries(x));
-    array_free(tempSeries);
+    if (tempSeries) {
+        array_foreach(tempSeries, x, FreeSeries(x));
+        array_free(tempSeries);
+    }
 
 __done:
     MRangeArgs_Free(&data->args);

@@ -331,6 +331,8 @@ static long long getModernIntegerConfigValue(const char *name, void *privdata) {
         return TSGlobalConfig.chunkSizeBytes;
     } else if (!strcasecmp("ts-ignore-max-time-diff", name)) {
         return TSGlobalConfig.ignoreMaxTimeDiff;
+    } else if (!strcasecmp("ts-prefetch-batch-size", name)) {
+        return TSGlobalConfig.prefetchBatchSize;
     }
 
     return 0;
@@ -364,6 +366,10 @@ static int setModernIntegerConfigValue(const char *name,
         }
 
         TSGlobalConfig.ignoreMaxTimeDiff = value;
+
+        return REDISMODULE_OK;
+    } else if (!strcasecmp("ts-prefetch-batch-size", name)) {
+        TSGlobalConfig.prefetchBatchSize = value;
 
         return REDISMODULE_OK;
     }
@@ -414,6 +420,27 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
 
     RedisModule_Log(
         ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-num-threads", 12, TSGlobalConfig.numThreads);
+
+    if (RedisModule_RegisterNumericConfig(ctx,
+                                          "ts-prefetch-batch-size",
+                                          TSGlobalConfig.prefetchBatchSize,
+                                          REDISMODULE_CONFIG_UNPREFIXED,
+                                          PREFETCH_BATCH_SIZE_MIN,
+                                          PREFETCH_BATCH_SIZE_MAX,
+                                          getModernIntegerConfigValue,
+                                          setModernIntegerConfigValue,
+                                          NULL,
+                                          NULL)) {
+        return false;
+    }
+
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*lld }",
+                    23,
+                    "ts-prefetch-batch-size",
+                    12,
+                    TSGlobalConfig.prefetchBatchSize);
 
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-retention-policy",
@@ -713,6 +740,7 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
     } else {
         TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
     }
+    TSGlobalConfig.prefetchBatchSize = DEFAULT_PREFETCH_BATCH_SIZE;
     TSGlobalConfig.forceSaveCrossRef = false;
     if (argc > 1 && RMUtil_ArgIndex("DEUBG_FORCE_RULE_DUMP", argv, argc) >= 0) {
         RedisModuleString *forceSaveCrossRef;

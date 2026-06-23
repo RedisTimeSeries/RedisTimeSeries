@@ -14,9 +14,17 @@
 
 RedisModuleBlockedClient *RTS_BlockClient(RedisModuleCtx *ctx,
                                           void (*free_privdata)(RedisModuleCtx *, void *)) {
+    return RTS_BlockClientTimeout(ctx, free_privdata, NULL, 0);
+}
+
+RedisModuleBlockedClient *RTS_BlockClientTimeout(RedisModuleCtx *ctx,
+                                                 void (*free_privdata)(RedisModuleCtx *, void *),
+                                                 RedisModuleCmdFunc timeout_cb,
+                                                 long long timeout_ms) {
     assert(ctx != NULL);
 
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, free_privdata, 0);
+    RedisModuleBlockedClient *bc =
+        RedisModule_BlockClient(ctx, NULL, timeout_cb, free_privdata, timeout_ms);
     if (CheckVersionForBlockedClientMeasureTime()) {
         // report block client start time
         RedisModule_BlockedClientMeasureTimeStart(bc);

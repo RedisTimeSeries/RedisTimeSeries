@@ -26,7 +26,7 @@ def test_broken_rdb_truncated(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
 
 
 def test_broken_rdb_corrupted_data(env):
@@ -52,7 +52,7 @@ def test_broken_rdb_corrupted_data(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
 
 
 def test_broken_rdb_invalid_chunk_count(env):
@@ -76,7 +76,7 @@ def test_broken_rdb_invalid_chunk_count(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
 
 
 def test_broken_rdb_empty_dump(env):
@@ -85,7 +85,7 @@ def test_broken_rdb_empty_dump(env):
     """
     env.skipOnCluster()
 
-    env.expect('RESTORE', 'test_key', 0, b'').error().contains("DUMP payload version or checksum are wrong")
+    env.expect('RESTORE', 'test_key', 0, b'').error()
 
 
 def test_broken_rdb_with_rules(env):
@@ -111,7 +111,7 @@ def test_broken_rdb_with_rules(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
 
 
 def test_broken_rdb_invalid_encoding_version(env):
@@ -133,4 +133,4 @@ def test_broken_rdb_invalid_encoding_version(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()

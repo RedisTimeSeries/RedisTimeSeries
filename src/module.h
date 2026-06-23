@@ -101,6 +101,27 @@ static inline bool CheckKeyIsAllowedToReadWriteC(RedisModuleCtx *ctx,
         ctx, keyName, keyNameLength, REDISMODULE_CMD_KEY_ACCESS | REDISMODULE_CMD_KEY_UPDATE);
 }
 
+/// @brief Check whether `user_name` (captured on the original command ctx) is
+/// allowed to access `keyName` with `permissionFlags`. Use this on the async
+/// emit path, where the thread-safe ctx has no client → no current user and
+/// the standard `GetCurrentUser(ctx)` would return NULL.
+///
+/// Returns false when the user vanished (deleted between command entry and
+/// emit) or when the ACL explicitly denies the key. Returns true on allow.
+static inline bool CheckKeyIsAllowedByAclsForUser(RedisModuleString *user_name,
+                                                  RedisModuleString *keyName,
+                                                  const int permissionFlags) {
+    if (!user_name)
+        return false;
+    RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(user_name);
+    if (!user)
+        return false;
+    const bool allowed =
+        (RedisModule_ACLCheckKeyPermissions(user, keyName, permissionFlags) == REDISMODULE_OK);
+    RedisModule_FreeModuleUser(user);
+    return allowed;
+}
+
 // Returns true if the user is allowed to read all the keys.
 static inline bool IsUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx,
                                                  struct RedisModuleUser *user) {
@@ -146,5 +167,6 @@ int CreateTsKey(RedisModuleCtx *ctx,
 bool CheckVersionForBlockedClientMeasureTime();
 
 extern int persistence_in_progress;
+extern bool bigredis_enabled;
 
 #endif // MODULE_H

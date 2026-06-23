@@ -13,7 +13,12 @@ def Refresh_Cluster(env):
             continue
         if not any(module for module in modules if (module[1] == b'timeseries' or module[1] == 'timeseries')):
             break
-        con.execute_command('timeseries.REFRESHCLUSTER')
+        try:
+            con.execute_command('timeseries.REFRESHCLUSTER')
+        except Exception:
+            # Not registered on Enterprise/RLEC — RLEC manages cluster topology
+            # itself, see deps/LibMR/src/cluster.c:1485. Safe to ignore.
+            pass
 
 def set_hertz(env):
     if RLEC_CLUSTER:

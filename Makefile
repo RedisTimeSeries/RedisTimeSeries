@@ -159,6 +159,7 @@ define _SOURCES
 	rdb.c
 	short_read.c
 	resultset.c
+	streaming_resultset.c
 	tsdb.c
 	series_iterator.c
 	utils/arch_features.c
@@ -169,6 +170,8 @@ define _SOURCES
 	multiseries_agg_dup_sample_iterator.c
 	utils/blocked_client.c
 	cmd_info/ts_info.c
+	prefetch.c
+	prefetch_commands.c
 endef
 
 ifeq ($(ARCH),x64)

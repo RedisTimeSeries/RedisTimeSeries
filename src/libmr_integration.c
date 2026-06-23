@@ -7,6 +7,8 @@
 #include "consts.h"
 #include "generic_chunk.h"
 #include "indexer.h"
+#include "module.h"
+#include "prefetch.h"
 #include "query_language.h"
 #include "tsdb.h"
 
@@ -500,6 +502,72 @@ Record *ListWithSeriesLastDatapoint(const Series *series, bool latest, bool resp
 #define should_finalize_last_bucket(pred, series)                                                  \
     ((pred)->latest && (series)->srcKey && (pred)->endTimestamp > (series)->lastTimestamp)
 
+// Materialize this shard's slot-owned keys from `result` into a freshly
+// malloc'd RedisModuleString* array, then free `result`. The slot is computed
+// from the raw dict-key bytes (RedisModule_ClusterKeySlotC) so foreign keys
+// this shard doesn't own never get a RedisModuleString allocated — only owned
+// keys are materialized and returned. Caller frees each returned string and
+// the array; *out_nkeys receives the number of owned keys.
+static RedisModuleString **collect_owned_keys_as_strings(RedisModuleCtx *ctx,
+                                                         RedisModuleDict *result,
+                                                         const SlotRangeRecord *slotRanges,
+                                                         size_t slotRangesCount,
+                                                         size_t *out_nkeys) {
+    RedisModuleString **keys = malloc(RedisModule_DictSize(result) * sizeof(*keys));
+    size_t n = 0;
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModuleString *keyName = NULL;
+        unsigned int slot;
+        if (RedisModule_ClusterKeySlotC != NULL) {
+            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
+        } else {
+            keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+            slot = RedisModule_ClusterKeySlot(keyName);
+        }
+        if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
+            if (keyName)
+                RedisModule_FreeString(ctx, keyName);
+            continue;
+        }
+        if (!keyName)
+            keyName = RedisModule_CreateString(ctx, currentKey, currentKeyLen);
+        keys[n++] = keyName;
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_FreeDict(ctx, result);
+    *out_nkeys = n;
+    return keys;
+}
+
+// Per-key state + callback for ShardSeriesMapper's batched prefetch loop
+// (driven by ForEachKeyWithSyncPrefetch).
+typedef struct ShardSeriesMapState
+{
+    Record *series_list;
+    QueryPredicates_Arg *predicates;
+    GetSeriesFlags flags;
+} ShardSeriesMapState;
+
+static void shard_series_emit_key(RedisModuleCtx *ctx, RedisModuleString *keyStr, void *user_data) {
+    ShardSeriesMapState *st = user_data;
+    RedisModuleKey *key;
+    Series *series;
+    const GetSeriesResult status =
+        GetSeries(ctx, keyStr, &key, &series, REDISMODULE_READ, st->flags);
+    if (status != GetSeriesResult_Success) {
+        RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
+        return;
+    }
+    ListRecord_Add(
+        st->series_list,
+        SeriesRecord_New(
+            series, st->predicates->startTimestamp, st->predicates->endTimestamp, st->predicates));
+    RedisModule_CloseKey(key);
+}
+
 Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     QueryPredicates_Arg *predicates = arg;
 
@@ -518,57 +586,95 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     RedisModuleDict *result = QueryIndex(
         rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
+    // Materialize this shard's slot-owned keys once, then iterate in batches:
+    // per batch, pre-warm only that slice via PrefetchKeysSync, then GetSeries
+    // + build record + CloseKey, then move on. Bigredis evicts the previous
+    // batch's keys under cap pressure before the next prefetch burst, bounding
+    // peak resident-set to ~batch_size * per-key-size instead of the full
+    // keyset.
+    size_t nkeys;
+    RedisModuleString **keys =
+        collect_owned_keys_as_strings(rts_staticCtx, result, slotRanges, slotRangesCount, &nkeys);
 
-    Series *series;
     Record *series_list = ListRecord_Create(0);
-    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    ShardSeriesMapState st = {
+        .series_list = series_list,
+        .predicates = predicates,
+        .flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls,
+    };
+    ForEachKeyWithSyncPrefetch(
+        rts_staticCtx, keys, nkeys, TSGlobalConfig.prefetchBatchSize, shard_series_emit_key, &st);
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        RedisModuleString *keyName = NULL;
-        unsigned int slot = 0;
-        if (RedisModule_ClusterKeySlotC != NULL) {
-            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
-        } else {
-            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-            slot = RedisModule_ClusterKeySlot(keyName);
-        }
-        if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
-            if (keyName) {
-                RedisModule_FreeString(rts_staticCtx, keyName);
-            }
-            continue;
-        }
-        if (!keyName) {
-            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        }
-        const GetSeriesResult status =
-            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
-
-        RedisModule_FreeString(rts_staticCtx, keyName);
-
-        if (status != GetSeriesResult_Success) {
-            RedisModule_Log(
-                rts_staticCtx, "warning", "couldn't open key or key is not a Timeseries.");
-            continue;
-        }
-
-        ListRecord_Add(
-            series_list,
-            SeriesRecord_New(
-                series, predicates->startTimestamp, predicates->endTimestamp, predicates));
-
-        RedisModule_CloseKey(key);
+    for (size_t i = 0; i < nkeys; i++) {
+        RedisModule_FreeString(rts_staticCtx, keys[i]);
     }
-
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
+    free(keys);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
     return &ShardEnvelopeRecord_Create(slotRanges, slotRangesCount, series_list)->base;
+}
+
+// Per-key state + callback for ShardMgetMapper's batched prefetch loop
+// (driven by ForEachKeyWithSyncPrefetch).
+typedef struct ShardMgetMapState
+{
+    Record *series_listOrMap;
+    QueryPredicates_Arg *predicates;
+    const char **limitLabelsStr;
+    GetSeriesFlags flags;
+} ShardMgetMapState;
+
+static void shard_mget_emit_key(RedisModuleCtx *ctx, RedisModuleString *keyStr, void *user_data) {
+    ShardMgetMapState *st = user_data;
+    QueryPredicates_Arg *predicates = st->predicates;
+    size_t klen;
+    const char *kstr = RedisModule_StringPtrLen(keyStr, &klen);
+    RedisModuleKey *key;
+    Series *series;
+    const GetSeriesResult status =
+        GetSeries(ctx, keyStr, &key, &series, REDISMODULE_READ, st->flags);
+    if (status != GetSeriesResult_Success) {
+        RedisModule_Log(ctx, "warning", "couldn't open key or key is not a Timeseries.");
+        return;
+    }
+
+    if (predicates->resp3) {
+        MapRecord_Add(st->series_listOrMap, StringRecord_Create(strndup(kstr, klen), klen));
+        Record *list_record = ListRecord_Create(2);
+        if (predicates->withLabels) {
+            ListRecord_Add(list_record, ListSeriesLabels_resp3(series));
+        } else if (predicates->limitLabelsSize > 0) {
+            ListRecord_Add(list_record,
+                           ListSeriesLabelsWithLimit_rep3(series,
+                                                          st->limitLabelsStr,
+                                                          predicates->limitLabels,
+                                                          predicates->limitLabelsSize));
+        } else {
+            ListRecord_Add(list_record, MapRecord_Create(0));
+        }
+        ListRecord_Add(list_record,
+                       ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
+        RedisModule_CloseKey(key);
+        ListRecord_Add(st->series_listOrMap, list_record);
+    } else {
+        Record *key_record = ListRecord_Create(3);
+        ListRecord_Add(key_record, StringRecord_Create(strndup(kstr, klen), klen));
+        if (predicates->withLabels) {
+            ListRecord_Add(key_record, ListSeriesLabels(series));
+        } else if (predicates->limitLabelsSize > 0) {
+            ListRecord_Add(key_record,
+                           ListSeriesLabelsWithLimit(series,
+                                                     st->limitLabelsStr,
+                                                     predicates->limitLabels,
+                                                     predicates->limitLabelsSize));
+        } else {
+            ListRecord_Add(key_record, ListRecord_Create(0));
+        }
+        ListRecord_Add(key_record,
+                       ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
+        RedisModule_CloseKey(key);
+        ListRecord_Add(st->series_listOrMap, key_record);
+    }
 }
 
 Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
@@ -594,11 +700,12 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RedisModuleDict *result = QueryIndex(
         rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
+    // Same batched-prefetch pattern as ShardSeriesMapper — see comment there
+    // for the memory-pressure rationale.
+    size_t nkeys;
+    RedisModuleString **keys =
+        collect_owned_keys_as_strings(rts_staticCtx, result, slotRanges, slotRangesCount, &nkeys);
 
-    Series *series;
     Record *series_listOrMap;
     if (predicates->resp3) {
         series_listOrMap = MapRecord_Create(0);
@@ -606,85 +713,19 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         series_listOrMap = ListRecord_Create(0);
     }
 
-    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    ShardMgetMapState st = {
+        .series_listOrMap = series_listOrMap,
+        .predicates = predicates,
+        .limitLabelsStr = limitLabelsStr,
+        .flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls,
+    };
+    ForEachKeyWithSyncPrefetch(
+        rts_staticCtx, keys, nkeys, TSGlobalConfig.prefetchBatchSize, shard_mget_emit_key, &st);
 
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModuleKey *key;
-        RedisModuleString *keyName = NULL;
-        unsigned int slot = 0;
-        if (RedisModule_ClusterKeySlotC != NULL) {
-            slot = RedisModule_ClusterKeySlotC(currentKey, currentKeyLen);
-        } else {
-            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-            slot = RedisModule_ClusterKeySlot(keyName);
-        }
-        if (!SlotInRanges(slot, slotRanges, slotRangesCount)) {
-            if (keyName) {
-                RedisModule_FreeString(rts_staticCtx, keyName);
-            }
-            continue;
-        }
-        if (!keyName) {
-            keyName = RedisModule_CreateString(rts_staticCtx, currentKey, currentKeyLen);
-        }
-        const GetSeriesResult status =
-            GetSeries(rts_staticCtx, keyName, &key, &series, REDISMODULE_READ, flags);
-        RedisModule_FreeString(rts_staticCtx, keyName);
-
-        if (status != GetSeriesResult_Success) {
-            RedisModule_Log(
-                rts_staticCtx, "warning", "couldn't open key or key is not a Timeseries.");
-            continue;
-        }
-
-        if (predicates->resp3) {
-            MapRecord_Add(series_listOrMap,
-                          StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
-            Record *list_record = ListRecord_Create(2);
-            if (predicates->withLabels) {
-                ListRecord_Add(list_record, ListSeriesLabels_resp3(series));
-            } else if (predicates->limitLabelsSize > 0) {
-                ListRecord_Add(list_record,
-                               ListSeriesLabelsWithLimit_rep3(series,
-                                                              limitLabelsStr,
-                                                              predicates->limitLabels,
-                                                              predicates->limitLabelsSize));
-            } else {
-                ListRecord_Add(list_record, MapRecord_Create(0));
-            }
-
-            ListRecord_Add(
-                list_record,
-                ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
-
-            RedisModule_CloseKey(key);
-            ListRecord_Add(series_listOrMap, list_record);
-        } else {
-            Record *key_record = ListRecord_Create(3);
-            ListRecord_Add(key_record,
-                           StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
-            if (predicates->withLabels) {
-                ListRecord_Add(key_record, ListSeriesLabels(series));
-            } else if (predicates->limitLabelsSize > 0) {
-                ListRecord_Add(key_record,
-                               ListSeriesLabelsWithLimit(series,
-                                                         limitLabelsStr,
-                                                         predicates->limitLabels,
-                                                         predicates->limitLabelsSize));
-            } else {
-                ListRecord_Add(key_record, ListRecord_Create(0));
-            }
-
-            ListRecord_Add(
-                key_record,
-                ListWithSeriesLastDatapoint(series, predicates->latest, predicates->resp3));
-
-            RedisModule_CloseKey(key);
-            ListRecord_Add(series_listOrMap, key_record);
-        }
+    for (size_t i = 0; i < nkeys; i++) {
+        RedisModule_FreeString(rts_staticCtx, keys[i]);
     }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
+    free(keys);
     free(limitLabelsStr);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
