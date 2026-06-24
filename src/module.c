@@ -2223,6 +2223,18 @@ void persistCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subeven
     return;
 }
 
+/* Re-sync the LibMR slot map at a slot-migration / reshard boundary. This is a
+ * lightweight, connection-preserving slot-map update: at a migration boundary the
+ * set of primaries is unchanged, so there is nothing to reconnect, and it
+ * self-upgrades to a full rebuild only if a new shard turns out to have appeared.
+ * It is a belt-and-suspenders refresh: the live RedisModuleEvent_ClusterTopologyChange
+ * notifications already keep the map current throughout the migration -- an
+ * in-place reshard fires SLOT-only changes, which LibMR applies as a map-only
+ * update that does not disrupt in-flight cross-shard queries. */
+static void resyncClusterSlotMap(void) {
+    MR_ClusterRefreshTopology(REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_SLOT);
+}
+
 void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
     /**
      * On sharding event we need to do couple of things depends on the subevent given:
@@ -2258,35 +2270,50 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_ENDED:
             RedisModule_Log(ctx, "notice", "%s", "Got trimming ended event, exit trimming phase.");
             isReshardTrimming = false;
+            resyncClusterSlotMap();
             break;
         default:
             RedisModule_Log(rts_staticCtx, "warning", "Bad subevent given, ignored.");
     }
 }
 
-/* Fired, in OSS cluster mode, whenever the cluster topology changes: on startup,
- * on resharding (slot ownership / node membership) and on failover (a primary
- * changed). We simply refresh the LibMR view of the cluster so keyless
- * multi-shard commands (TS.MGET, TS.MRANGE, TS.MREVRANGE, TS.QUERYINDEX) keep
- * aggregating across all shards, without the operator having to call the
- * internal TIMESERIES.REFRESHCLUSTER on every primary. The refresh is a no-op
- * outside OSS cluster mode (under Enterprise the DMC drives topology via
- * CLUSTERSET), so it is safe to subscribe unconditionally. */
+/* Fired, in OSS cluster mode, whenever the cluster topology changes. We refresh the
+ * LibMR view of the cluster so keyless multi-shard commands (TS.MGET, TS.MRANGE,
+ * TS.MREVRANGE, TS.QUERYINDEX) keep aggregating across all shards and slot-routed
+ * multi-shard commands keep routing correctly, without the operator having to call
+ * the internal TIMESERIES.REFRESHCLUSTER on every primary.
+ *
+ * The event carries a 'change_flags' reason bitmask that we hand straight to LibMR,
+ * which picks the cheapest refresh that stays correct: a NODE/ROLE/STATE reason (a
+ * node joined/left, a failover, or an OK/FAIL transition) may change the set of
+ * primaries and triggers a full rebuild that reconnects, while a SLOT-only change
+ * (an in-place reshard) updates just the slot->node routing and keeps the existing
+ * connections -- so a reshard does not tear down and abort in-flight cross-shard
+ * queries. That distinction is what lets us refresh live during a migration instead
+ * of suppressing it: an in-place reshard is non-disruptive, and a genuine
+ * membership/role change must be applied to route correctly.
+ *
+ * The refresh is a no-op outside OSS cluster mode (under Enterprise the DMC drives
+ * topology via CLUSTERSET), so it is safe to subscribe unconditionally. */
 void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
                                    RedisModuleEvent eid,
                                    uint64_t subevent,
                                    void *data) {
+    REDISMODULE_NOT_USED(subevent); /* The event has no subevents. */
     if (eid.id != REDISMODULE_EVENT_CLUSTER_TOPOLOGY_CHANGE) {
         RedisModule_Log(
             rts_staticCtx, "warning", "Bad event given (id=%" PRIu64 "), ignored.", eid.id);
         return;
     }
-    /* Logged at verbose: a reshard issues CLUSTER SETSLOT per slot, so this can
-     * fire thousands of times; the actual (coalesced) refresh is logged by LibMR. */
+    int change_flags = 0;
+    if (data != NULL) {
+        const RedisModuleClusterTopologyChangeInfo *info = data;
+        change_flags = (int)info->change_flags;
+    }
     RedisModule_Log(ctx, "verbose",
-                    "Got cluster topology change event (subevent=%" PRIu64
-                    "), scheduling cluster topology refresh.", subevent);
-    MR_ClusterRefreshTopology();
+                    "Got cluster topology change event (change_flags=0x%x), scheduling cluster topology refresh.",
+                    change_flags);
+    MR_ClusterRefreshTopology(change_flags);
 }
 
 void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
@@ -2310,6 +2337,7 @@ void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
                             "Cluster ASM import failed (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmImporting = false;
+            resyncClusterSlotMap();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_IMPORT_COMPLETED:
             RedisModule_Log(ctx,
@@ -2317,6 +2345,7 @@ void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
                             "Cluster ASM import completed (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmImporting = false;
+            resyncClusterSlotMap();
             break;
         case REDISMODULE_SUBEVENT_CLUSTER_SLOT_MIGRATION_MIGRATE_STARTED:
             RedisModule_Log(ctx,
@@ -2374,6 +2403,7 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
                             "Cluster ASM trim completed (subevent=%" PRIu64 ") received.",
                             subevent);
             isAsmTrimming = false;
+            resyncClusterSlotMap();
             break;
         // Since we subscribed to keyspace event REDISMODULE_NOTIFY_KEY_TRIMMED
         // an active trimming will be used so no need to handle the
