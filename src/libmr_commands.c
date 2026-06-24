@@ -196,18 +196,9 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
-    // For aggregation queries, shards applied FILTERBY per-series before reducing; the
-    // coordinator must not re-apply it.  For plain queries, shards return raw samples and
-    // the coordinator is responsible for FILTERBY.
-    RangeArgs coordArgs;
-    const RangeArgs *replyArgs;
-    if (args->rangeArgs.aggregationArgs.numClasses > 0) {
-        coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
-        replyArgs = &coordArgs;
-    } else {
-        coordArgs = args->rangeArgs;
-        replyArgs = &args->rangeArgs;
-    }
+    // Shards always apply FILTERBY (aggregation or not); the coordinator must not re-apply it.
+    RangeArgs coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
+    const RangeArgs *replyArgs = &coordArgs;
 
     array_foreach(nodesResults, record, {
         ARR(Series *) sl = record->seriesList;
@@ -639,6 +630,9 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     queryArg->userName = CopyCurrentUserName(ctx);
+    // Always send FILTERBY to shards; they apply it regardless of aggregation.
+    queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
+    queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;
     // Push aggregation to every shard for all cases (single-agg and multi-agg).
     // Multi-agg + GROUPBY is rejected at parse time, so no special case is needed.
     if (args.rangeArgs.aggregationArgs.numClasses > 0) {
@@ -650,8 +644,6 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         queryArg->aggEmpty = args.rangeArgs.aggregationArgs.empty;
         queryArg->alignment = args.rangeArgs.alignment;
         queryArg->timestampAlignment = args.rangeArgs.timestampAlignment;
-        queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
-        queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;
     } else {
         queryArg->numAggClasses = 0;
     }

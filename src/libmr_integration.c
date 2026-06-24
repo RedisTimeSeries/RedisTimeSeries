@@ -832,8 +832,8 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.rangeArgs.aggregationArgs.bucketTS = BucketStartTimestamp;
     mrangeArgs.rangeArgs.aggregationArgs.numClasses = 0;
     mrangeArgs.rangeArgs.aggregationArgs.classes = NULL;
-    mrangeArgs.rangeArgs.filterByValueArgs.hasValue = false;
-    mrangeArgs.rangeArgs.filterByTSArgs.hasValue = false;
+    mrangeArgs.rangeArgs.filterByValueArgs = queryArg->filterByValueArgs;
+    mrangeArgs.rangeArgs.filterByTSArgs = queryArg->filterByTSArgs;
     mrangeArgs.rangeArgs.alignment = DefaultAlignment;
     mrangeArgs.rangeArgs.timestampAlignment = 0;
     mrangeArgs.rangeArgs.skipAggregation = false;
@@ -857,8 +857,6 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
         mrangeArgs.rangeArgs.aggregationArgs.timeDelta = queryArg->aggTimeDelta;
         mrangeArgs.rangeArgs.aggregationArgs.bucketTS = queryArg->aggBucketTS;
         mrangeArgs.rangeArgs.aggregationArgs.empty = queryArg->aggEmpty;
-        mrangeArgs.rangeArgs.filterByValueArgs = queryArg->filterByValueArgs;
-        mrangeArgs.rangeArgs.filterByTSArgs = queryArg->filterByTSArgs;
         mrangeArgs.rangeArgs.alignment = queryArg->alignment;
         mrangeArgs.rangeArgs.timestampAlignment = queryArg->timestampAlignment;
     }
