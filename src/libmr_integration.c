@@ -326,14 +326,7 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
         goto err;
     }
 
-    // per-shard aggregation fields — absent in old-format payloads.
-    // A read error here means the buffer is exhausted (old coordinator); return with zero agg
-    // fields, which are already zeroed by calloc. doPreAgg=false ignores them anyway.
     predicates->numAggClasses = MR_SerializationCtxReadLongLong(sctx, error);
-    if (*error) {
-        *error = NULL;
-        return predicates;
-    }
     if (predicates->numAggClasses > TS_AGG_TYPES_MAX) {
         goto err;
     }
@@ -825,7 +818,7 @@ static Record *SlotRangesReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES,
                                                         .replyParser = SlotRangesReplyParser };
 
-static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args, bool doPreAgg) {
+static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
 
     ApplyCtxUser(ctx, queryArg->userName);
@@ -855,7 +848,7 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args, bool doPreA
     mrangeArgs.reverse = false;
 
     AggregationClass *aggClasses[TS_AGG_TYPES_MAX] = { 0 };
-    if (doPreAgg && queryArg->numAggClasses > 0) {
+    if (queryArg->numAggClasses > 0) {
         for (size_t i = 0; i < queryArg->numAggClasses; i++) {
             aggClasses[i] = GetAggClass(queryArg->aggTypes[i]);
         }
@@ -878,13 +871,7 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args, bool doPreA
 }
 
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
-    TS_INTERNAL_MRANGE_impl(ctx, args, false);
-}
-
-// New inner shard command for the pre-aggregation path.
-// Old coordinators never send it, so mixed-version clusters get a clear "unknown command" error.
-static void TS_INTERNAL_MRANGE_AGG(RedisModuleCtx *ctx, void *args) {
-    TS_INTERNAL_MRANGE_impl(ctx, args, true);
+    TS_INTERNAL_MRANGE_impl(ctx, args);
 }
 
 // Parse one shard reply element into N Series (one per agg type).
@@ -1028,9 +1015,6 @@ static Record *SeriesListReplyParser(const redisReply *reply) {
 
 static InternalCommandCallbacks MrangeCallbacks = { .command = TS_INTERNAL_MRANGE,
                                                     .replyParser = SeriesListReplyParser };
-
-static InternalCommandCallbacks MrangeAggCallbacks = { .command = TS_INTERNAL_MRANGE_AGG,
-                                                       .replyParser = SeriesListReplyParser };
 
 static void TS_INTERNAL_MGET(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
@@ -1293,7 +1277,6 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterInternalCommand(
         "TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
-    MR_RegisterInternalCommand("TS.INTERNAL_MRANGE_AGG", &MrangeAggCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MGET", &MgetCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_QUERYINDEX", &QueryIndexCallbacks, QueryPredicatesType);
 

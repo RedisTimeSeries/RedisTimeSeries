@@ -182,8 +182,6 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     if (!nodesResults)
         goto __done;
 
-    bool preAgg = data->preAgg;
-
     TS_ResultSet *resultset = NULL;
     if (args->groupByLabel) {
         resultset = ResultSet_Create();
@@ -191,20 +189,20 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     } else {
         size_t totalLen = 0;
         array_foreach(nodesResults, record, {
-            size_t N = (preAgg && record->numAggClasses > 1) ? record->numAggClasses : 1;
+            size_t N = (record->numAggClasses > 1) ? record->numAggClasses : 1;
             totalLen += array_len(record->seriesList) / N;
         });
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
-    // In the pre-agg path the coordinator must not re-aggregate or re-filter shard data.
+    // The coordinator must not re-aggregate or re-filter pre-aggregated shard data.
     // Keep agg info intact so RESP3 can display the aggregator names.
-    RangeArgs coordArgs = preAgg ? RangeArgsSkipReAggregation(&args->rangeArgs) : args->rangeArgs;
+    RangeArgs coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
     const RangeArgs *replyArgs = &coordArgs;
 
     array_foreach(nodesResults, record, {
         ARR(Series *) sl = record->seriesList;
-        size_t numAggTypes = (preAgg && record->numAggClasses > 1) ? record->numAggClasses : 1;
+        size_t numAggTypes = (record->numAggClasses > 1) ? record->numAggClasses : 1;
         size_t numKeys = array_len(sl) / numAggTypes;
         for (size_t k = 0; k < numKeys; k++) {
             Series **group = &sl[k * numAggTypes];
@@ -659,11 +657,9 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
             break;
         }
         case LIBMR_PROTOCOL_INTERNAL: {
-            bool usePreAgg = queryArg->numAggClasses > 0;
             builder = MR_CreateEmptyExecutionBuilder();
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
-            MR_ExecutionBuilderInternalCommand(
-                builder, usePreAgg ? "TS.INTERNAL_MRANGE_AGG" : "TS.INTERNAL_MRANGE", queryArg);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
             break;
         }
         default: {
@@ -682,7 +678,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     MRangeData *data = malloc(sizeof(struct MRangeData)); // freed by mrange_done
     data->bc = bc;
     data->args = args;
-    data->preAgg = (queryArg->numAggClasses > 0);
+
     MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
 
     MR_Run(exec);
