@@ -326,13 +326,23 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
         goto err;
     }
 
-    // per-shard aggregation fields
+    // per-shard aggregation fields — absent in old-format payloads.
+    // A read error here means the buffer is exhausted (old coordinator); return with zero agg
+    // fields, which are already zeroed by calloc. doPreAgg=false ignores them anyway.
     predicates->numAggClasses = MR_SerializationCtxReadLongLong(sctx, error);
+    if (*error) {
+        *error = NULL;
+        return predicates;
+    }
     if (predicates->numAggClasses > TS_AGG_TYPES_MAX) {
         goto err;
     }
     for (size_t i = 0; i < predicates->numAggClasses; i++) {
         predicates->aggTypes[i] = MR_SerializationCtxReadLongLong(sctx, error);
+        if (predicates->aggTypes[i] <= TS_AGG_NONE ||
+            predicates->aggTypes[i] >= TS_AGG_TYPES_MAX) {
+            goto err;
+        }
     }
     predicates->aggTimeDelta = MR_SerializationCtxReadLongLong(sctx, error);
     predicates->aggBucketTS = MR_SerializationCtxReadLongLong(sctx, error);
@@ -879,9 +889,10 @@ static void TS_INTERNAL_MRANGE_AGG(RedisModuleCtx *ctx, void *args) {
 }
 
 // Parse one shard reply element into N Series (one per agg type).
-// numAgg is detected from the first sample's element count — no caller knowledge needed.
+// minNumAgg is the minimum number of Series to produce; when samples are absent the caller
+// must pass the expected agg count so that empty keys keep a consistent stride in seriesList.
 // Only series[0] carries labels; series[1..N-1] have key name only.
-static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply) {
+static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAgg) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
     RedisModule_Assert(reply->elements == 3); // name, labels, samples
 
@@ -929,7 +940,9 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply) {
     RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
 
     // Detect numAgg from first sample: [ts, v0, v1, ...] → elements-1; compact [ts,val] → 1.
-    size_t numAgg = 1;
+    // Never go below minNumAgg: empty keys must produce as many Series as populated ones so
+    // mrange_done_internal's flat-list stride stays consistent.
+    size_t numAgg = minNumAgg;
     if (samplesElement->elements > 0) {
         const redisReply *first = samplesElement->element[0];
         if (first->type == REDIS_REPLY_ARRAY && first->elements > 2)
@@ -984,12 +997,28 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply) {
 static Record *SeriesListReplyParser(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
 
-    ARR(Series *) seriesList = array_new(Series *, reply->elements);
+    // First pass: determine numAgg from populated keys without allocating Series.
+    // Empty keys have zero samples so they cannot reveal the agg count on their own.
     size_t numAgg = 1;
     for (size_t i = 0; i < reply->elements; i++) {
-        ARR(Series *) group = ParseSeriesAllAggs(reply->element[i]);
-        if (array_len(group) > numAgg)
-            numAgg = array_len(group); // capture from first non-empty series
+        const redisReply *el = reply->element[i];
+        RedisModule_Assert(el->type == REDIS_REPLY_ARRAY && el->elements == 3);
+        const redisReply *samples = el->element[2];
+        if (samples->elements > 0) {
+            const redisReply *first = samples->element[0];
+            if (first->type == REDIS_REPLY_ARRAY && first->elements > 2) {
+                size_t n = first->elements - 1;
+                if (n > numAgg)
+                    numAgg = n;
+            }
+        }
+    }
+
+    // Second pass: parse every key passing the true numAgg as the floor so empty keys
+    // produce the same number of Series as populated ones, keeping the stride uniform.
+    ARR(Series *) seriesList = array_new(Series *, reply->elements * numAgg);
+    for (size_t i = 0; i < reply->elements; i++) {
+        ARR(Series *) group = ParseSeriesAllAggs(reply->element[i], numAgg);
         for (size_t a = 0; a < array_len(group); a++)
             seriesList = array_append(seriesList, group[a]);
         array_free(group); // free wrapper only; Series pointers are now in seriesList

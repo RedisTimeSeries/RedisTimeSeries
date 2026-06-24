@@ -785,6 +785,109 @@ def test_multi_agg_twa_edge_gap_no_surrounding_samples():
                     f"leading gap: {agg} mismatch at bucket {i}: multi-agg={result2[i][1 + a]}, single={refs2[a][i][1]}"
 
 
+def test_multi_agg_mrange_empty_series_stride():
+    """Regression: multi-agg MRANGE must not drop or mis-pair keys when one matched
+    key has no samples in the queried range.
+
+    SeriesListReplyParser flattens each shard reply into a flat list and groups keys
+    by dividing the length by numAggTypes. A key with no samples in range contributes
+    only 1 Series to the list (ParseSeriesAllAggs detects numAgg=1 from an empty sample
+    array) while populated keys contribute numAggTypes. That breaks the fixed-stride
+    grouping: keys get silently dropped or merged across different keys.
+    """
+    e = Env()
+    if not e.isCluster():
+        e.skip()
+    with e.getClusterConnectionIfNeeded() as r:
+        # All keys share hash tag {c} so they land on one shard;
+        # the cluster LibMR / SeriesListReplyParser path is still exercised.
+        r.execute_command('TS.CREATE', 'magg_stride_s1{c}', 'LABELS', 'grp', 'stride_test')
+        r.execute_command('TS.CREATE', 'magg_stride_s2{c}', 'LABELS', 'grp', 'stride_test')
+        r.execute_command('TS.CREATE', 'magg_stride_s3{c}', 'LABELS', 'grp', 'stride_test')
+
+        # s1 and s3 have data inside [0, 29]; s2 only has data outside that range.
+        for i in range(10):
+            r.execute_command('TS.ADD', 'magg_stride_s1{c}', i,      10 + i)
+            r.execute_command('TS.ADD', 'magg_stride_s3{c}', 20 + i, 30 + i)
+        r.execute_command('TS.ADD', 'magg_stride_s2{c}', 1000, 999)
+
+        result = r.execute_command(
+            'TS.MRANGE', 0, 29,
+            'AGGREGATION', 'min,max', 10,
+            'FILTER', 'grp=stride_test',
+        )
+
+        assert len(result) == 3, \
+            f"Expected 3 series, got {len(result)}: {[s[0] for s in result]}"
+
+        by_key = {s[0]: s[2] for s in result}
+        assert b'magg_stride_s1{c}' in by_key, "s1 missing from result"
+        assert b'magg_stride_s2{c}' in by_key, "s2 missing from result"
+        assert b'magg_stride_s3{c}' in by_key, "s3 missing from result"
+
+        # s2 matched the filter but has no samples in [0, 29] — must appear with empty samples.
+        assert by_key[b'magg_stride_s2{c}'] == [], \
+            f"Expected empty samples for s2, got: {by_key[b'magg_stride_s2{c}']}"
+
+        # s1: one bucket [0, 10) — min=10, max=19
+        assert by_key[b'magg_stride_s1{c}'] == [[0, b'10', b'19']], \
+            f"s1 wrong: {by_key[b'magg_stride_s1{c}']}"
+
+        # s3: one bucket [20, 30) — min=30, max=39
+        assert by_key[b'magg_stride_s3{c}'] == [[20, b'30', b'39']], \
+            f"s3 wrong: {by_key[b'magg_stride_s3{c}']}"
+
+
+def test_empty_groupby_retention_cluster_parity():
+    """MRANGE with EMPTY + GROUPBY + RETENTION produces correct bucket-aligned results
+    in both standalone and cluster modes.
+
+    In cluster mode, each shard independently fills EMPTY buckets for its keys before
+    the coordinator applies GROUPBY REDUCE — bucket timestamps must align across shards.
+
+    k1 spans buckets 0 and 20 (with an internal gap at 10) so EMPTY emits 3 buckets.
+    k2 has data only in bucket 0, so EMPTY has no gap to fill and emits 1 bucket.
+    GROUPBY REDUCE sum combines them:
+      bucket  0: k1(sum=10) + k2(sum=20) = 30
+      bucket 10: k1(EMPTY sum=0)          = 0   -- alignment must survive cross-shard
+      bucket 20: k1(sum=10)               = 10
+    """
+    e = Env()
+    with e.getClusterConnectionIfNeeded() as r, e.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'gb_empty_k1', 'RETENTION', 100, 'LABELS', 'grp', 'gb_empty')
+        r.execute_command('TS.CREATE', 'gb_empty_k2', 'RETENTION', 100, 'LABELS', 'grp', 'gb_empty')
+
+        # k1: data in bucket 0 AND bucket 20 -> EMPTY fills the internal gap at bucket 10
+        for i in range(10):
+            r.execute_command('TS.ADD', 'gb_empty_k1', i, 1)
+        for i in range(10):
+            r.execute_command('TS.ADD', 'gb_empty_k1', 20 + i, 1)
+        # k2: data only in bucket 0 -- no internal gap, EMPTY has nothing to add
+        for i in range(10):
+            r.execute_command('TS.ADD', 'gb_empty_k2', i, 2)
+
+        result = r1.execute_command(
+            'TS.MRANGE', 0, 29,
+            'AGGREGATION', 'sum', 10, 'EMPTY',
+            'FILTER', 'grp=gb_empty',
+            'GROUPBY', 'grp', 'REDUCE', 'sum',
+        )
+
+        assert len(result) == 1
+        group = result[0]
+        assert group[0] == b'grp=gb_empty'
+        buckets = {int(b[0]): float(b[1]) for b in group[2]}
+
+        assert set(buckets.keys()) == {0, 10, 20}, \
+            f"Expected buckets {{0, 10, 20}}, got {set(buckets.keys())}"
+        # k1(10) + k2(20)
+        assert buckets[0] == 30.0,  f"Bucket 0 wrong: {buckets[0]}"
+        # k1 EMPTY gap -> sum=0; k2 has no bucket here
+        assert buckets[10] == 0.0,  f"Bucket 10 wrong: {buckets[10]}"
+        # k1(10); k2 has no data past t=9
+        assert buckets[20] == 10.0, f"Bucket 20 wrong: {buckets[20]}"
+
+
 def test_createrule_multi_agg_error():
     """TS.CREATERULE should reject multiple aggregators."""
     with Env().getClusterConnectionIfNeeded() as r:
