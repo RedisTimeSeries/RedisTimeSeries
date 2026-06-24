@@ -798,7 +798,7 @@ def test_multi_agg_mrange_empty_series_stride():
     e = Env()
     if not e.isCluster():
         e.skip()
-    with e.getClusterConnectionIfNeeded() as r:
+    with e.getClusterConnectionIfNeeded() as r, e.getConnection(1) as r1:
         # All keys share hash tag {c} so they land on one shard;
         # the cluster LibMR / SeriesListReplyParser path is still exercised.
         r.execute_command('TS.CREATE', 'magg_stride_s1{c}', 'LABELS', 'grp', 'stride_test')
@@ -811,7 +811,7 @@ def test_multi_agg_mrange_empty_series_stride():
             r.execute_command('TS.ADD', 'magg_stride_s3{c}', 20 + i, 30 + i)
         r.execute_command('TS.ADD', 'magg_stride_s2{c}', 1000, 999)
 
-        result = r.execute_command(
+        result = r1.execute_command(
             'TS.MRANGE', 0, 29,
             'AGGREGATION', 'min,max', 10,
             'FILTER', 'grp=stride_test',
