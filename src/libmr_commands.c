@@ -195,10 +195,17 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
-    // The coordinator must not re-aggregate or re-filter pre-aggregated shard data.
-    // Keep agg info intact so RESP3 can display the aggregator names.
-    RangeArgs coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
-    const RangeArgs *replyArgs = &coordArgs;
+    // When shards pre-aggregated, they also applied FILTERBY; the coordinator must not
+    // re-aggregate or re-filter that data.  For plain (non-aggregation) queries the shards
+    // returned raw samples, so the coordinator must apply FILTERBY itself.
+    RangeArgs coordArgs;
+    const RangeArgs *replyArgs;
+    if (args->rangeArgs.aggregationArgs.numClasses > 0) {
+        coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
+        replyArgs = &coordArgs;
+    } else {
+        replyArgs = &args->rangeArgs;
+    }
 
     array_foreach(nodesResults, record, {
         ARR(Series *) sl = record->seriesList;
