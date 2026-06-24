@@ -930,7 +930,7 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
     if (samplesElement->elements > 0) {
         const redisReply *first = samplesElement->element[0];
         if (first->type == REDIS_REPLY_ARRAY && first->elements > 2)
-            numAgg = first->elements - 1;
+            numAgg = max(first->elements - 1, minNumAgg);
     }
 
     // Build N Series — only series[0] carries labels.
