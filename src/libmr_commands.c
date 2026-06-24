@@ -162,13 +162,12 @@ __error:
     return NULL;
 }
 
-// Build coordinator RangeArgs from the original args, opening the time window and disabling
-// filters so the coordinator doesn't re-aggregate or re-filter pre-aggregated shard data.
+// Build coordinator RangeArgs from the original args: open the time window so the coordinator
+// accepts all pre-aggregated buckets from shards, and skip re-aggregation.  FILTERBY is always
+// applied by the coordinator, so those args are preserved.
 static RangeArgs RangeArgsSkipReAggregation(const RangeArgs *src) {
     RangeArgs a = *src;
     a.skipAggregation = true;
-    a.filterByValueArgs.hasValue = false;
-    a.filterByTSArgs.hasValue = false;
     a.startTimestamp = 0;
     a.endTimestamp = UINT64_MAX;
     return a;
@@ -195,17 +194,10 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
-    // When shards pre-aggregated, they also applied FILTERBY; the coordinator must not
-    // re-aggregate or re-filter that data.  For plain (non-aggregation) queries the shards
-    // returned raw samples, so the coordinator must apply FILTERBY itself.
-    RangeArgs coordArgs;
-    const RangeArgs *replyArgs;
-    if (args->rangeArgs.aggregationArgs.numClasses > 0) {
-        coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
-        replyArgs = &coordArgs;
-    } else {
-        replyArgs = &args->rangeArgs;
-    }
+    // The coordinator must not re-aggregate or re-filter pre-aggregated shard data.
+    // Keep agg info intact so RESP3 can display the aggregator names.
+    RangeArgs coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
+    const RangeArgs *replyArgs = &coordArgs;
 
     array_foreach(nodesResults, record, {
         ARR(Series *) sl = record->seriesList;
