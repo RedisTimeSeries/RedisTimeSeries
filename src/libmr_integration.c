@@ -339,8 +339,7 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
     }
     for (size_t i = 0; i < predicates->numAggClasses; i++) {
         predicates->aggTypes[i] = MR_SerializationCtxReadLongLong(sctx, error);
-        if (predicates->aggTypes[i] <= TS_AGG_NONE ||
-            predicates->aggTypes[i] >= TS_AGG_TYPES_MAX) {
+        if (predicates->aggTypes[i] <= TS_AGG_NONE || predicates->aggTypes[i] >= TS_AGG_TYPES_MAX) {
             goto err;
         }
     }
