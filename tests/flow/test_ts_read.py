@@ -299,6 +299,65 @@ def test_read_timeout_flushes_available_samples():
 
 
 # ---------------------------------------------------------------------------
+# 4b. BLOCK 0 = block forever: client parks with no timeout and only wakes
+#     when a qualifying sample arrives via SignalKeyAsReady.
+# ---------------------------------------------------------------------------
+
+def test_read_block_zero_blocks_forever_until_sample_arrives():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.execute_command("FLUSHALL")
+
+    # BLOCK 0 min_count=1: no timeout, must stay parked until first ADD.
+    t, slot = _start_read(env, "ts", "-", block_ms=0, min_count=1)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(),
+                   message="BLOCK 0 should park the client indefinitely (no timeout)")
+
+    # Still blocked after another pause — no producer yet.
+    time.sleep(0.5)
+    env.assertTrue(t.is_alive(),
+                   message="BLOCK 0 must still be parked with no data")
+
+    assert r.execute_command("TS.ADD", "ts", 100, "1.0") == 100
+
+    t.join(timeout=WAKE_TIMEOUT_SECS)
+    env.assertFalse(t.is_alive(),
+                    message="BLOCK 0 must wake promptly once a qualifying sample arrives")
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [[100, b"1"]])
+
+
+def test_read_block_zero_wakes_on_del():
+    """BLOCK 0 (infinite) must also unblock on key deletion, not hang forever."""
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0")])
+
+    t, slot = _start_read(env, "ts", 0, block_ms=0, min_count=5)
+    time.sleep(0.3)
+    env.assertTrue(t.is_alive(), message="BLOCK 0 should be parked")
+
+    t0 = time.time()
+    assert r.execute_command("DEL", "ts") == 1
+
+    t.join(timeout=WAKE_TIMEOUT_SECS)
+    elapsed = time.time() - t0
+    env.assertFalse(t.is_alive(),
+                    message="DEL must wake a BLOCK 0 client (took %.3fs)" % elapsed)
+    env.assertEqual(slot["error"], None)
+    env.assertEqual(slot["result"], [])
+    env.assertTrue(elapsed < WAKE_TIMEOUT_SECS,
+                   message="DEL wake must be immediate, took %.3fs" % elapsed)
+
+
+# ---------------------------------------------------------------------------
 # 5. '-' sentinel: cursor=0, matches every existing sample.
 # ---------------------------------------------------------------------------
 
@@ -599,6 +658,27 @@ def test_read_inside_eval_refuses_with_clear_error():
                    message="unexpected error: %r" % (excinfo.value,))
 
 
+def test_read_block_zero_refused_in_multi():
+    """BLOCK 0 (infinite) must also be refused inside MULTI — it blocks forever."""
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.execute_command("FLUSHALL")
+
+    r.execute_command("MULTI")
+    r.execute_command("TS.READ", "ts", 0, "BLOCK", 0, 1)
+    try:
+        res = r.execute_command("EXEC")
+        env.assertEqual(len(res), 1)
+        env.assertTrue(_is_deny_blocking_error(res[0]),
+                       message="unexpected EXEC reply: %r" % (res[0],))
+    except redis.ResponseError as e:
+        env.assertTrue(_is_deny_blocking_error(e),
+                       message="unexpected error: %r" % (e,))
+
+
 # ---------------------------------------------------------------------------
 # 14. Parse / arity validation — every malformed call must surface an error.
 # ---------------------------------------------------------------------------
@@ -653,6 +733,52 @@ def test_read_without_block_returns_partial_immediately():
     env.assertEqual(res, [[100, b"1"], [200, b"2"]])
     env.assertTrue(elapsed < 0.3,
                    message="non-blocking READ must not block, took %.3fs" % elapsed)
+
+
+def test_read_without_block_on_missing_key_returns_empty_immediately():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    r.execute_command("FLUSHALL")
+
+    t0 = time.time()
+    res = r.execute_command("TS.READ", "ts", 0)
+    elapsed = time.time() - t0
+
+    env.assertEqual(res, [])
+    env.assertTrue(elapsed < 0.3,
+                   message="non-blocking READ on missing key must not block, took %.3fs" % elapsed)
+
+
+def test_read_without_block_on_empty_series_returns_empty_immediately():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    assert r.execute_command("TS.CREATE", "ts")
+
+    t0 = time.time()
+    res = r.execute_command("TS.READ", "ts", 0)
+    elapsed = time.time() - t0
+
+    env.assertEqual(res, [])
+    env.assertTrue(elapsed < 0.3,
+                   message="non-blocking READ on empty series must not block, took %.3fs" % elapsed)
+
+
+def test_read_without_block_respects_max_count():
+    env = Env()
+    if env.is_cluster():
+        env.skip()
+
+    r = env.getConnection()
+    _seed(r, "ts", [(100, "1.0"), (200, "2.0"), (300, "3.0"), (400, "4.0")])
+
+    res = r.execute_command("TS.READ", "ts", 0, "MAX_COUNT", 2)
+    env.assertEqual(res, [[100, b"1"], [200, b"2"]])
 
 
 # ---------------------------------------------------------------------------
