@@ -742,9 +742,7 @@ static const RedisModuleCommandArg TS_READ_ARGS[] = {
       .flags = REDISMODULE_CMD_ARG_OPTIONAL,
       .subargs =
           (RedisModuleCommandArg[]){
-              { .name = "milliseconds",
-                .type = REDISMODULE_ARG_TYPE_INTEGER,
-                .token = "BLOCK" },
+              { .name = "milliseconds", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "BLOCK" },
               { .name = "min_count", .type = REDISMODULE_ARG_TYPE_INTEGER },
               { 0 } } },
     { .name = "MAX_COUNT",
