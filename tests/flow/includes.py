@@ -31,7 +31,7 @@ SANITIZER = os.getenv('SANITIZER', '')
 VALGRIND = (os.getenv('VALGRIND', '0') == '1') or (os.getenv('VG', '0') == '1')
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
-# Upper bound on how long a "prompt" wake (e.g. TS.BGET woken by a key deletion)
+# Upper bound on how long a "prompt" wake (e.g. TS.READ woken by a key deletion)
 # may take before we consider it a regression. Scaled up under Valgrind/sanitizer
 # so the slower wake-up callback there can't produce a false failure.
 WAKE_TIMEOUT_SECS = 30 if (VALGRIND or SANITIZER) else 5

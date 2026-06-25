@@ -904,7 +904,7 @@ static int internalAdd(RedisModuleCtx *ctx,
             handleCompaction(ctx, series, rule, timestamp, value);
         }
     }
-    // Wake any TS.BGET waiters parked on this key. Cheap no-op when no client
+    // Wake any TS.READ waiters parked on this key. Cheap no-op when no client
     // is blocked; harmless extra try_reply when the upsert was an in-place
     // update (the reply_cb will re-check and stay parked if nothing changed).
     RedisModule_SignalKeyAsReady(ctx, series->keyName);
@@ -1441,22 +1441,23 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 /* ============================================================================
- *  TS.BGET — Blocking GET (cursor-style tailing of a series)
+ *  TS.READ — Blocking GET (cursor-style tailing of a series)
  *
- *  Syntax:  TS.BGET key timestamp timeout [MIN_COUNT min_count] [MAX_COUNT max_count]
+ *  Syntax:  TS.READ key timestamp [BLOCK milliseconds min_count] [MAX_COUNT max_count]
  *
  *  Returns up to `max_count` samples (default unlimited) with sample-ts greater
- *  than or equal to the resolved cursor, sorted ascending. Blocks up to
- *  `timeout` ms waiting until at least `min_count` qualifying samples exist
- *  (default 1). `timestamp` may be a literal UNIX-ms value or one of the
- *  sentinels `-` (earliest) / `+` (latest existing sample, inclusive) /
+ *  than or equal to the resolved cursor, sorted ascending. When BLOCK is given,
+ *  blocks up to `milliseconds` ms waiting until at least `min_count` qualifying
+ *  samples exist (default 1). Without BLOCK, returns immediately. `timestamp`
+ *  may be a literal UNIX-ms value or one of the sentinels `-` (earliest) /
+ *  `+` (latest existing sample, inclusive) /
  *  `$` (latest sample's ts + 1, i.e. only post-command samples qualify).
  *
  *  Wake-up is driven by RedisModule_SignalKeyAsReady() in the sample-append
  *  chokepoint of the engine (covers TS.ADD / TS.MADD / TS.INCRBY / TS.DECRBY
  *  on append, plus compaction-rule writes to the destination key).
  *
- *  Sentinel support (all resolved once inside parse_bget_args):
+ *  Sentinel support (all resolved once inside parse_read_args):
  *    `-` -> cursor=0 (no lower bound).
  *    `+` -> cursor=series->lastTimestamp (latest existing sample qualifies,
  *           aligned with TS.RANGE); missing/empty -> 0; wrong-type -> WRONGTYPE.
@@ -1465,47 +1466,50 @@ int TSDB_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  * ============================================================================
  */
 
-/// TS.BGET MIN_COUNT default: unblock as soon as one sample qualifies.
-#define BGET_DEFAULT_MIN_COUNT 1
-/// TS.BGET MAX_COUNT default: unlimited (maps to RangeArgs.count == -1).
-#define BGET_DEFAULT_MAX_COUNT (-1)
+/// TS.READ BLOCK min_count default: unblock as soon as one sample qualifies.
+#define READ_DEFAULT_MIN_COUNT 1
+/// TS.READ MAX_COUNT default: unlimited (maps to RangeArgs.count == -1).
+#define READ_DEFAULT_MAX_COUNT (-1)
 
-/// TS.BGET fixed argv layout: TS.BGET key timestamp timeout [MIN_COUNT n] [MAX_COUNT n]
-typedef enum BGetArgv
+/// TS.READ fixed argv layout: TS.READ key timestamp [BLOCK ms min_count] [MAX_COUNT n]
+typedef enum ReadArgv
 {
-    BGET_ARGV_COMMAND = 0,     ///< the command name itself
-    BGET_ARGV_KEY = 1,         ///< series key
-    BGET_ARGV_TIMESTAMP = 2,   ///< cursor / '-' / '+' / '$'
-    BGET_ARGV_TIMEOUT = 3,     ///< timeout in ms
-    BGET_ARGV_FIRST_OPTION = 4 ///< first MIN_COUNT/MAX_COUNT keyword (options follow in pairs)
-} BGetArgv;
+    READ_ARGV_COMMAND = 0,     ///< the command name itself
+    READ_ARGV_KEY = 1,         ///< series key
+    READ_ARGV_TIMESTAMP = 2,   ///< cursor / '-' / '+' / '$'
+    READ_ARGV_FIRST_OPTION = 3 ///< first optional keyword (BLOCK or MAX_COUNT)
+} ReadArgv;
 
-#define BGET_OPTION_STRIDE 2 ///< each option is a keyword + value pair
-/// timeout_ms value meaning "do not block": reply with whatever is available now.
-#define BGET_NO_BLOCK_TIMEOUT 0
-/// Min argc: just the fixed args (command key timestamp timeout), no options.
-#define BGET_MIN_ARGC BGET_ARGV_FIRST_OPTION
-/// Max argc: the fixed args plus both MIN_COUNT and MAX_COUNT pairs.
-#define BGET_MAX_ARGC (BGET_ARGV_FIRST_OPTION + 2 * BGET_OPTION_STRIDE)
+/// Token count for the optional BLOCK group: keyword + milliseconds + min_count.
+#define READ_BLOCK_TOKENS 3
+/// Token count for the optional MAX_COUNT group: keyword + value.
+#define READ_MAX_COUNT_TOKENS 2
+/// Min argc: command + key + timestamp, no options.
+#define READ_MIN_ARGC READ_ARGV_FIRST_OPTION
+/// Max argc: fixed args + BLOCK group + MAX_COUNT group.
+#define READ_MAX_ARGC (READ_MIN_ARGC + READ_BLOCK_TOKENS + READ_MAX_COUNT_TOKENS)
 
 /**
- * @brief Parsed TS.BGET arguments, also used as blocked-client privdata.
+ * @brief Parsed TS.READ arguments, also used as blocked-client privdata.
  *
- * Populated once by parse_bget_args() so callbacks never re-parse argv.
- * `key` is borrowed at parse time; TSDB_bget_block() retains it and
- * TSDB_bget_free_privdata() releases it.
+ * Populated once by parse_read_args() so callbacks never re-parse argv.
+ * `key` is borrowed at parse time; TSDB_read_block() retains it and
+ * TSDB_read_free_privdata() releases it.
  */
-typedef struct BGetCtx
+typedef struct ReadCtx
 {
     RedisModuleString *key; ///< series key to read from
     api_timestamp_t cursor; ///< inclusive lower bound: only samples with ts >= cursor qualify
     size_t min_count;       ///< unblock threshold: wait until this many samples qualify (default 1)
     long long max_count;    ///< reply cap: max samples to return; -1 = unlimited (default)
-    long long timeout_ms;   ///< 0 = do not block; >0 = max time to wait
-} BGetCtx;
+    bool blocking_req;      ///< true when BLOCK was specified; false = return immediately
+    long long timeout_ms;   ///< BLOCK timeout: 0 = block forever, >0 = max wait ms.
+                          ///< Only set when blocking_req; non-blocking paths resolve synchronously
+                          ///< and never reach RTS_BlockClientOnKey.
+} ReadCtx;
 
 /**
- * @brief Parse TS.BGET argv into @p out, including sentinel resolution.
+ * @brief Parse TS.READ argv into @p out, including sentinel resolution.
  *
  * On error, replies to the client with a descriptive error.
  * @p out->key is borrowed from @p argv (not retained).
@@ -1514,61 +1518,72 @@ typedef struct BGetCtx
  *   - literal non-negative integer : @p out->cursor = the integer.
  *   - '-'                          : @p out->cursor = 0 (no lower bound).
  *   - '+'                          : open the series ONCE and snapshot
- *                                    @p out->cursor = lastTimestamp + 1;
- *                                    saturated (lastTimestamp == UINT64_MAX)
- *                                    -> UINT64_MAX to avoid wrap-to-0;
+ *                                    @p out->cursor = lastTimestamp;
  *                                    missing or empty series -> 0; wrong-type
  *                                    key -> reply WRONGTYPE and return ERR.
+ *   - '$'                          : @p out->cursor = lastTimestamp + 1
+ *                                    (saturated at UINT64_MAX); only future
+ *                                    samples qualify.
  *
  * After OK, @p out->cursor is a plain literal for the rest of the lifecycle.
  *
- * Syntax: TS.BGET key timestamp timeout [MIN_COUNT min_count] [MAX_COUNT max_count]
- *   - argv[3] (timeout): non-negative integer milliseconds; 0 means "do not block".
- *   - MIN_COUNT (optional): unblock threshold, positive integer. Default 1.
+ * Syntax: TS.READ key timestamp [BLOCK milliseconds min_count] [MAX_COUNT max_count]
+ *   - BLOCK (optional): milliseconds is non-negative integer ms; 0 = do not block.
+ *                       min_count is positive integer unblock threshold. Default: no block.
  *   - MAX_COUNT (optional): reply cap, positive integer. Default unlimited (-1).
- *   - Requires min_count <= max_count.
+ *   - Requires min_count <= max_count when MAX_COUNT is specified.
  *
  * @param ctx   Redis module context (used to reply on error / WRONGTYPE).
  * @param argv  Command argument vector.
- * @param argc  Number of arguments in @p argv (4 to 8).
+ * @param argc  Number of arguments in @p argv (3, 5, 6, or 8).
  * @param out   Output struct populated on success.
  * @return REDISMODULE_OK on success, REDISMODULE_ERR on any reply written.
  */
-static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, BGetCtx *out) {
-    // Optional args come only as MIN_COUNT/MAX_COUNT keyword+value pairs, so
-    // anything past the fixed args must be a whole number of BGET_OPTION_STRIDE
-    // tokens. This rejects a stray trailing token or a lone keyword (e.g. an
-    // odd argc of 5 or 7) instead of silently ignoring it.
-    if (argc < BGET_MIN_ARGC || argc > BGET_MAX_ARGC ||
-        (argc - BGET_MIN_ARGC) % BGET_OPTION_STRIDE != 0) {
+static int parse_read_args(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, ReadCtx *out) {
+    // Determine which optional blocks are present before validating argc so we
+    // can compute the exact expected count and give WrongArity on mismatch.
+    // BLOCK takes 3 tokens (keyword + ms + min_count); MAX_COUNT takes 2.
+    // Valid argcs: 3, 5 (MAX_COUNT only), 6 (BLOCK only), 8 (both).
+    bool has_block =
+        RMUtil_ArgIndex("BLOCK", argv + READ_ARGV_FIRST_OPTION, argc - READ_ARGV_FIRST_OPTION) >= 0;
+    bool has_max_count = RMUtil_ArgIndex("MAX_COUNT",
+                                         argv + READ_ARGV_FIRST_OPTION,
+                                         argc - READ_ARGV_FIRST_OPTION) >= 0;
+    int expected_argc = READ_MIN_ARGC + (has_block ? READ_BLOCK_TOKENS : 0) +
+                        (has_max_count ? READ_MAX_COUNT_TOKENS : 0);
+    if (argc != expected_argc) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_ERR;
     }
 
-    // timeout_ms: non-negative integer. BGET_NO_BLOCK_TIMEOUT means "do not block".
-    long long timeout_ms = BGET_NO_BLOCK_TIMEOUT;
-    if (RedisModule_StringToLongLong(argv[BGET_ARGV_TIMEOUT], &timeout_ms) != REDISMODULE_OK ||
-        timeout_ms < 0) {
-        RedisModule_ReplyWithError(ctx, "TSDB: timeout must be a non-negative integer");
-        return REDISMODULE_ERR;
-    }
+    long long timeout_ms = 0;
+    long long min_count = READ_DEFAULT_MIN_COUNT;
+    long long max_count = READ_DEFAULT_MAX_COUNT;
 
-    // Optional MIN_COUNT / MAX_COUNT, parsed like every other TS optional
-    // keyword argument: locate the token with RMUtil_ArgIndex and read its
-    // value with RMUtil_ParseArgsAfter.
-    long long min_count = BGET_DEFAULT_MIN_COUNT;
-    long long max_count = BGET_DEFAULT_MAX_COUNT;
-
-    if (RMUtil_ArgIndex("MIN_COUNT", argv, argc) > 0) {
-        if (RMUtil_ParseArgsAfter("MIN_COUNT", argv, argc, "l", &min_count) != REDISMODULE_OK ||
-            min_count <= 0) {
-            RedisModule_ReplyWithError(ctx, "TSDB: MIN_COUNT must be a positive integer");
+    if (has_block) {
+        if (RMUtil_ParseArgsAfter("BLOCK",
+                                  argv + READ_ARGV_FIRST_OPTION,
+                                  argc - READ_ARGV_FIRST_OPTION,
+                                  "ll",
+                                  &timeout_ms,
+                                  &min_count) != REDISMODULE_OK ||
+            timeout_ms < 0) {
+            RedisModule_ReplyWithError(ctx,
+                                       "TSDB: BLOCK milliseconds must be a non-negative integer");
+            return REDISMODULE_ERR;
+        }
+        if (min_count <= 0) {
+            RedisModule_ReplyWithError(ctx, "TSDB: BLOCK min_count must be a positive integer");
             return REDISMODULE_ERR;
         }
     }
 
-    if (RMUtil_ArgIndex("MAX_COUNT", argv, argc) > 0) {
-        if (RMUtil_ParseArgsAfter("MAX_COUNT", argv, argc, "l", &max_count) != REDISMODULE_OK ||
+    if (has_max_count) {
+        if (RMUtil_ParseArgsAfter("MAX_COUNT",
+                                  argv + READ_ARGV_FIRST_OPTION,
+                                  argc - READ_ARGV_FIRST_OPTION,
+                                  "l",
+                                  &max_count) != REDISMODULE_OK ||
             max_count <= 0) {
             RedisModule_ReplyWithError(ctx, "TSDB: MAX_COUNT must be a positive integer");
             return REDISMODULE_ERR;
@@ -1576,8 +1591,8 @@ static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     }
 
     // Unlimited max_count is >= any min_count, so only validate when capped.
-    if (max_count != BGET_DEFAULT_MAX_COUNT && min_count > max_count) {
-        RedisModule_ReplyWithError(ctx, "TSDB: MIN_COUNT must be <= MAX_COUNT");
+    if (max_count != READ_DEFAULT_MAX_COUNT && min_count > max_count) {
+        RedisModule_ReplyWithError(ctx, "TSDB: BLOCK min_count must be <= MAX_COUNT");
         return REDISMODULE_ERR;
     }
 
@@ -1594,12 +1609,12 @@ static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     // lastTs would chase forward and we'd never reply.
     api_timestamp_t cursor = 0;
     size_t ts_len = 0;
-    const char *ts_str = RedisModule_StringPtrLen(argv[BGET_ARGV_TIMESTAMP], &ts_len);
+    const char *ts_str = RedisModule_StringPtrLen(argv[READ_ARGV_TIMESTAMP], &ts_len);
     if (ts_len == 1 && ts_str[0] == '-') {
         cursor = 0;
     } else if (ts_len == 1 && (ts_str[0] == '+' || ts_str[0] == '$')) {
         const bool future_only = (ts_str[0] == '$');
-        RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[BGET_ARGV_KEY], REDISMODULE_READ);
+        RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[READ_ARGV_KEY], REDISMODULE_READ);
         const int kt = key ? RedisModule_KeyType(key) : REDISMODULE_KEYTYPE_EMPTY;
 
         if (kt == REDISMODULE_KEYTYPE_EMPTY) {
@@ -1630,7 +1645,7 @@ static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
         }
     } else {
         long long ts_ll = 0;
-        if (RedisModule_StringToLongLong(argv[BGET_ARGV_TIMESTAMP], &ts_ll) != REDISMODULE_OK ||
+        if (RedisModule_StringToLongLong(argv[READ_ARGV_TIMESTAMP], &ts_ll) != REDISMODULE_OK ||
             ts_ll < 0) {
             RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
             return REDISMODULE_ERR;
@@ -1638,10 +1653,11 @@ static int parse_bget_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
         cursor = (api_timestamp_t)ts_ll;
     }
 
-    out->key = argv[BGET_ARGV_KEY];
+    out->key = argv[READ_ARGV_KEY];
     out->cursor = cursor;
     out->min_count = (size_t)min_count;
     out->max_count = max_count;
+    out->blocking_req = has_block;
     out->timeout_ms = timeout_ms;
     return REDISMODULE_OK;
 }
@@ -1671,7 +1687,7 @@ static size_t TSDB_count_samples_up_to(Series *series, const RangeArgs *range, s
 }
 
 /**
- * @brief Try to satisfy a TS.BGET request from current series state.
+ * @brief Try to satisfy a TS.READ request from current series state.
  *
  * Single source of truth for "what should we reply with right now?", shared
  * by the fast path, the wake-up callback, and the timeout callback. In
@@ -1687,7 +1703,7 @@ static size_t TSDB_count_samples_up_to(Series *series, const RangeArgs *range, s
  *     wake-ups.
  *   - flush  (@p require_full_batch == false): always reply (possibly empty
  *     or partial). Used by the timeout callback and by the no-block fast
- *     path when `timeout_ms == 0`.
+ *     path when BLOCK is omitted (`blocking_req == false`).
  *
  * In all reply cases at most @p args->max_count samples are returned.
  *
@@ -1699,12 +1715,12 @@ static size_t TSDB_count_samples_up_to(Series *series, const RangeArgs *range, s
  *                         flush  -> reply (0..max_count samples).
  *
  * @param ctx                Module context for OpenKey/Reply* calls.
- * @param args               Parsed BGET arguments (key, cursor, min/max count).
+ * @param args               Parsed READ arguments (key, cursor, min/max count).
  * @param require_full_batch Strict (true) vs flush (false) mode.
  * @return true if a reply was written, false only in strict mode when caller
  *         should block / stay parked.
  */
-static bool TSDB_bget_try_reply(RedisModuleCtx *ctx, const BGetCtx *args, bool require_full_batch) {
+static bool TSDB_read_try_reply(RedisModuleCtx *ctx, const ReadCtx *args, bool require_full_batch) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx, args->key, REDISMODULE_READ);
     const int keyType = key ? RedisModule_KeyType(key) : REDISMODULE_KEYTYPE_EMPTY;
 
@@ -1771,13 +1787,13 @@ static bool TSDB_bget_try_reply(RedisModuleCtx *ctx, const BGetCtx *args, bool r
  * Must be called from a BlockClientOnKeys callback (reply / timeout) on the
  * unblock path — i.e. right before returning REDISMODULE_OK. Accumulates the
  * elapsed wait into bc->background_duration so slowlog / commandstats /
- * latency-history account for blocked TS.BGET time instead of dropping it.
+ * latency-history account for blocked TS.READ time instead of dropping it.
  *
  * Safe no-op when the Redis build doesn't expose the MeasureTime APIs.
  *
  * @param ctx Module context bound to the blocked client.
  */
-static void TSDB_bget_account_blocked_time(RedisModuleCtx *ctx) {
+static void TSDB_read_account_blocked_time(RedisModuleCtx *ctx) {
     if (CheckVersionForBlockedClientMeasureTime()) {
         RedisModule_BlockedClientMeasureTimeEnd(RedisModule_GetBlockedClientHandle(ctx));
     }
@@ -1795,21 +1811,21 @@ static void TSDB_bget_account_blocked_time(RedisModuleCtx *ctx) {
  * @return REDISMODULE_OK to unblock and commit the reply, REDISMODULE_ERR to
  *         stay parked until the next signal or the timeout.
  */
-static int TSDB_bget_reply_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int TSDB_read_reply_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
-    const BGetCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
+    const ReadCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
     // If the key was deleted while we were parked (Redis wakes us on
     // DEL/UNLINK/FLUSHDB/FLUSHALL/expire/eviction via the
     // REDISMODULE_BLOCK_UNBLOCK_DELETED flag set in RTS_BlockClientOnKey),
     // flush whatever's available (empty) instead of re-parking until timeout.
     const bool key_gone = !RedisModule_KeyExists(ctx, priv->key);
-    if (!TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/!key_gone)) {
+    if (!TSDB_read_try_reply(ctx, priv, /*require_full_batch=*/!key_gone)) {
         // Stay parked: keep the background timer running so the eventual
         // unblock (next signal or timeout) accounts for the full wait.
         return REDISMODULE_ERR;
     }
-    TSDB_bget_account_blocked_time(ctx);
+    TSDB_read_account_blocked_time(ctx);
     return REDISMODULE_OK;
 }
 
@@ -1818,36 +1834,36 @@ static int TSDB_bget_reply_callback(RedisModuleCtx *ctx, RedisModuleString **arg
  *
  * Invoked when `timeout_ms` elapses without the client being unblocked.
  * Flushes whatever is available (possibly empty or fewer than count) per
- * the TS.BGET spec.
+ * the TS.READ spec.
  *
  * @param ctx   Module context bound to the blocked client.
  * @param argv  Unused.
  * @param argc  Unused.
  * @return Always REDISMODULE_OK (the client is unblocked unconditionally).
  */
-static int TSDB_bget_timeout_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int TSDB_read_timeout_callback(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
-    const BGetCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
-    (void)TSDB_bget_try_reply(ctx, priv, /*require_full_batch=*/false);
-    TSDB_bget_account_blocked_time(ctx);
+    const ReadCtx *priv = RedisModule_GetBlockedClientPrivateData(ctx);
+    (void)TSDB_read_try_reply(ctx, priv, /*require_full_batch=*/false);
+    TSDB_read_account_blocked_time(ctx);
     return REDISMODULE_OK;
 }
 
 /**
- * @brief Release the BGetCtx attached to the blocked client.
+ * @brief Release the ReadCtx attached to the blocked client.
  *
  * Called by Redis once the client is unblocked (via reply, timeout,
  * disconnect, or abort). Frees the retained key and the heap struct.
  *
  * @param ctx       Module context (used for RedisModule_FreeString).
- * @param privdata  BGetCtx* allocated by TSDB_bget_block(); NULL-safe.
+ * @param privdata  ReadCtx* allocated by TSDB_read_block(); NULL-safe.
  */
-static void TSDB_bget_free_privdata(RedisModuleCtx *ctx, void *privdata) {
+static void TSDB_read_free_privdata(RedisModuleCtx *ctx, void *privdata) {
     if (!privdata) {
         return;
     }
-    BGetCtx *priv = privdata;
+    ReadCtx *priv = privdata;
     if (priv->key) {
         RedisModule_FreeString(ctx, priv->key);
     }
@@ -1858,7 +1874,7 @@ static void TSDB_bget_free_privdata(RedisModuleCtx *ctx, void *privdata) {
  * @brief Allocate privdata and park the client on @p args->key.
  *
  * Heap-copies @p args, retains the key for the privdata's lifetime, and
- * registers the BGET reply / timeout / free callbacks. Redis owns the
+ * registers the READ reply / timeout / free callbacks. Redis owns the
  * blocked-client lifecycle thereafter.
  *
  * If Redis refuses to block (MULTI / Lua / deny-blocking context),
@@ -1867,83 +1883,81 @@ static void TSDB_bget_free_privdata(RedisModuleCtx *ctx, void *privdata) {
  * a leak.
  *
  * @param ctx   Module context bound to the calling client.
- * @param args  Parsed BGET arguments to capture into privdata.
+ * @param args  Parsed READ arguments to capture into privdata.
  * @return Handle to the blocked client, or NULL if blocking was refused.
  */
-static RedisModuleBlockedClient *TSDB_bget_block(RedisModuleCtx *ctx, const BGetCtx *args) {
-    BGetCtx *priv = malloc(sizeof(*priv));
+static RedisModuleBlockedClient *TSDB_read_block(RedisModuleCtx *ctx, const ReadCtx *args) {
+    ReadCtx *priv = malloc(sizeof(*priv));
     *priv = *args;
     RedisModule_RetainString(ctx, priv->key);
 
     RedisModuleBlockedClient *bc = RTS_BlockClientOnKey(ctx,
-                                                        TSDB_bget_reply_callback,
-                                                        TSDB_bget_timeout_callback,
-                                                        TSDB_bget_free_privdata,
+                                                        TSDB_read_reply_callback,
+                                                        TSDB_read_timeout_callback,
+                                                        TSDB_read_free_privdata,
                                                         priv->timeout_ms,
                                                         priv->key,
                                                         priv);
     if (!bc) {
-        TSDB_bget_free_privdata(ctx, priv);
+        TSDB_read_free_privdata(ctx, priv);
     }
     return bc;
 }
 
 /**
- * @brief TS.BGET command entry point.
+ * @brief TS.READ command entry point.
  *
- * Parses argv into a BGetCtx. If samples at-or-after the cursor already exist
- * (or the key is unusable / `timeout_ms == 0`), replies inline via
- * TSDB_bget_try_reply(); otherwise parks the client via TSDB_bget_block().
+ * Parses argv into a ReadCtx. If samples at-or-after the cursor already exist
+ * (or the key is unusable / BLOCK omitted), replies inline via
+ * TSDB_read_try_reply(); otherwise parks the client via TSDB_read_block().
  *
  * Blocking refusal in MULTI / EVAL / deny-blocking contexts is handled
- * reactively: BlockClientOnKeys returns NULL, TSDB_bget_block cleans up the
+ * reactively: BlockClientOnKeys returns NULL, TSDB_read_block cleans up the
  * privdata, and we deliver an explanatory error here.
  *
  * @param ctx   Module context.
  * @param argv  Command argument vector:
- *              `TS.BGET key timestamp timeout [MIN_COUNT min_count] [MAX_COUNT max_count]`.
- * @param argc  Argument count (4 to 8).
+ *              `TS.READ key timestamp [BLOCK milliseconds min_count] [MAX_COUNT max_count]`.
+ * @param argc  Argument count (3 to 8).
  * @return Always REDISMODULE_OK — errors (parse, WRONGTYPE, blocking refused)
  *         are delivered through RedisModule_ReplyWithError so the client
  *         always sees a terminal reply.
  */
-int TSDB_bget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int TSDB_read(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
-    BGetCtx args = { 0 };
-    if (parse_bget_args(ctx, argv, argc, &args) != REDISMODULE_OK) {
-        // parse_bget_args already wrote a reply (validation error, WRONGTYPE
+    ReadCtx args = { 0 };
+    if (parse_read_args(ctx, argv, argc, &args) != REDISMODULE_OK) {
+        // parse_read_args already wrote a reply (validation error, WRONGTYPE
         // during '+' resolution, etc.).
         return REDISMODULE_OK;
     }
 
-    // BGET_NO_BLOCK_TIMEOUT means "do not block" — flush whatever is available
-    // now (possibly empty / partial). A positive timeout uses strict mode; if
-    // we don't have min_count yet, fall through and park the client until a
-    // SignalKeyAsReady wakes us with enough data, or the timeout fires.
-    if (TSDB_bget_try_reply(ctx, &args, args.timeout_ms > BGET_NO_BLOCK_TIMEOUT)) {
+    // Without BLOCK: flush whatever exists now and return immediately.
+    // With BLOCK: use strict mode — if min_count isn't met yet, fall through and park.
+    if (TSDB_read_try_reply(ctx, &args, args.blocking_req)) {
         return REDISMODULE_OK;
     }
 
     // Preemptive refusal in MULTI / EVAL / deny-blocking contexts, mirroring
-    // TSDB_mget. A timeout_ms == 0 request already resolved synchronously
-    // above, so reaching here implies the caller asked to block.
+    // TSDB_mget. A no-BLOCK request already resolved synchronously above,
+    // so reaching here implies the caller issued BLOCK and asked to wait.
     if (RedisModule_GetContextFlags(ctx) &
         (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
          REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
         RedisModule_ReplyWithError(ctx,
-                                   "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
+                                   "TSDB: blocking TS.READ (with BLOCK) is not allowed "
                                    "inside MULTI, EVAL, or a deny-blocking context");
         return REDISMODULE_OK;
     }
 
-    if (!TSDB_bget_block(ctx, &args)) {
+    if (!TSDB_read_block(ctx, &args)) {
         // Defensive fallback: BlockClientOnKeys refused to park us even
         // though the preemptive context check passed (e.g. a Redis version
         // surfacing a new deny-blocking flag). Reply with an error so the
         // client doesn't hang on an empty pipeline.
         RedisModule_ReplyWithError(ctx,
-                                   "TSDB: blocking TS.BGET (timeout > 0) is not allowed "
+                                   "TSDB: blocking TS.READ (with BLOCK) is not allowed "
                                    "inside MULTI, EVAL, or a deny-blocking context");
     }
     return REDISMODULE_OK;
@@ -2576,8 +2590,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     RegisterCommandWithModesAndAcls(ctx, "ts.info", TSDB_info, "readonly", "read fast");
     RegisterCommandWithModesAndAcls(ctx, "ts.get", TSDB_get, "readonly", "read fast");
-    // TS.BGET may block on the key; intentionally NOT flagged "fast".
-    RegisterCommandWithModesAndAcls(ctx, "ts.bget", TSDB_bget, "readonly", "read");
+    // TS.READ may block on the key; intentionally NOT flagged "fast".
+    RegisterCommandWithModesAndAcls(ctx, "ts.read", TSDB_read, "readonly", "read");
     RegisterCommandWithModesAndAcls(ctx, "ts.del", TSDB_delete, "write", "write");
 
     if (RedisModule_CreateCommand(ctx, "ts.madd", TSDB_madd, "write deny-oom", 1, -1, 3) ==
