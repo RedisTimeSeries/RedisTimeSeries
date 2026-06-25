@@ -37,8 +37,12 @@ on:
         description: 'Redis ref to checkout'  # todo change per version/tag
         type: string
         required: true
-      quick: 
+      quick:
         description: 'Run quick tests'
+        type: boolean
+        default: false
+      build_only:
+        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
       beta-version:
@@ -65,8 +69,12 @@ on:
         description: 'Redis ref to checkout'  # todo change per version/tag
         type: string
         required: true
-      quick: 
+      quick:
         description: 'Run quick tests'
+        type: boolean
+        default: false
+      build_only:
+        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
       beta-version:
@@ -89,7 +97,7 @@ jobs:
       os: ${{ steps.set-matrix.outputs.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: set env
         id: set-env
         uses: ./.github/actions/setup-env
@@ -98,12 +106,18 @@ jobs:
           redis-ref: ${{ inputs.redis-ref }}
       - name: Set matrix
         id: set-matrix
+        env:
+          OS_INPUT: ${{ inputs.os }}
         run: |
-          OS="${{ inputs.os }}"
-          if [ -z "${OS}" ]; then
+          if [ -z "$OS_INPUT" ]; then
             OS='["macos-14", "macos-15", "macos-26", "macos-14-large", "macos-15-intel", "macos-26-intel"]'
           else
-            OS='["${OS}"]'
+            # Convert space-separated list to JSON array (supports one or many).
+            OS="["
+            for os in $OS_INPUT; do
+              OS="${OS}\"${os}\","
+            done
+            OS="${OS%,}]"
           fi
           echo "${OS}"
           echo "os=${OS}" >> $GITHUB_OUTPUT
@@ -129,11 +143,11 @@ jobs:
         run: |
           brew install make coreutils autoconf automake pyenv-virtualenv libtool
       - name: Full checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
       - name: Checkout Redis
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: 'redis/redis'
           ref: ${{ needs.setup-environment.outputs.redis-ref }}
@@ -159,26 +173,29 @@ jobs:
         with:
           use-venv: '1'
       - name: Run tests
+        if: ${{ !inputs.build_only }}
         uses: ./.github/actions/run-tests
         with:
           use-venv: '1'
           quick: ${{inputs.quick && '1' || '0'}}
       - name: Capture test results
-        if: always()
+        if: ${{ always() && !inputs.build_only }}
         uses: ./.github/actions/capture-test-results
         with:
           os-name: ${{ matrix.os }}
       - name: Upload test artifacts
-        if: failure()
+        if: ${{ failure() && !inputs.build_only }}
         uses: ./.github/actions/upload-artifacts
         with:
           image: ${{ matrix.os }}
       - name: Pack module
+        if: ${{ !inputs.build_only }}
         uses: ./.github/actions/pack-module
         with:
           use-venv: '1'
           beta-version: ${{ inputs.beta-version }}
       - name: Upload artifacts to S3
+        if: ${{ !inputs.build_only }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

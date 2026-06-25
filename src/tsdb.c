@@ -560,8 +560,9 @@ const char *SeriesGetCStringLabelValue(const Series *series, const char *labelKe
 
 size_t SeriesMemUsage(const void *value) {
     const Series *series = (const Series *)value;
-    return RedisModule_MallocSize((void *)series) + SeriesRulesSize(series) +
-           SeriesLabelsSize(series) + SeriesChunksSize(series);
+    size_t keyNameSize = series->keyName ? RedisModule_MallocSizeString(series->keyName) : 0;
+    return RedisModule_MallocSize((void *)series) + keyNameSize + SeriesRulesSize(series) +
+           SeriesLabelsSize(series) + SeriesChunksSize(series) + IndexMemUsage(series->keyName);
 }
 
 size_t SeriesGetNumSamples(const Series *series) {
@@ -608,7 +609,7 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
     } else {
         SeriesUpsertSample(destSeries, start, val, DP_LAST);
     }
-    // Wake any TS.BGET waiters parked on the destination key, so a
+    // Wake any TS.READ waiters parked on the destination key, so a
     // compaction-rule bucket landing here triggers them just like a direct
     // write would.
     RedisModule_SignalKeyAsReady(ctx, rule->destKey);
@@ -1405,7 +1406,7 @@ AbstractIterator *SeriesQuery(Series *series,
             break;
     }
 
-    if (args->aggregationArgs.numClasses > 0) {
+    if (args->aggregationArgs.numClasses > 0 && !args->skipAggregation) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
                                                             args->aggregationArgs.numClasses,
                                                             args->aggregationArgs.classes,

@@ -3,7 +3,7 @@ Test that verifies RDB load failure handling for corrupted/broken RDB files.
 This test creates various types of broken RDB files and ensures they fail to load properly.
 """
 
-from RLTest import Env
+from includes import Env
 from includes import *
 
 

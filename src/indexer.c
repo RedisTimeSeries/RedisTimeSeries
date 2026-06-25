@@ -287,6 +287,58 @@ int IsKeyIndexed(RedisModuleString *ts_key) {
     return !nokey;
 }
 
+// Estimates the label-index memory attributable to a single time series (MOD-6409 #6).
+//
+// The index is global module state rather than part of the value object, but the
+// ticket lists it as a memUsage() fix, so it is summed into SeriesMemUsage() and thus
+// reported by both TS.INFO and MEMORY USAGE. Apportioning the shared leaves by 1/N
+// keeps the property that summing over all keys counts the index exactly once.
+//
+// Two contributions are summed:
+//   1. The inverse-index dict (tsLabelIndex[ts_key]), which is owned exclusively by
+//      this key, is counted in full.
+//   2. Each shared leaf dict in labelsIndex (one per "label=value" / "label" the key
+//      indexes) is shared by every key carrying that same label, so only this key's
+//      per-entry slice (size / entry-count) is attributed to it.
+//
+// Dict sizes come from RedisModule_MallocSizeDict(), which is itself an approximation,
+// so the result is an estimate.
+//
+// Note: the per-key number is not static — it shifts as other keys with the same
+// label are added or removed, because entries (the denominator) changes. This is
+// intentional: the 1/N slice keeps the sum-over-all-keys invariant correct, which
+// is what matters for capacity estimates. Individual MEMORY USAGE calls on a live
+// system will show small fluctuations as the keyspace changes.
+size_t IndexMemUsage(RedisModuleString *ts_key) {
+    if (ts_key == NULL) {
+        return 0;
+    }
+    int nokey = 0;
+    RedisModuleDict *ts_leaf = RedisModule_DictGet(tsLabelIndex, ts_key, &nokey);
+    if (nokey) { // series has no labels or is not indexed
+        return 0;
+    }
+
+    size_t total = RedisModule_MallocSizeDict(ts_leaf);
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(ts_leaf, "^", NULL, 0);
+    RedisModuleString *labelKey;
+    while ((labelKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
+        int leaf_nokey = 0;
+        RedisModuleDict *leaf = RedisModule_DictGet(labelsIndex, labelKey, &leaf_nokey);
+        if (!leaf_nokey && leaf != NULL) {
+            const uint64_t entries = RedisModule_DictSize(leaf);
+            if (entries > 0) {
+                total += RedisModule_MallocSizeDict(leaf) / entries;
+            }
+        }
+        RedisModule_FreeString(NULL, labelKey);
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    return total;
+}
+
 static uint64_t _calc_dicts_total_size(RedisModuleDict **dicts, size_t dict_size) {
     uint64_t total_size = 0;
     for (size_t i = 0; i < dict_size; i++) {

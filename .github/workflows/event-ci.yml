@@ -28,30 +28,10 @@ jobs:
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
-  build-linux-x64:
-    uses: ./.github/workflows/flow-linux.yml
-    needs: [prepare-values]
-    with:
-      arch: x64
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
-    secrets: inherit
-  build-linux-arm64:
-    uses: ./.github/workflows/flow-linux.yml
-    needs: [prepare-values]
-    with:
-      arch: arm64
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
-    secrets: inherit
-  macos:
-    uses: ./.github/workflows/flow-macos.yml
-    needs: [prepare-values]
-    with:
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      quick: false
-    secrets: inherit
-  linux-valgrind:
+  # One OS per arch runs the FULL suite (all topologies, incl. OSS-cluster /
+  # LibMR), topology-sharded so the five variants run in parallel (~15-20m).
+  # The full 18-OS matrix runs in event-nightly.
+  build-linux-x64-full:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
@@ -59,8 +39,52 @@ jobs:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
-      run_valgrind: true
+      shard_topologies: true
     secrets: inherit
+  build-linux-arm64-full:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: arm64
+      os: jammy
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      quick: false
+      shard_topologies: true
+    secrets: inherit
+  # Remaining OSes are a small, toolchain-diverse compile-only smoke set
+  # (musl / old-glibc / Microsoft / RHEL). Full tests for these run nightly.
+  build-linux-x64-smoke:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: alpine amazonlinux2 azurelinux3 rocky9
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      build_only: true
+    secrets: inherit
+  build-linux-arm64-smoke:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: arm64
+      os: alpine amazonlinux2023 azurelinux3 rocky9
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      build_only: true
+    secrets: inherit
+  macos:
+    uses: ./.github/workflows/flow-macos.yml
+    needs: [prepare-values]
+    with:
+      # macOS tests are serial (PARALLEL=0) and cannot be sharded. On PRs run a
+      # compile-only smoke on the newest macOS only, one per arch: macos-26
+      # (arm) + macos-26-intel (intel). The full 6-variant macOS test matrix
+      # runs in event-nightly.
+      os: macos-26 macos-26-intel
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      build_only: true
+    secrets: inherit
+  # Valgrind runs nightly-only (see event-nightly.yml). ASAN below covers most
+  # memory bugs on PRs; full valgrind across all topologies runs in the nightly.
   linux-sanitizer:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
@@ -68,6 +92,11 @@ jobs:
       arch: x64
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      # ASAN runs the full topology suite on PRs, sharded one topology per
+      # runner (run_sanitizer + quick=false triggers the shard gate in
+      # flow-linux). Each ASAN shard lands ~at the full-test pole (~15m), so
+      # this adds replication/AOF/cluster/LibMR ASAN coverage without raising
+      # the overall PR wall-clock.
       quick: false
       run_sanitizer: true
     secrets: inherit
