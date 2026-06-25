@@ -17,14 +17,19 @@ if [ -z "${REDIS_REF}" ]; then
     exit 1
 fi
 
-echo "Installing Redis from ref: ${REDIS_REF}"
+# REDIS_REPO lets CI build Redis from a fork/branch (e.g. an in-review core PR
+# such as the RedisModuleEvent_ClusterTopologyChange work) instead of upstream.
+# Empty/unset falls back to the canonical redis/redis.
+REDIS_REPO="${REDIS_REPO:-https://github.com/redis/redis.git}"
+
+echo "Installing Redis from ${REDIS_REPO} ref: ${REDIS_REF}"
 
 # SANITIZER can be passed to build Redis with sanitizer support (e.g., SANITIZER=address)
 if [ -n "${SANITIZER}" ]; then
     echo "Building Redis with SANITIZER=${SANITIZER}"
 fi
 
-git clone https://github.com/redis/redis.git 
+git clone "${REDIS_REPO}" redis
 cd redis
 git fetch origin ${REDIS_REF}
 git checkout ${REDIS_REF}

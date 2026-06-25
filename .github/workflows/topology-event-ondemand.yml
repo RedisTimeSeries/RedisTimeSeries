@@ -1,0 +1,53 @@
+name: Topology Event (on-demand)
+
+# On-demand validation of the OSS-cluster topology auto-refresh feature (MOD-16382)
+# against the *in-review* patched core. It builds Redis from a fork branch (default:
+# the RedisModuleEvent_ClusterTopologyChange PR on gabsow/redis) together with this
+# branch's module stack (deps/LibMR + deps/RedisModulesSDK pinned via submodules),
+# then runs the flow suite. The OSS-cluster shard is the one that exercises the new
+# code end-to-end: tests/flow/test_asm.py (incl. test_auto_refresh_on_topology_change
+# and the concurrent reshard test).
+#
+# Why on-demand and not a cron nightly: GitHub schedules only run from the default
+# branch, and the patched core lives on a fork branch (not in redis/redis) until the
+# core PR lands. Trigger this from the Actions tab ("Run workflow") and select this
+# branch. Once the core PR merges to redis/redis unstable, the regular Event Nightly
+# (redis_ref: unstable) exercises these tests automatically and this workflow can go.
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      redis-repo:
+        description: 'Redis repo URL to build (the patched core)'
+        type: string
+        required: false
+        default: 'https://github.com/gabsow/redis.git'
+      redis-ref:
+        description: 'Redis branch/ref in that repo'
+        type: string
+        required: false
+        default: 'feature/cluster-topology-change-event'
+      arch:
+        description: 'Architecture'
+        type: choice
+        options:
+          - x64
+          - arm64
+        default: x64
+
+jobs:
+  topology:
+    uses: ./.github/workflows/flow-linux.yml
+    with:
+      arch: ${{ inputs.arch }}
+      os: jammy
+      redis-ref: ${{ inputs.redis-ref }}
+      redis-repo: ${{ inputs.redis-repo }}
+      quick: false
+      # One parallel job per topology; the oss_cluster shard runs the event/ASM tests.
+      shard_topologies: true
+    secrets: inherit
