@@ -38,8 +38,8 @@ def _start_read(env, key, cursor, block_ms=None, min_count=None, max_count=None)
         # first under normal conditions.
         try:
             if block_ms is not None:
-                conn.connection_pool.connection_kwargs["socket_timeout"] = \
-                    max(1.0, (block_ms / 1000.0) + 1.0)
+                timeout = WAKE_TIMEOUT_SECS + 1.0 if block_ms == 0 else max(1.0, (block_ms / 1000.0) + 1.0)
+                conn.connection_pool.connection_kwargs["socket_timeout"] = timeout
         except Exception:
             pass
         t0 = time.time()

@@ -1503,7 +1503,9 @@ typedef struct ReadCtx
     size_t min_count;       ///< unblock threshold: wait until this many samples qualify (default 1)
     long long max_count;    ///< reply cap: max samples to return; -1 = unlimited (default)
     bool blocking_req;      ///< true when BLOCK was specified; false = return immediately
-    long long timeout_ms;   ///< only meaningful when blocking_req; 0 = block forever, >0 = max wait
+    long long timeout_ms;   ///< BLOCK timeout: 0 = block forever, >0 = max wait ms.
+                          ///< Only set when blocking_req; non-blocking paths resolve synchronously
+                          ///< and never reach RTS_BlockClientOnKey.
 } ReadCtx;
 
 /**
@@ -1542,8 +1544,11 @@ static int parse_read_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     // can compute the exact expected count and give WrongArity on mismatch.
     // BLOCK takes 3 tokens (keyword + ms + min_count); MAX_COUNT takes 2.
     // Valid argcs: 3, 5 (MAX_COUNT only), 6 (BLOCK only), 8 (both).
-    bool has_block = RMUtil_ArgIndex("BLOCK", argv, argc) >= READ_ARGV_FIRST_OPTION;
-    bool has_max_count = RMUtil_ArgIndex("MAX_COUNT", argv, argc) >= READ_ARGV_FIRST_OPTION;
+    bool has_block =
+        RMUtil_ArgIndex("BLOCK", argv + READ_ARGV_FIRST_OPTION, argc - READ_ARGV_FIRST_OPTION) >= 0;
+    bool has_max_count = RMUtil_ArgIndex("MAX_COUNT",
+                                         argv + READ_ARGV_FIRST_OPTION,
+                                         argc - READ_ARGV_FIRST_OPTION) >= 0;
     int expected_argc = READ_MIN_ARGC + (has_block ? READ_BLOCK_TOKENS : 0) +
                         (has_max_count ? READ_MAX_COUNT_TOKENS : 0);
     if (argc != expected_argc) {
@@ -1556,8 +1561,12 @@ static int parse_read_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     long long max_count = READ_DEFAULT_MAX_COUNT;
 
     if (has_block) {
-        if (RMUtil_ParseArgsAfter("BLOCK", argv, argc, "ll", &timeout_ms, &min_count) !=
-                REDISMODULE_OK ||
+        if (RMUtil_ParseArgsAfter("BLOCK",
+                                  argv + READ_ARGV_FIRST_OPTION,
+                                  argc - READ_ARGV_FIRST_OPTION,
+                                  "ll",
+                                  &timeout_ms,
+                                  &min_count) != REDISMODULE_OK ||
             timeout_ms < 0) {
             RedisModule_ReplyWithError(ctx,
                                        "TSDB: BLOCK milliseconds must be a non-negative integer");
@@ -1570,7 +1579,11 @@ static int parse_read_args(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     }
 
     if (has_max_count) {
-        if (RMUtil_ParseArgsAfter("MAX_COUNT", argv, argc, "l", &max_count) != REDISMODULE_OK ||
+        if (RMUtil_ParseArgsAfter("MAX_COUNT",
+                                  argv + READ_ARGV_FIRST_OPTION,
+                                  argc - READ_ARGV_FIRST_OPTION,
+                                  "l",
+                                  &max_count) != REDISMODULE_OK ||
             max_count <= 0) {
             RedisModule_ReplyWithError(ctx, "TSDB: MAX_COUNT must be a positive integer");
             return REDISMODULE_ERR;
@@ -1933,7 +1946,7 @@ int TSDB_read(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
          REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
         RedisModule_ReplyWithError(ctx,
-                                   "TSDB: blocking TS.READ (with BLOCK) is not allowed"
+                                   "TSDB: blocking TS.READ (with BLOCK) is not allowed "
                                    "inside MULTI, EVAL, or a deny-blocking context");
         return REDISMODULE_OK;
     }
@@ -1944,7 +1957,7 @@ int TSDB_read(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         // surfacing a new deny-blocking flag). Reply with an error so the
         // client doesn't hang on an empty pipeline.
         RedisModule_ReplyWithError(ctx,
-                                   "TSDB: blocking TS.READ (with BLOCK) is not allowed"
+                                   "TSDB: blocking TS.READ (with BLOCK) is not allowed "
                                    "inside MULTI, EVAL, or a deny-blocking context");
     }
     return REDISMODULE_OK;
