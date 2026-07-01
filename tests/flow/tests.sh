@@ -453,6 +453,11 @@ PARALLEL=${PARALLEL:-1}
 # due to Python "Can't pickle local object" problem in RLTest
 [[ $OS == macos ]] && PARALLEL=0
 
+# MOD-14615 probe: run Valgrind serially (--parallelism 1) so a shard isn't CPU-starved by the
+# other parallel test clusters on the small hosted runner. Testing whether this alone fixes the
+# multi-shard max-idle at the default 5s (no ts-query-max-idle-ms bump).
+[[ $VG == 1 ]] && PARALLEL=0
+
 [[ $EXT == 1 || $EXT == run || $BB == 1 || $GDB == 1 ]] && PARALLEL=0
 
 if [[ -n $PARALLEL && $PARALLEL != 0 ]]; then
