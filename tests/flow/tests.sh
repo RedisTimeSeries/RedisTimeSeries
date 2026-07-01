@@ -453,6 +453,10 @@ PARALLEL=${PARALLEL:-1}
 # due to Python "Can't pickle local object" problem in RLTest
 [[ $OS == macos ]] && PARALLEL=0
 
+# run Valgrind serially: at --parallelism nproc the runner oversubscribes CPU
+# (redis-server is ~30x slower under Valgrind), starving shards past LibMR's max-idle
+[[ $VG == 1 ]] && PARALLEL=0
+
 [[ $EXT == 1 || $EXT == run || $BB == 1 || $GDB == 1 ]] && PARALLEL=0
 
 if [[ -n $PARALLEL && $PARALLEL != 0 ]]; then
