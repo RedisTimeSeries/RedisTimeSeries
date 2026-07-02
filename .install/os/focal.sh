@@ -5,6 +5,7 @@
 # shellcheck source=../lib/packages.sh
 . "$LIB/packages.sh"
 
+$SUDO update-alternatives --remove-all g++ 2>/dev/null || true
 debian_default_install
 apt_install gcc-10 g++-10
 $SUDO update-alternatives --remove-all g++ 2>/dev/null || true
