@@ -410,10 +410,10 @@ def test_nrange_errors():
 # ---------------------------------------------------------------------------
 
 def _pivot_ref_multi(r, keys, lo, hi, aggs_per_key, bucket, rev=False):
-    """Reference pivot for multi-agg specs, matching the nested NRANGE reply format.
+    """Reference pivot for multi-agg specs, matching the flat NRANGE reply format.
 
     aggs_per_key: list of agg-spec strings, one per key, e.g. ['avg,max', 'sum']
-    Returns: [[ts, [[v0a, v0b], [v1a], ...]], ...]
+    Returns: [[ts, [v0a, v0b, v1a, ...]], ...]
     """
     cmd = 'TS.REVRANGE' if rev else 'TS.RANGE'
     n_aggs = [spec.count(',') + 1 for spec in aggs_per_key]
@@ -427,72 +427,58 @@ def _pivot_ref_multi(r, keys, lo, hi, aggs_per_key, bucket, rev=False):
     result = []
     for ts in sorted(all_ts, reverse=rev):
         per_key = [m.get(ts, [b'NaN'] * n) for m, n in zip(maps, n_aggs)]
-        result.append([ts, per_key])
+        flat = [v for sublist in per_key for v in sublist]
+        result.append([ts, flat])
     return result
 
 
-def _assert_pivot_nested(actual, expected):
-    assert len(actual) == len(expected), \
-        f"row count {len(actual)} != {len(expected)}\nactual={actual}\nexpected={expected}"
-    for ai, ei in zip(actual, expected):
-        assert ai[0] == ei[0], f"timestamp {ai[0]} != {ei[0]}"
-        assert len(ai[1]) == len(ei[1]), \
-            f"ts {ai[0]}: key count {len(ai[1])} != {len(ei[1])}"
-        for ki, (ak, ek) in enumerate(zip(ai[1], ei[1])):
-            assert len(ak) == len(ek), \
-                f"ts {ai[0]} key {ki}: agg count {len(ak)} != {len(ek)}"
-            for j, (a, e) in enumerate(zip(ak, ek)):
-                assert _norm(a) == _norm(e), \
-                    f"ts {ai[0]} key {ki} agg {j}: {a!r} != {e!r}"
-
-
 def test_nrange_multi_agg_mixed():
-    """key0 gets 2 aggs, key1 gets 1 agg -> nested format."""
+    """key0 gets 2 aggs, key1 gets 1 agg -> flat format."""
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_magg}')[:2]
         res = r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
                                 'AGGREGATION', 'avg,max', 'sum', 2)
-        _assert_pivot_nested(res, _pivot_ref_multi(r, keys, '-', '+',
-                                                   ['avg,max', 'sum'], 2))
+        _assert_pivot(res, _pivot_ref_multi(r, keys, '-', '+',
+                                            ['avg,max', 'sum'], 2))
 
 
 def test_nrange_multi_agg_all_same():
-    """All keys get the same multi-agg spec -> nested format."""
+    """All keys get the same multi-agg spec -> flat format."""
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_magg2}')[:2]
         res = r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
                                 'AGGREGATION', 'min,max', 'min,max', 2)
-        _assert_pivot_nested(res, _pivot_ref_multi(r, keys, '-', '+',
-                                                   ['min,max', 'min,max'], 2))
+        _assert_pivot(res, _pivot_ref_multi(r, keys, '-', '+',
+                                            ['min,max', 'min,max'], 2))
 
 
 def test_nrange_multi_agg_single_key():
     """Single key: splice is bypassed, comma-agg goes directly to the range
-    parser -> nested format because >1 agg for the key."""
+    parser -> flat format."""
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_magg3}')
         res = r.execute_command('TS.NRANGE', 1, keys[0], '-', '+',
                                 'AGGREGATION', 'avg,sum', 2)
-        _assert_pivot_nested(res, _pivot_ref_multi(r, [keys[0]], '-', '+',
-                                                   ['avg,sum'], 2))
+        _assert_pivot(res, _pivot_ref_multi(r, [keys[0]], '-', '+',
+                                            ['avg,sum'], 2))
 
 
 def test_nrevrange_multi_agg():
-    """NREVRANGE with multi-agg per key -> nested format, descending order."""
+    """NREVRANGE with multi-agg per key -> flat format, descending order."""
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_maggrev}')[:2]
         res = r.execute_command('TS.NREVRANGE', 2, *keys, '-', '+',
                                 'AGGREGATION', 'sum,count', 'max', 3)
-        _assert_pivot_nested(res, _pivot_ref_multi(r, keys, '-', '+',
-                                                   ['sum,count', 'max'], 3, rev=True))
+        _assert_pivot(res, _pivot_ref_multi(r, keys, '-', '+',
+                                            ['sum,count', 'max'], 3, rev=True))
 
 
 def test_nrange_multi_agg_nan_fills_all_slots():
@@ -510,16 +496,14 @@ def test_nrange_multi_agg_nan_fills_all_slots():
         res = r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
                                 'AGGREGATION', 'sum', 'sum,count', 10)
         assert len(res) == 2
-        # bucket [0,10): key0=[sum=3], key1=[sum=30, count=2]
+        # bucket [0,10): flat=[sum_k0=3, sum_k1=30, count_k1=2]
         assert res[0][0] == 0
-        assert len(res[0][1][0]) == 1 and _norm(res[0][1][0][0]) == 3.0
-        assert len(res[0][1][1]) == 2
-        assert _norm(res[0][1][1][0]) == 30.0 and _norm(res[0][1][1][1]) == 2.0
-        # bucket [10,20): key0 missing -> 1 NaN slot; key1=[sum=100, count=1]
+        assert _norm(res[0][1][0]) == 3.0
+        assert _norm(res[0][1][1]) == 30.0 and _norm(res[0][1][2]) == 2.0
+        # bucket [10,20): key0 missing -> NaN; key1=[sum=100, count=1]
         assert res[1][0] == 10
-        assert len(res[1][1][0]) == 1 and _norm(res[1][1][0][0]) == 'NAN'
-        assert len(res[1][1][1]) == 2
-        assert _norm(res[1][1][1][0]) == 100.0 and _norm(res[1][1][1][1]) == 1.0
+        assert _norm(res[1][1][0]) == 'NAN'
+        assert _norm(res[1][1][1]) == 100.0 and _norm(res[1][1][2]) == 1.0
 
 
 def test_nrange_multi_agg_too_many_tokens():

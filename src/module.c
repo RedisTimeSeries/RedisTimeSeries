@@ -665,8 +665,7 @@ fail:
 // timestamp: one row per distinct timestamp, NaN where a key has no sample. Each aggspec is
 // comma-separated to request multiple aggregators for that key (e.g. "AVG,SUM"). The number of
 // aggspecs must equal numkeys; all share a single bucketDuration.
-// Reply format: [timestamp, [v0, v1, ...]] flat when every key has one agg (current/single-agg),
-// [timestamp, [[v0a, v0b], [v1a], ...]] nested per key when any key has more than one agg.
+// Reply format: [timestamp, [v0, v1, ...]] flat — all agg values across all keys in one array.
 int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     // argv: [0]=cmd [1]=numkeys [2..1+numkeys]=keys [2+numkeys]=from [3+numkeys]=to ...
     if (argc < 5) {
@@ -747,15 +746,6 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         }
     }
 
-    // nested reply when any key has more than one agg; flat otherwise (backward compat)
-    bool nested = false;
-    for (size_t i = 0; i < (size_t)numKeys; i++) {
-        if (aggs_per_key[i] > 1) {
-            nested = true;
-            break;
-        }
-    }
-
     iters = malloc(numKeys * sizeof(AbstractIterator *));
     {
         size_t offset = 0;
@@ -773,7 +763,7 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         }
     }
 
-    ReplySeriesNRange(ctx, iters, (size_t)numKeys, aggs_per_key, nested, rangeArgs.count, rev);
+    ReplySeriesNRange(ctx, iters, (size_t)numKeys, aggs_per_key, rangeArgs.count, rev);
     rv = REDISMODULE_OK;
 
 cleanup:

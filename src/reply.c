@@ -328,7 +328,6 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
                       AbstractIterator **iters,
                       size_t num_keys,
                       const size_t *aggs_per_key,
-                      bool nested,
                       long long count,
                       bool reverse) {
     const long long limit = (count < 0) ? LLONG_MAX : count;
@@ -402,19 +401,7 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
             }
         }
 
-        if (!nested) {
-            ReplyWithPivotSample(ctx, target, row_buf, row_width);
-        } else {
-            RedisModule_ReplyWithArray(ctx, 2);
-            RedisModule_ReplyWithLongLong(ctx, (long long)target);
-            RedisModule_ReplyWithArray(ctx, num_keys);
-            for (size_t i = 0; i < num_keys; i++) {
-                RedisModule_ReplyWithArray(ctx, aggs_per_key[i]);
-                for (size_t j = 0; j < aggs_per_key[i]; j++) {
-                    ReplyWithDoubleOrString(ctx, row_buf[key_row_offset[i] + j]);
-                }
-            }
-        }
+        ReplyWithPivotSample(ctx, target, row_buf, row_width);
         emitted++;
     }
 
