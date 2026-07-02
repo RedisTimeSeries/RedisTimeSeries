@@ -183,7 +183,7 @@ def test_nrange_single_aggregator_rejected():
         keys = _setup_distinct(r, '{rx_bcast}')
         # a single aggregator for multiple keys is rejected: the count must
         # equal numkeys (one aggregator per key)
-        with pytest.raises(redis.ResponseError, match="aggregators"):
+        with pytest.raises(redis.ResponseError, match="AGGREGATION arguments"):
             r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
                               'AGGREGATION', 'avg', 2)
 
@@ -383,7 +383,7 @@ def test_nrange_errors():
             r.execute_command('TS.NRANGE', 3, keys[0], '-', '+')
 
         # aggregator count must equal numkeys (too few valid aggregators)
-        with pytest.raises(redis.ResponseError, match="aggregators"):
+        with pytest.raises(redis.ResponseError, match="AGGREGATION arguments"):
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min', 'max', 10)
 
@@ -392,7 +392,7 @@ def test_nrange_errors():
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min', 'bogus', 'max', 10)
         # comma-joined token with bucket immediately after is a count mismatch (1 token for 3 keys)
-        with pytest.raises(redis.ResponseError, match="number of aggregators"):
+        with pytest.raises(redis.ResponseError, match="number of AGGREGATION arguments"):
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min,max,avg', 10)
 
@@ -506,13 +506,56 @@ def test_nrange_multi_agg_nan_fills_all_slots():
         assert _norm(res[1][1][1]) == 100.0 and _norm(res[1][1][2]) == 1.0
 
 
+def test_nrange_empty_multi_agg():
+    """EMPTY + multi-agg: gap-filled buckets carry values_per_sample > 1."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = ['{rx_emptyma}:a', '{rx_emptyma}:b']
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        # k0 has a sample only in [0,10); k1 only in [10,20)
+        r.execute_command('TS.ADD', keys[0], 5, 10)
+        r.execute_command('TS.ADD', keys[1], 15, 20)
+        # k0 spec: avg,sum (2 aggs); k1 spec: max (1 agg)
+        res = r.execute_command('TS.NRANGE', 2, *keys, 0, 20,
+                                'AGGREGATION', 'avg,sum', 'max', 10, 'EMPTY')
+        assert len(res) == 2
+        # bucket [0,10): k0=[avg=10,sum=10], k1=[max=NaN]
+        assert res[0][0] == 0
+        assert [_norm(v) for v in res[0][1]] == [10.0, 10.0, 'NAN']
+        # bucket [10,20): k0=[avg=NaN,sum=NaN], k1=[max=20]
+        assert res[1][0] == 10
+        assert [_norm(v) for v in res[1][1]] == ['NAN', 'NAN', 20.0]
+
+
+def test_nrevrange_empty_multi_agg():
+    """NREVRANGE + EMPTY + multi-agg: gap-filled buckets in reverse order."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = ['{rx_remptyma}:a', '{rx_remptyma}:b']
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        r.execute_command('TS.ADD', keys[0], 5, 10)
+        r.execute_command('TS.ADD', keys[1], 15, 20)
+        res = r.execute_command('TS.NREVRANGE', 2, *keys, 0, 20,
+                                'AGGREGATION', 'avg,sum', 'max', 10, 'EMPTY')
+        assert len(res) == 2
+        # descending: bucket [10,20) first, then [0,10)
+        assert res[0][0] == 10
+        assert [_norm(v) for v in res[0][1]] == ['NAN', 'NAN', 20.0]
+        assert res[1][0] == 0
+        assert [_norm(v) for v in res[1][1]] == [10.0, 10.0, 'NAN']
+
+
 def test_nrange_multi_agg_too_many_tokens():
     """More agg tokens than numkeys -> count mismatch error."""
     e = Env()
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_magerr}')[:2]
-        with pytest.raises(redis.ResponseError, match="number of aggregators"):
+        with pytest.raises(redis.ResponseError, match="number of AGGREGATION arguments"):
             r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
                               'AGGREGATION', 'avg,max', 'sum', 'min', 10)
 

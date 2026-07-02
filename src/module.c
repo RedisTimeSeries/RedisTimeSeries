@@ -645,7 +645,7 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
                 RedisModule_StringToLongLong(argv[firstAgg + keyIdx], &numericCheck) ==
                     REDISMODULE_OK) {
                 RTS_ReplyGeneralError(ctx,
-                                      "TSDB: the number of aggregators must be equal to numkeys");
+                                      "TSDB: the number of AGGREGATION arguments must be equal to numkeys");
                 free(allClasses);
                 goto cleanup;
             }
@@ -685,7 +685,7 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
             aggs_per_key[keyIdx] = classIdx - keyClassStart;
         }
         if (firstAgg + n < argc && RMStringLenAggTypeToEnum(argv[firstAgg + n]) != TS_AGG_INVALID) {
-            RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
+            RTS_ReplyGeneralError(ctx, "TSDB: the number of AGGREGATION arguments must be equal to numkeys");
             free(allClasses);
             goto cleanup;
         }
