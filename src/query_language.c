@@ -460,7 +460,8 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
         const char *s = RedisModule_StringPtrLen(argv[aggOffset + 1], &slen);
         total = 1;
         for (size_t i = 0; i < slen; i++) {
-            if (s[i] == ',') total++;
+            if (s[i] == ',')
+                total++;
         }
     }
     int *agg_types = malloc(total * sizeof(int));

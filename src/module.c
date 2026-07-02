@@ -681,10 +681,8 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
             }
             aggs_per_key[keyIdx] = classIdx - keyClassStart;
         }
-        if (firstAgg + n < argc &&
-            RMStringLenAggTypeToEnum(argv[firstAgg + n]) != TS_AGG_INVALID) {
-            RTS_ReplyGeneralError(ctx,
-                                  "TSDB: the number of aggregators must be equal to numkeys");
+        if (firstAgg + n < argc && RMStringLenAggTypeToEnum(argv[firstAgg + n]) != TS_AGG_INVALID) {
+            RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
             free(allClasses);
             goto cleanup;
         }
@@ -696,7 +694,8 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         int newArgc = argc - (n - 1);
         RedisModuleString **tmpArgv = malloc((size_t)newArgc * sizeof(*tmpArgv));
         memcpy(tmpArgv, argv, (size_t)(firstAgg + 1) * sizeof(*tmpArgv));
-        memcpy(tmpArgv + firstAgg + 1, argv + firstAgg + n,
+        memcpy(tmpArgv + firstAgg + 1,
+               argv + firstAgg + n,
                (size_t)(argc - firstAgg - n) * sizeof(*tmpArgv));
         int parseResult = parseRangeArguments(ctx, rangeStart, tmpArgv, newArgc, &rangeArgs);
         free(tmpArgv);
