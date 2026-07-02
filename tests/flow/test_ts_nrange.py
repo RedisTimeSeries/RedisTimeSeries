@@ -412,10 +412,6 @@ def test_nrange_errors():
 
 
 # ---------------------------------------------------------------------------
-# cluster: keys must share a slot -> cross-slot keys are rejected
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # multi-agg per key (MOD-16299)
 # ---------------------------------------------------------------------------
 
@@ -650,3 +646,22 @@ def test_nrange_crossslot():
             with pytest.raises((redis.ResponseError, redis.exceptions.RedisClusterException),
                                match='CROSSSLOT|same key slot'):
                 r.execute_command(cmd, 2, 'cs{a}', 'cs{b}', '-', '+')
+
+
+def test_nrange_crossslot_same_shard():
+    """CROSSSLOT is enforced even when keys are co-located on the same shard but in different slots.
+    This covers the ASM scenario: after a slot migrates, keys that were on the same shard end up
+    split — NRANGE must reject them the same way it rejects obviously cross-shard keys.
+
+    nrange_ss_1 -> slot 6911, nrange_ss_5 -> slot 6779: both in 5461-10922 (same shard in
+    RLTest's default 3-shard cluster), different slots."""
+    env = Env(decodeResponses=True)
+    if not env.isCluster():
+        env.skip()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'nrange_ss_1')
+        r.execute_command('TS.CREATE', 'nrange_ss_5')
+        for cmd in ('TS.NRANGE', 'TS.NREVRANGE'):
+            with pytest.raises((redis.ResponseError, redis.exceptions.RedisClusterException),
+                               match='CROSSSLOT|same key slot'):
+                r.execute_command(cmd, 2, 'nrange_ss_1', 'nrange_ss_5', '-', '+')
