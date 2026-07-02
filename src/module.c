@@ -581,9 +581,6 @@ int TSDB_revrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return TSDB_generic_range(ctx, argv, argc, true);
 }
 
-// NRANGE takes one aggregator spec per key, space-separated, instead of the single comma-joined
-// token the shared range parser expects. Each per-key spec may itself be comma-separated to request
-
 // TS.NRANGE/TS.NREVRANGE numkeys key [key...] fromTimestamp toTimestamp [options]
 //   [LATEST] [FILTER_BY_TS ts...] [FILTER_BY_VALUE min max] [COUNT count]
 //   [[ALIGN align] AGGREGATION aggspec [aggspec ...] bucketDuration [BUCKETTIMESTAMP bt] [EMPTY]]
@@ -654,6 +651,12 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
             }
             size_t specLen;
             const char *spec = RedisModule_StringPtrLen(argv[firstAgg + keyIdx], &specLen);
+            if (specLen == 0) { // empty spec for a non-first key would silently emit zero columns;
+                                // match what the shared parser returns when key 0's spec is empty
+                RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+                free(allClasses);
+                goto cleanup;
+            }
             size_t keyClassStart = classIdx;
             const char *cursor = spec, *specEnd = spec + specLen;
             while (cursor < specEnd) {
@@ -721,9 +724,9 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
 
     keys = calloc(numKeys, sizeof(RedisModuleKey *));
     series = calloc(numKeys, sizeof(Series *));
-    iters = malloc(numKeys * sizeof(AbstractIterator *));
 
-    size_t classOffset = 0;
+    // Open all keys first. If one fails we bail before any iterator is created, so the cleanup
+    // path -- which closes keys but not iterators -- can't leak the iterators of earlier keys.
     for (; opened < (size_t)numKeys; opened++) {
         const GetSeriesResult status = GetSeries(ctx,
                                                  argv[2 + opened],
@@ -732,18 +735,23 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
                                                  REDISMODULE_READ,
                                                  GetSeriesFlags_CheckForAcls);
         if (status != GetSeriesResult_Success) {
-            goto cleanup;
+            goto cleanup; // GetSeries already replied with the error
         }
-        RangeArgs perKey = rangeArgs;
+    }
+
+    iters = malloc(numKeys * sizeof(AbstractIterator *));
+    size_t classOffset = 0;
+    for (size_t i = 0; i < (size_t)numKeys; i++) {
+        RangeArgs perKey = rangeArgs; // shares filters; classes is read-only here
         if (numClasses == 0) {
             perKey.aggregationArgs.numClasses = 0;
             perKey.aggregationArgs.classes = NULL;
         } else {
-            perKey.aggregationArgs.numClasses = aggs_per_key[opened];
+            perKey.aggregationArgs.numClasses = aggs_per_key[i];
             perKey.aggregationArgs.classes = &rangeArgs.aggregationArgs.classes[classOffset];
-            classOffset += aggs_per_key[opened];
+            classOffset += aggs_per_key[i];
         }
-        iters[opened] = SeriesQuery(series[opened], &perKey, rev, true);
+        iters[i] = SeriesQuery(series[i], &perKey, rev, true);
     }
 
     ReplySeriesNRange(ctx, iters, (size_t)numKeys, aggs_per_key, rangeArgs.count, rev);

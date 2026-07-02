@@ -453,18 +453,9 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          AggregationArgs *out) {
-    size_t total = TS_AGG_TYPES_MAX;
-    int aggOffset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
-    if (aggOffset >= 0 && aggOffset + 1 < argc) {
-        size_t slen;
-        const char *s = RedisModule_StringPtrLen(argv[aggOffset + 1], &slen);
-        total = 1;
-        for (size_t i = 0; i < slen; i++) {
-            if (s[i] == ',')
-                total++;
-        }
-    }
-    int *agg_types = malloc(total * sizeof(int));
+    // _parseAggregationArgs caps the count at TS_AGG_TYPES_MAX before writing, so a fixed array
+    // of that size always fits -- no dynamic sizing on the comma count needed.
+    int agg_types[TS_AGG_TYPES_MAX];
     size_t num_agg_types = 0;
     AggregationArgs aggregationArgs = { 0 };
     int result = _parseAggregationArgs(ctx,
@@ -483,16 +474,13 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
             aggregationArgs.classes[i] = GetAggClass(agg_types[i]);
             if (aggregationArgs.classes[i] == NULL) {
                 free(aggregationArgs.classes);
-                free(agg_types);
                 RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
                 return TSDB_ERROR;
             }
         }
         *out = aggregationArgs;
-        free(agg_types);
         return TSDB_OK;
     } else {
-        free(agg_types);
         return result;
     }
 }
