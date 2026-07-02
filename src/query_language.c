@@ -376,6 +376,10 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
                 RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
                 return TSDB_ERROR;
             }
+            if (count >= TS_AGG_TYPES_MAX) {
+                RTS_ReplyGeneralError(ctx, "TSDB: Too many aggregation types");
+                return TSDB_ERROR;
+            }
             int agg = StringLenAggTypeToEnum(p, token_len);
             if (agg < 0 || agg >= TS_AGG_TYPES_MAX) {
                 RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
@@ -449,9 +453,7 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          AggregationArgs *out) {
-    // Pre-scan the agg string to size the scratch buffer: avoids a fixed cap on total types.
-    // The per-key cap (TS_AGG_TYPES_MAX) is enforced upstream in nrange_splice_aggregators.
-    size_t total = TS_AGG_TYPES_MAX; // default covers single-key / non-NRANGE callers
+    size_t total = TS_AGG_TYPES_MAX;
     int aggOffset = RMUtil_ArgIndex("AGGREGATION", argv, argc);
     if (aggOffset >= 0 && aggOffset + 1 < argc) {
         size_t slen;

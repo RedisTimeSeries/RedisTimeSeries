@@ -695,7 +695,7 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         // and parses the shared bucketDuration/BUCKETTIMESTAMP/EMPTY/etc. correctly.
         int newArgc = argc - (n - 1);
         RedisModuleString **tmpArgv = malloc((size_t)newArgc * sizeof(*tmpArgv));
-        memcpy(tmpArgv, argv, (size_t)firstAgg * sizeof(*tmpArgv));
+        memcpy(tmpArgv, argv, (size_t)(firstAgg + 1) * sizeof(*tmpArgv));
         memcpy(tmpArgv + firstAgg + 1, argv + firstAgg + n,
                (size_t)(argc - firstAgg - n) * sizeof(*tmpArgv));
         int parseResult = parseRangeArguments(ctx, rangeStart, tmpArgv, newArgc, &rangeArgs);
