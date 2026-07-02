@@ -49,12 +49,16 @@ void ReplyWithPivotSample(RedisModuleCtx *ctx,
                           const double *values,
                           size_t num_values);
 
-// Merge num_keys time-ordered per-key sample iterators into a timestamp-major
-// reply (one row per distinct timestamp, NaN where a key has no sample). Used by
-// TS.NRANGE / TS.NREVRANGE. Consumes and closes each iterator.
+// Merge num_keys time-ordered per-key chunk iterators into a timestamp-major reply (one row per
+// distinct timestamp, NaN where a key has no sample). aggs_per_key[i] is the number of aggregation
+// values key i contributes per row. When nested is false (all keys have one agg) the row is flat:
+// [ts, [v0, v1, ...]]. When nested is true (any key has >1 agg) each key gets its own inner array:
+// [ts, [[v0a, v0b], [v1a], ...]]. Consumes and closes each iterator.
 int ReplySeriesNRange(RedisModuleCtx *ctx,
-                      AbstractSampleIterator **iters,
+                      AbstractIterator **iters,
                       size_t num_keys,
+                      const size_t *aggs_per_key,
+                      bool nested,
                       long long count,
                       bool reverse);
 
