@@ -339,6 +339,35 @@ static int _parseAlignmentTS(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+// Parse a comma-separated aggregator spec string (e.g. "avg,sum") into agg_types[].
+// Returns the number of types written, or -1 on error (error already replied).
+int ParseAggSpec(RedisModuleCtx *ctx, const char *spec, size_t specLen, int *agg_types) {
+    int count = 0;
+    const char *cursor = spec, *end = spec + specLen;
+    while (true) {
+        const char *comma = memchr(cursor, ',', (size_t)(end - cursor));
+        size_t tokenLen = comma ? (size_t)(comma - cursor) : (size_t)(end - cursor);
+        if (tokenLen == 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
+            return -1;
+        }
+        if (count >= TS_AGG_TYPES_MAX) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Too many aggregation types");
+            return -1;
+        }
+        int agg = StringLenAggTypeToEnum(cursor, tokenLen);
+        if (agg < 0 || agg >= TS_AGG_TYPES_MAX) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+            return -1;
+        }
+        agg_types[count++] = agg;
+        if (!comma)
+            break;
+        cursor = comma + 1;
+    }
+    return count;
+}
+
 int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
@@ -366,42 +395,14 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
         size_t aggStr_len;
         const char *aggStr = RedisModule_StringPtrLen(aggTypeStr, &aggStr_len);
 
-        size_t count = 0;
-        const char *p = aggStr;
-        const char *end = aggStr + aggStr_len;
-        while (p < end) {
-            const char *comma = memchr(p, ',', end - p);
-            size_t token_len = comma ? (size_t)(comma - p) : (size_t)(end - p);
-            if (token_len == 0) {
-                RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
-                return TSDB_ERROR;
-            }
-            if (count >= TS_AGG_TYPES_MAX) {
-                RTS_ReplyGeneralError(ctx, "TSDB: Too many aggregation types");
-                return TSDB_ERROR;
-            }
-            int agg = StringLenAggTypeToEnum(p, token_len);
-            if (agg < 0 || agg >= TS_AGG_TYPES_MAX) {
+        int count = ParseAggSpec(ctx, aggStr, aggStr_len, agg_types);
+        if (count <= 0) {
+            if (count == 0) {
                 RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
-                return TSDB_ERROR;
             }
-            agg_types[count++] = agg;
-            if (comma) {
-                p = comma + 1;
-                if (p == end) {
-                    RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
-                    return TSDB_ERROR;
-                }
-            } else {
-                p = end;
-            }
-        }
-
-        if (count == 0) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
             return TSDB_ERROR;
         }
-        *num_agg_types = count;
+        *num_agg_types = (size_t)count;
 
         if (temp_time_delta <= 0) {
             RTS_ReplyGeneralError(ctx, "TSDB: bucketDuration must be greater than zero");

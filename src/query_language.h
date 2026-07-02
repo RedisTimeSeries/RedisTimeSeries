@@ -140,6 +140,8 @@ int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, i
 
 int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, CreateCtx *cCtx);
 
+int ParseAggSpec(RedisModuleCtx *ctx, const char *spec, size_t specLen, int *agg_types);
+
 int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,

@@ -396,6 +396,16 @@ def test_nrange_errors():
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min,max,avg', 10)
 
+        # trailing comma in per-key spec
+        with pytest.raises(redis.ResponseError, match="Empty aggregation type"):
+            r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
+                              'AGGREGATION', 'avg,', 'min', 'max', 10)
+
+        # embedded empty token in per-key spec
+        with pytest.raises(redis.ResponseError, match="Empty aggregation type"):
+            r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
+                              'AGGREGATION', 'avg,,sum', 'min', 'max', 10)
+
         # missing key
         with pytest.raises(redis.ResponseError):
             r.execute_command('TS.NRANGE', 1, '{rx_err}:nope', '-', '+')

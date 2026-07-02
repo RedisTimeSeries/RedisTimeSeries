@@ -618,6 +618,7 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     Series **series = NULL;
     AbstractIterator **iters = NULL;
     size_t *aggs_per_key = NULL;
+    AggregationClass **allClasses = NULL;
     size_t numClasses = 0;
     int rv = REDISMODULE_ERR;
     size_t opened = 0;
@@ -637,16 +638,15 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         // Single pass: validate tokens, fill aggs_per_key, and resolve agg type names.
         // Pre-allocate with the upper bound (n × TS_AGG_TYPES_MAX) to avoid a separate
         // counting pass; actual size is classIdx at the end.
-        AggregationClass **allClasses = malloc((size_t)n * TS_AGG_TYPES_MAX * sizeof(*allClasses));
+        allClasses = malloc((size_t)n * TS_AGG_TYPES_MAX * sizeof(*allClasses));
         size_t classIdx = 0;
         for (int keyIdx = 0; keyIdx < n; keyIdx++) {
             long long numericCheck;
             if (firstAgg + keyIdx >= argc ||
                 RedisModule_StringToLongLong(argv[firstAgg + keyIdx], &numericCheck) ==
                     REDISMODULE_OK) {
-                RTS_ReplyGeneralError(ctx,
-                                      "TSDB: the number of AGGREGATION arguments must be equal to numkeys");
-                free(allClasses);
+                RTS_ReplyGeneralError(
+                    ctx, "TSDB: the number of AGGREGATION arguments must be equal to numkeys");
                 goto cleanup;
             }
             size_t specLen;
@@ -654,39 +654,26 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
             if (specLen == 0) { // empty spec for a non-first key would silently emit zero columns;
                                 // match what the shared parser returns when key 0's spec is empty
                 RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
-                free(allClasses);
                 goto cleanup;
             }
             size_t keyClassStart = classIdx;
-            const char *cursor = spec, *specEnd = spec + specLen;
-            while (cursor < specEnd) {
-                if (classIdx - keyClassStart >= TS_AGG_TYPES_MAX) {
-                    RTS_ReplyGeneralError(ctx, "TSDB: Too many aggregation types");
-                    free(allClasses);
-                    goto cleanup;
-                }
-                const char *comma = memchr(cursor, ',', (size_t)(specEnd - cursor));
-                size_t tokenLen = comma ? (size_t)(comma - cursor) : (size_t)(specEnd - cursor);
-                int aggType = StringLenAggTypeToEnum(cursor, tokenLen);
-                if (aggType < 0 || aggType >= TS_AGG_TYPES_MAX) {
-                    RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
-                    free(allClasses);
-                    goto cleanup;
-                }
-                allClasses[classIdx] = GetAggClass((TS_AGG_TYPES_T)aggType);
+            int agg_types[TS_AGG_TYPES_MAX];
+            int nTypes = ParseAggSpec(ctx, spec, specLen, agg_types);
+            if (nTypes < 0) {
+                goto cleanup;
+            }
+            for (int t = 0; t < nTypes; t++, classIdx++) {
+                allClasses[classIdx] = GetAggClass((TS_AGG_TYPES_T)agg_types[t]);
                 if (!allClasses[classIdx]) {
                     RTS_ReplyGeneralError(ctx, "TSDB: Failed to retrieve aggregation class");
-                    free(allClasses);
                     goto cleanup;
                 }
-                classIdx++;
-                cursor = comma ? comma + 1 : specEnd;
             }
             aggs_per_key[keyIdx] = classIdx - keyClassStart;
         }
         if (firstAgg + n < argc && RMStringLenAggTypeToEnum(argv[firstAgg + n]) != TS_AGG_INVALID) {
-            RTS_ReplyGeneralError(ctx, "TSDB: the number of AGGREGATION arguments must be equal to numkeys");
-            free(allClasses);
+            RTS_ReplyGeneralError(
+                ctx, "TSDB: the number of AGGREGATION arguments must be equal to numkeys");
             goto cleanup;
         }
         size_t totalClasses = classIdx;
@@ -703,13 +690,13 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         int parseResult = parseRangeArguments(ctx, rangeStart, tmpArgv, newArgc, &rangeArgs);
         free(tmpArgv);
         if (parseResult != REDISMODULE_OK) {
-            free(allClasses);
             goto cleanup;
         }
 
         // Replace the single-key classes array from parseRangeArguments with the full flat array.
         free(rangeArgs.aggregationArgs.classes);
         rangeArgs.aggregationArgs.classes = allClasses;
+        allClasses = NULL; // ownership transferred; don't double-free at cleanup
         numClasses = totalClasses;
 
     } else {
@@ -758,6 +745,7 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     rv = REDISMODULE_OK;
 
 cleanup:
+    free(allClasses);
     free(iters);
     free(aggs_per_key);
     free(rangeArgs.aggregationArgs.classes);
