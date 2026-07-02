@@ -517,6 +517,50 @@ def test_nrange_multi_agg_too_many_tokens():
                               'AGGREGATION', 'avg,max', 'sum', 'min', 10)
 
 
+def test_nrange_many_keys_single_agg():
+    """35 keys, one agg each — exercises the n > 30 path with no upper-bound overflow."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        n = 35
+        tag = '{rx_many}'
+        keys = [f'{tag}:k{i}' for i in range(n)]
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        for ts in range(10):
+            args = []
+            for i, k in enumerate(keys):
+                args += [k, ts, i * 10 + ts]
+            r.execute_command('TS.MADD', *args)
+        aggs = ['avg'] * n
+        res = r.execute_command('TS.NRANGE', n, *keys, '-', '+',
+                                'AGGREGATION', *aggs, 5)
+        _assert_pivot(res, _pivot_ref(r, keys, '-', '+', aggs=aggs, bucket=5))
+
+
+def test_nrange_many_keys_multi_agg():
+    """35 keys with mixed multi-agg specs (2 and 3 aggs per key) — exercises
+    the n * TS_AGG_TYPES_MAX upper-bound allocation with > 30 keys."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        n = 35
+        tag = '{rx_mmany}'
+        keys = [f'{tag}:k{i}' for i in range(n)]
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        for ts in range(20):
+            args = []
+            for i, k in enumerate(keys):
+                args += [k, ts, i * 100 + ts]
+            r.execute_command('TS.MADD', *args)
+        # alternate between 2-agg and 3-agg specs across the 35 keys
+        aggs_per_key = ['min,max' if i % 2 == 0 else 'avg,sum,count' for i in range(n)]
+        res = r.execute_command('TS.NRANGE', n, *keys, '-', '+',
+                                'AGGREGATION', *aggs_per_key, 5)
+        _assert_pivot(res, _pivot_ref_multi(r, keys, '-', '+', aggs_per_key, 5))
+
+
 def test_nrange_all_single_agg_stays_flat():
     """All single-agg per key -> flat format unchanged (backward compat)."""
     e = Env()
