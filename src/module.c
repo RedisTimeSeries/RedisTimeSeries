@@ -624,7 +624,8 @@ static RedisModuleString **nrange_splice_aggregators(RedisModuleCtx *ctx,
         // count agg types in this per-key token (commas + 1)
         size_t cnt = 1;
         for (size_t k = 0; k < len; k++) {
-            if (s[k] == ',') cnt++;
+            if (s[k] == ',')
+                cnt++;
         }
         out_aggs_per_key[i] = cnt;
         if (i)
@@ -706,7 +707,8 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     // aggs_per_key[i] = number of agg types requested for key i. Initialized to 1 (covers
     // the no-AGGREGATION case and the single-key path where splice does not run).
     aggs_per_key = malloc((size_t)numKeys * sizeof(*aggs_per_key));
-    for (size_t i = 0; i < (size_t)numKeys; i++) aggs_per_key[i] = 1;
+    for (size_t i = 0; i < (size_t)numKeys; i++)
+        aggs_per_key[i] = 1;
 
     // Collapse the space-separated per-key aggregator specs into the comma form the shared parser
     // wants. The splice also fills aggs_per_key for the numKeys > 1 case.
@@ -748,7 +750,10 @@ int TSDB_generic_nrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     // nested reply when any key has more than one agg; flat otherwise (backward compat)
     bool nested = false;
     for (size_t i = 0; i < (size_t)numKeys; i++) {
-        if (aggs_per_key[i] > 1) { nested = true; break; }
+        if (aggs_per_key[i] > 1) {
+            nested = true;
+            break;
+        }
     }
 
     iters = malloc(numKeys * sizeof(AbstractIterator *));

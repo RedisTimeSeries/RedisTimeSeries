@@ -334,13 +334,15 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
     const long long limit = (count < 0) ? LLONG_MAX : count;
 
     // Per-key chunk state for the k-way merge.
-    EnrichedChunk **key_chunks  = malloc(num_keys * sizeof(*key_chunks));  // current data batch per key
-    size_t         *chunk_pos   = malloc(num_keys * sizeof(*chunk_pos));   // position inside current batch per key
-    bool           *key_active  = malloc(num_keys * sizeof(*key_active));  // whether key still has data
+    EnrichedChunk **key_chunks =
+        malloc(num_keys * sizeof(*key_chunks)); // current data batch per key
+    size_t *chunk_pos =
+        malloc(num_keys * sizeof(*chunk_pos)); // position inside current batch per key
+    bool *key_active = malloc(num_keys * sizeof(*key_active)); // whether key still has data
 
     // Pre-compute where each key's values start in the flat row buffer, and the total row width.
     size_t *key_row_offset = malloc(num_keys * sizeof(*key_row_offset));
-    size_t  row_width = 0;
+    size_t row_width = 0;
     for (size_t i = 0; i < num_keys; i++) {
         key_row_offset[i] = row_width;
         row_width += aggs_per_key[i];
@@ -352,7 +354,8 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
         key_chunks[i] = iters[i]->GetNext(iters[i]);
         chunk_pos[i] = 0;
         key_active[i] = (key_chunks[i] != NULL && key_chunks[i]->samples.num_samples > 0);
-        if (key_active[i]) active_count++;
+        if (key_active[i])
+            active_count++;
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -364,7 +367,8 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
         bool found = false;
         timestamp_t target = 0;
         for (size_t i = 0; i < num_keys; i++) {
-            if (!key_active[i]) continue;
+            if (!key_active[i])
+                continue;
             timestamp_t ts = key_chunks[i]->samples.timestamps[chunk_pos[i]];
             if (!found || (reverse ? ts > target : ts < target)) {
                 target = ts;
