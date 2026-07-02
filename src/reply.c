@@ -324,6 +324,15 @@ void ReplyWithPivotSample(RedisModuleCtx *ctx,
     }
 }
 
+static EnrichedChunk *NextNonemptyChunk(AbstractIterator *iter) {
+    EnrichedChunk *chunk;
+    while ((chunk = iter->GetNext(iter)) != NULL) {
+        if (chunk->samples.num_samples > 0)
+            return chunk;
+    }
+    return NULL;
+}
+
 int ReplySeriesNRange(RedisModuleCtx *ctx,
                       AbstractIterator **iters,
                       size_t num_keys,
@@ -350,9 +359,9 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
 
     size_t active_count = 0;
     for (size_t i = 0; i < num_keys; i++) {
-        key_chunks[i] = iters[i]->GetNext(iters[i]);
+        key_chunks[i] = NextNonemptyChunk(iters[i]);
         chunk_pos[i] = 0;
-        key_active[i] = (key_chunks[i] != NULL && key_chunks[i]->samples.num_samples > 0);
+        key_active[i] = (key_chunks[i] != NULL);
         if (key_active[i])
             active_count++;
     }
@@ -386,8 +395,8 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
                 }
                 chunk_pos[i]++;
                 if (chunk_pos[i] >= key_chunks[i]->samples.num_samples) {
-                    key_chunks[i] = iters[i]->GetNext(iters[i]);
-                    if (!key_chunks[i] || key_chunks[i]->samples.num_samples == 0) {
+                    key_chunks[i] = NextNonemptyChunk(iters[i]);
+                    if (!key_chunks[i]) {
                         key_active[i] = false;
                         active_count--;
                     } else {

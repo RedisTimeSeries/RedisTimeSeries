@@ -396,12 +396,8 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
         const char *aggStr = RedisModule_StringPtrLen(aggTypeStr, &aggStr_len);
 
         int count = ParseAggSpec(ctx, aggStr, aggStr_len, agg_types);
-        if (count <= 0) {
-            if (count == 0) {
-                RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
-            }
+        if (count <= 0)
             return TSDB_ERROR;
-        }
         *num_agg_types = (size_t)count;
 
         if (temp_time_delta <= 0) {
