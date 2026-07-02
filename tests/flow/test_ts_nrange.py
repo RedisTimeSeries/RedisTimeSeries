@@ -392,7 +392,7 @@ def test_nrange_errors():
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min', 'bogus', 'max', 10)
         # comma-joined token with bucket immediately after is a count mismatch (1 token for 3 keys)
-        with pytest.raises(redis.ResponseError, match="aggregat"):
+        with pytest.raises(redis.ResponseError, match="number of aggregators"):
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min,max,avg', 10)
 
@@ -512,7 +512,7 @@ def test_nrange_multi_agg_too_many_tokens():
     e.skipOnCluster()
     with e.getClusterConnectionIfNeeded() as r:
         keys = _setup_distinct(r, '{rx_magerr}')[:2]
-        with pytest.raises(redis.ResponseError, match="aggregat"):
+        with pytest.raises(redis.ResponseError, match="number of aggregators"):
             r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
                               'AGGREGATION', 'avg,max', 'sum', 'min', 10)
 

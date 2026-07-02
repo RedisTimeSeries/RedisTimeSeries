@@ -632,14 +632,13 @@ static RedisModuleString **nrange_splice_aggregators(RedisModuleCtx *ctx,
             RedisModule_StringAppendBuffer(ctx, joined, ",", 1);
         RedisModule_StringAppendBuffer(ctx, joined, s, len);
     }
-    // A non-numeric token where bucketDuration belongs means too many per-key tokens.
-    {
-        long long dummy;
-        if (firstAgg + n < argc &&
-            RedisModule_StringToLongLong(argv[firstAgg + n], &dummy) != REDISMODULE_OK) {
-            RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
-            goto fail;
-        }
+    // If the token right after the n per-key specs is itself a valid agg type name, the user
+    // supplied more specs than numkeys (e.g. 3 tokens for 2 keys). Numbers and known flags
+    // (BUCKETTIMESTAMP, EMPTY, …) are fine here — they belong to the downstream parser.
+    if (firstAgg + n < argc &&
+        RMStringLenAggTypeToEnum(argv[firstAgg + n]) != TS_AGG_INVALID) {
+        RTS_ReplyGeneralError(ctx, "TSDB: the number of aggregators must be equal to numkeys");
+        goto fail;
     }
 
     // Splice: [..AGGREGATION] joined [bucketDuration..end], dropping the n-1 extra agg tokens.
