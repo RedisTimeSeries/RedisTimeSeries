@@ -190,11 +190,15 @@ jobs:
           submodules: 'recursive'
 
       - name: Build Docker Image
+        # Pass user-controllable inputs via env vars (not inline ${{ }} in run:) so
+        # they can't be expanded into the shell command -- avoids script injection.
+        env:
+          REDIS_REPO: ${{ inputs.redis-repo }}
         run: |
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
-            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
-            --build-arg REDIS_REPO=${{ inputs.redis-repo }} \
+            --build-arg REDIS_REF="$REDIS_REF" \
+            --build-arg REDIS_REPO="$REDIS_REPO" \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
             --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
             -t ${{ env.DOCKER_IMAGE }} \
