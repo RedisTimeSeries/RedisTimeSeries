@@ -324,63 +324,93 @@ void ReplyWithPivotSample(RedisModuleCtx *ctx,
     }
 }
 
+static EnrichedChunk *NextNonemptyChunk(AbstractIterator *iter) {
+    EnrichedChunk *chunk;
+    while ((chunk = iter->GetNext(iter)) != NULL) {
+        if (chunk->samples.num_samples > 0)
+            return chunk;
+    }
+    return NULL;
+}
+
 int ReplySeriesNRange(RedisModuleCtx *ctx,
-                      AbstractSampleIterator **iters,
+                      AbstractIterator **iters,
                       size_t num_keys,
+                      const size_t *aggs_per_key,
                       long long count,
                       bool reverse) {
     const long long limit = (count < 0) ? LLONG_MAX : count;
 
-    // Streaming k-way merge: hold only one "front" sample per key at a time.
-    Sample *front = malloc(num_keys * sizeof(*front));
-    bool *active = malloc(num_keys * sizeof(*active));
-    double *row = malloc(num_keys * sizeof(*row));
-    size_t active_count = 0;
+    // Per-key chunk state for the k-way merge.
+    EnrichedChunk **key_chunks =
+        malloc(num_keys * sizeof(*key_chunks)); // current data batch per key
+    size_t *chunk_pos =
+        malloc(num_keys * sizeof(*chunk_pos)); // position inside current batch per key
+    bool *key_active = malloc(num_keys * sizeof(*key_active)); // whether key still has data
 
+    // Pre-compute where each key's values start in the flat row buffer, and the total row width.
+    size_t *key_row_offset = malloc(num_keys * sizeof(*key_row_offset));
+    size_t row_width = 0;
     for (size_t i = 0; i < num_keys; i++) {
-        active[i] = (iters[i]->GetNext(iters[i], &front[i]) == CR_OK);
-        if (active[i]) {
+        key_row_offset[i] = row_width;
+        row_width += aggs_per_key[i];
+    }
+    double *row_buf = malloc(row_width * sizeof(*row_buf)); // scratch buffer for one output row
+
+    size_t active_count = 0;
+    for (size_t i = 0; i < num_keys; i++) {
+        key_chunks[i] = NextNonemptyChunk(iters[i]);
+        chunk_pos[i] = 0;
+        key_active[i] = (key_chunks[i] != NULL);
+        if (key_active[i])
             active_count++;
-        }
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     long long emitted = 0;
     while (active_count > 0 && emitted < limit) {
-        // Next output timestamp: smallest front (largest when reverse).
+        // Next output timestamp: smallest front ts (largest when reverse).
         // Linear over the fronts; a heap could replace it if num_keys grows large.
         bool found = false;
         timestamp_t target = 0;
         for (size_t i = 0; i < num_keys; i++) {
-            if (!active[i]) {
+            if (!key_active[i])
                 continue;
-            }
-            if (!found ||
-                (reverse ? (front[i].timestamp > target) : (front[i].timestamp < target))) {
-                target = front[i].timestamp;
+            timestamp_t ts = key_chunks[i]->samples.timestamps[chunk_pos[i]];
+            if (!found || (reverse ? ts > target : ts < target)) {
+                target = ts;
                 found = true;
             }
         }
 
-        // Build the pivoted row. A missing sample for a key at this timestamp is
-        // reported as NaN -- indistinguishable from a key that has a real sample
-        // whose value is NaN. This conflation is intended behavior (see the
-        // TS.NRANGE/TS.NREVRANGE command docs); disambiguating would require a
-        // separate null cell.
+        // Build the pivoted row. A missing sample for a key at this timestamp is reported as
+        // NaN -- indistinguishable from a key that has a real NaN sample. This conflation is
+        // intended (see TS.NRANGE/TS.NREVRANGE docs); disambiguating needs a separate null cell.
         for (size_t i = 0; i < num_keys; i++) {
-            if (active[i] && front[i].timestamp == target) {
-                row[i] = front[i].value;
-                if (iters[i]->GetNext(iters[i], &front[i]) != CR_OK) {
-                    active[i] = false;
-                    active_count--;
+            double *slot = row_buf + key_row_offset[i];
+            if (key_active[i] && key_chunks[i]->samples.timestamps[chunk_pos[i]] == target) {
+                for (size_t j = 0; j < aggs_per_key[i]; j++) {
+                    slot[j] = Samples_value_at(&key_chunks[i]->samples, chunk_pos[i], j);
+                }
+                chunk_pos[i]++;
+                if (chunk_pos[i] >= key_chunks[i]->samples.num_samples) {
+                    key_chunks[i] = NextNonemptyChunk(iters[i]);
+                    if (!key_chunks[i]) {
+                        key_active[i] = false;
+                        active_count--;
+                    } else {
+                        chunk_pos[i] = 0;
+                    }
                 }
             } else {
-                row[i] = NAN;
+                for (size_t j = 0; j < aggs_per_key[i]; j++) {
+                    slot[j] = NAN;
+                }
             }
         }
 
-        ReplyWithPivotSample(ctx, target, row, num_keys);
+        ReplyWithPivotSample(ctx, target, row_buf, row_width);
         emitted++;
     }
 
@@ -389,9 +419,11 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
     for (size_t i = 0; i < num_keys; i++) {
         iters[i]->Close(iters[i]);
     }
-    free(front);
-    free(active);
-    free(row);
+    free(key_chunks);
+    free(chunk_pos);
+    free(key_active);
+    free(key_row_offset);
+    free(row_buf);
     return REDISMODULE_OK;
 }
 
