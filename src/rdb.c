@@ -39,6 +39,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     if (encver < TS_SIZE_RDB_VER) {
         cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
+    if (cCtx.chunkSizeBytes == 0 || cCtx.chunkSizeBytes % 8 != 0) {
+        RedisModule_LogIOError(io, "error", "chunkSizeBytes must be a non-zero multiple of 8");
+        err = true;
+        return NULL;
+    }
     cCtx.options = Load_IOError_OrDefault(
         io, err, NULL, encver >= TS_UNCOMPRESSED_VER, SERIES_OPT_UNCOMPRESSED);
 
