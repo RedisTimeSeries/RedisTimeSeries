@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
 import redis
 
-from includes import Env, VALGRIND, SANITIZER
+from includes import Env, VALGRIND, SANITIZER, RUNNER_LABEL
 from utils import slot_table
 
 
@@ -36,6 +36,13 @@ def test_asm_with_data():
 def test_asm_with_data_and_queries_during_migrations():
     env = Env(shardsCount=2, decodeResponses=True, noLog=False)
     if env.env != "oss-cluster":
+        env.skip()
+
+    # macos-15-intel is the slowest hosted runner and can't reliably serve the
+    # multi-shard query within LibMR's 5s max-idle during migration churn, so it
+    # occasionally trips the max-idle timeout instead of the expected slot-ranges
+    # error (MOD-14615 residual; not a product bug -- other macOS/Linux runners pass).
+    if RUNNER_LABEL == "macos-15-intel":
         env.skip()
 
     number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100

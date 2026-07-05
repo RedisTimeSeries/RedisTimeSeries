@@ -128,6 +128,8 @@ jobs:
       BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
       TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH}}
       PIP_BREAK_SYSTEM_PACKAGES: 1
+      # Expose the matrix runner label to the tests so they can skip on a specific runner.
+      RUNNER_LABEL: ${{ matrix.os }}
     runs-on: ${{matrix.os}}
     needs: setup-environment
     strategy:

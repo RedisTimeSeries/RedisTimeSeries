@@ -24,3 +24,9 @@ $SUDO yum -y install --nogpgcheck --skip-broken \
 
 rhel_default_install
 $SUDO ln -sf "$(command -v cmake3)" /usr/bin/cmake
+if [ -f /opt/rh/devtoolset-11/root/usr/bin/gcc ]; then
+    $SUDO ln -sf /opt/rh/devtoolset-11/root/usr/bin/make /usr/local/bin/make
+    $SUDO ln -sf /opt/rh/devtoolset-11/root/usr/bin/gcc /usr/local/bin/gcc
+    $SUDO ln -sf /opt/rh/devtoolset-11/root/usr/bin/g++ /usr/local/bin/g++
+    $SUDO ln -sf /opt/rh/devtoolset-11/root/usr/bin/cc /usr/local/bin/cc
+fi
