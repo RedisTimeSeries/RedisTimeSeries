@@ -106,6 +106,17 @@ def _rdb_read_string_len_and_skip(buf: bytes, idx: int):
         return outlen, idx + clen
     raise AssertionError("Unknown RDB string encoding")
 
+def _rdb_encode_len(v: int) -> bytes:
+    # Implements Redis rdbSaveLen() encoding for non-encoded lengths/integers.
+    assert v >= 0
+    if v < (1 << 6):
+        return bytes([v & 0x3F])
+    if v < (1 << 14):
+        return bytes([((v >> 8) & 0x3F) | 0x40, v & 0xFF])
+    if v <= 0xFFFFFFFF:
+        return bytes([0x80]) + int(v).to_bytes(4, "big", signed=False)
+    return bytes([0x81]) + int(v).to_bytes(8, "big", signed=False)
+
 def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: int) -> bytes:
     # We keep the same encoding width by ensuring new_num_samples fits in 6-bit len (0..63).
     assert 0 <= new_num_samples <= 63
@@ -338,3 +349,227 @@ def test_broken_rdb_invalid_uncompressed_chunk_metadata(env):
     env.skipOnCluster()
     rdb_payload = b'\x07\x81M \xc1\xf96\x0f\x10\x08\x05\x04zxcv\x02\x00\x02P\x00\x02\x01\x02\x01\x04\x00\x00\x00\x00\x00\x00\xf0?\x02\x01\x02\x00\x02\x00\x02\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x02\x00\x02\x01\x02\x00\x02\x80AAAA\x02\x01\x05B\xbbXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\x00\xff\x0c\x00\xf4\x02\x01#\x17\x97f\xae'
     env.expect('RESTORE', 'test_key', 0, rdb_payload, replace=True).error().contains("Bad data format")
+
+
+def test_broken_rdb_rejects_compressed_chunk_size_len_mismatch(env):
+    env.skipOnCluster()
+
+    rdb_payload = (b'\x07\x81M \xc1\xf96\x0f\x10\x08\x05\tts_retest\x02\x00\x02@@\x02\x00\x02C\xe8'
+                   b'\x04\x00\x00\x00\x00\x00\x00E@\x02\x01\x02\x00\x02\x00\x02\x00'
+                   b'\x04\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x02\x00\x02\x01\x02P\x00\x02\x00'
+                   b'\x02\x00\x02\x81@E\x00\x00\x00\x00\x00\x00\x02C\xe8\x02C\xe8\x02\x00'
+                   b'\x02\x81@E\x00\x00\x00\x00\x00\x00\x02 \x02 '
+                   b'\x05\x10\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f'
+                   b'\x00\x0c\x004\n\xe3@\x86\xf3\x15\xe1')
+
+    env.expect('RESTORE', 'ts_retest', 0, rdb_payload).error()
+
+    pong = env.cmd('PING')
+    assert pong in (b'PONG', 'PONG', True)
+    env.assertEqual(env.cmd('EXISTS', 'ts_retest'), 0)
+
+
+def _patch_first_compressed_chunk_misalign_size(dump: bytes) -> bytes:
+    """
+    Shrinks the first compressed chunk's data buffer by 1 byte and updates
+    chunk->size to match (so the size==len check still passes), producing a
+    buffer length that isn't a multiple of 8.
+    """
+    b = bytearray(dump)
+    assert _verify_dump_payload(dump), "baseline DUMP payload should have valid checksum"
+
+    idx = 0
+    idx += 1  # object type byte
+    _, _, idx = _rdb_load_len(dump, idx)  # moduleid
+
+    def read_opcode():
+        nonlocal idx
+        op, _, idx2 = _rdb_load_len(dump, idx)
+        idx = idx2
+        return op
+
+    def read_uint_capture():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 2  # RDB_MODULE_OPCODE_UINT
+        val_start = idx
+        val, _, idx2 = _rdb_load_len(dump, idx)
+        idx = idx2
+        return val, val_start, idx
+
+    def read_string_skip():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 5  # RDB_MODULE_OPCODE_STRING
+        idx = _rdb_skip_string(dump, idx)
+
+    def read_double_skip():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 4  # RDB_MODULE_OPCODE_DOUBLE
+        idx += 8
+
+    read_string_skip()                 # keyName
+    read_uint_capture()                # retentionTime
+    read_uint_capture()                # chunkSizeBytes
+    options, _, _ = read_uint_capture()
+    assert options == 2, "test assumes default COMPRESSED encoding (SERIES_OPT_COMPRESSED_GORILLA)"
+    read_uint_capture()                # lastTimestamp
+    read_double_skip()                 # lastValue
+    read_uint_capture()                # totalSamples
+    read_uint_capture()                # duplicatePolicy
+    has_src, _, _ = read_uint_capture()
+    assert has_src == 0
+    read_uint_capture()                # ignoreMaxTimeDiff
+    read_double_skip()                 # ignoreMaxValDiff
+    labels_count, _, _ = read_uint_capture()
+    assert labels_count == 0
+    rules_count, _, _ = read_uint_capture()
+    assert rules_count == 0
+    num_chunks, _, _ = read_uint_capture()
+    assert num_chunks == 1
+
+    size_val, size_start, size_end = read_uint_capture()  # chunk->size
+    read_uint_capture()  # count
+    read_uint_capture()  # idx
+    read_uint_capture()  # baseValue
+    read_uint_capture()  # baseTimestamp
+    read_uint_capture()  # prevTimestamp
+    read_uint_capture()  # prevTimestampDelta
+    read_uint_capture()  # prevValue
+    read_uint_capture()  # prevLeading
+    read_uint_capture()  # prevTrailing
+
+    string_field_start = idx
+    op = read_opcode()
+    assert op == 5  # RDB_MODULE_OPCODE_STRING
+    assert size_val % 8 == 0, "test assumes an 8-aligned baseline chunk size"
+    data_field_end = _rdb_skip_string(dump, idx)
+
+    new_len = size_val - 1
+    # Rebuild the whole data-string field as a plain (non-LZF, non-int-encoded)
+    # buffer of the new length -- the real DUMP may have LZF-compressed this
+    # field (it's mostly zero bytes), so we can't just truncate the raw bytes.
+    # Content doesn't matter here, only the length/alignment.
+    new_field = bytes([5]) + _rdb_encode_len(new_len) + bytes(new_len)
+
+    # Replace data-string field first (rightmost span), then chunk->size
+    # (leftmost span) -- editing right-to-left keeps the earlier offset valid.
+    b[string_field_start:data_field_end] = new_field
+    b[size_start:size_end] = _rdb_encode_len(new_len)
+
+    _patch_dump_crc(b)
+    assert _verify_dump_payload(bytes(b)), "patched DUMP payload should have valid checksum"
+    return bytes(b)
+
+
+def _patch_first_compressed_chunk_count(dump: bytes, new_count: int) -> bytes:
+    """
+    Inflates chunk->count on the first compressed chunk without touching
+    idx/size/data. Regression test for the missing count-vs-idx consistency
+    check in Compressed_LoadFromRDB.
+    """
+    b = bytearray(dump)
+    assert _verify_dump_payload(dump), "baseline DUMP payload should have valid checksum"
+
+    idx = 0
+    idx += 1  # object type byte
+    _, _, idx = _rdb_load_len(dump, idx)  # moduleid
+
+    def read_opcode():
+        nonlocal idx
+        op, _, idx2 = _rdb_load_len(dump, idx)
+        idx = idx2
+        return op
+
+    def read_uint_capture():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 2  # RDB_MODULE_OPCODE_UINT
+        val_start = idx
+        val, _, idx2 = _rdb_load_len(dump, idx)
+        idx = idx2
+        return val, val_start, idx
+
+    def read_string_skip():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 5  # RDB_MODULE_OPCODE_STRING
+        idx = _rdb_skip_string(dump, idx)
+
+    def read_double_skip():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 4  # RDB_MODULE_OPCODE_DOUBLE
+        idx += 8
+
+    read_string_skip()                 # keyName
+    read_uint_capture()                # retentionTime
+    read_uint_capture()                # chunkSizeBytes
+    options, _, _ = read_uint_capture()
+    assert options == 2, "test assumes default COMPRESSED encoding (SERIES_OPT_COMPRESSED_GORILLA)"
+    read_uint_capture()                # lastTimestamp
+    read_double_skip()                 # lastValue
+    read_uint_capture()                # totalSamples
+    read_uint_capture()                # duplicatePolicy
+    has_src, _, _ = read_uint_capture()
+    assert has_src == 0
+    read_uint_capture()                # ignoreMaxTimeDiff
+    read_double_skip()                 # ignoreMaxValDiff
+    labels_count, _, _ = read_uint_capture()
+    assert labels_count == 0
+    rules_count, _, _ = read_uint_capture()
+    assert rules_count == 0
+    num_chunks, _, _ = read_uint_capture()
+    assert num_chunks == 1
+
+    read_uint_capture()                                      # chunk->size
+    count_val, count_start, count_end = read_uint_capture()  # chunk->count
+
+    b[count_start:count_end] = _rdb_encode_len(new_count)
+
+    _patch_dump_crc(b)
+    assert _verify_dump_payload(bytes(b)), "patched DUMP payload should have valid checksum"
+    return bytes(b)
+
+
+def test_broken_rdb_rejects_compressed_chunk_size_not_word_aligned(env):
+    env.skipOnCluster()
+
+    env.cmd('TS.CREATE', 'test_key', 'CHUNK_SIZE', '48')
+    env.cmd('TS.ADD', 'test_key', 1000, 1.0)
+
+    valid_dump = env.cmd('DUMP', 'test_key')
+    malicious_dump = _patch_first_compressed_chunk_misalign_size(valid_dump)
+
+    env.cmd('DEL', 'test_key')
+
+    env.expect('RESTORE', 'test_key', 0, malicious_dump).error()
+
+
+def test_broken_rdb_rejects_compressed_chunk_count_exceeds_encoded_bits(env):
+    env.skipOnCluster()
+
+    env.cmd('TS.CREATE', 'test_key', 'CHUNK_SIZE', '128')
+    env.cmd('TS.ADD', 'test_key', 1000, 1.0)
+
+    valid_dump = env.cmd('DUMP', 'test_key')
+    malicious_dump = _patch_first_compressed_chunk_count(valid_dump, 1000000)
+
+    env.cmd('DEL', 'test_key')
+
+    env.expect('RESTORE', 'test_key', 0, malicious_dump).error()
+
+
+def test_broken_rdb_rejects_compressed_chunk_count_overflow_bypass(env):
+    env.skipOnCluster()
+
+    env.cmd('TS.CREATE', 'test_key', 'CHUNK_SIZE', '128')
+    env.cmd('TS.ADD', 'test_key', 1000, 1.0)
+
+    valid_dump = env.cmd('DUMP', 'test_key')
+    malicious_dump = _patch_first_compressed_chunk_count(valid_dump, (1 << 63) + 1)
+
+    env.cmd('DEL', 'test_key')
+
+    env.expect('RESTORE', 'test_key', 0, malicious_dump).error()
