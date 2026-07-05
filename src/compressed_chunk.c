@@ -545,6 +545,22 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
         err = true;
         return TSDB_ERROR; /* Bit index can't exceed buffer size in bits */
     }
+    if (compchunk->size != len) {
+        err = true;
+        return TSDB_ERROR; /* size metadata must match actual buffer length */
+    }
+    if (compchunk->size % sizeof(binary_t) != 0) {
+        err = true;
+        return TSDB_ERROR; /* gorilla.c reads/writes data in binary_t (8-byte) words */
+    }
+    /* Every sample after the first costs >=2 bits to encode (appendInteger/appendFloat
+     * in gorilla.c), so idx must be able to cover count-1 appended samples.
+     * Written as idx/2 < count-1 (equivalent to idx < 2*(count-1) for non-negative
+     * integers) to avoid overflow when count is attacker-inflated near UINT64_MAX. */
+    if (compchunk->count > 0 && compchunk->idx / 2 < compchunk->count - 1) {
+        err = true;
+        return TSDB_ERROR;
+    }
     *chunk = (Chunk_t *)compchunk;
 
     return TSDB_OK;
