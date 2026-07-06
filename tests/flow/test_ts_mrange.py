@@ -1054,3 +1054,304 @@ def test_mrange_empty_fill_range_ends_after_last_sample():
                                             'FILTER', _EMPTY_FILL_LABEL)
             assert _mrange_key_samples(mrange_res, 'ef_after') == range_res, \
                 f'after-last-sample mismatch for agg={agg}'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXCLUDEEMPTY tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _excl_keys(res):
+    """Return sorted list of key names from RESP2 or RESP3 MRANGE result."""
+    if isinstance(res, dict):
+        return sorted(k.decode() if isinstance(k, bytes) else k for k in res.keys())
+    return sorted(s[0].decode() if isinstance(s[0], bytes) else s[0] for s in res)
+
+
+def _excl_samples(res, key):
+    """Return sample list for key from RESP2 or RESP3 MRANGE result."""
+    key_b = key.encode() if isinstance(key, str) else key
+    if isinstance(res, dict):
+        entry = res.get(key_b) or res.get(key)
+        return entry[-1]  # last element is always samples
+    for s in res:
+        if s[0] == key_b or s[0] == key:
+            return s[2]
+    raise AssertionError(repr(key) + ' not found in result')
+
+
+def test_excludeempty_basic(env):
+    """Series with no samples in range are excluded; series with data are returned."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xeb1', 'LABELS', 'g', 'xeb')
+        r.execute_command('TS.CREATE', 'xeb2', 'LABELS', 'g', 'xeb')
+        r.execute_command('TS.CREATE', 'xeb3', 'LABELS', 'g', 'xeb')
+        r.execute_command('TS.ADD', 'xeb1', 10, 1.0)
+        r.execute_command('TS.ADD', 'xeb1', 20, 2.0)
+        r.execute_command('TS.ADD', 'xeb2', 1000, 99.0)   # outside range
+        r.execute_command('TS.ADD', 'xeb3', 15, 3.0)
+
+        res = r1.execute_command('TS.MRANGE', 1, 100, 'EXCLUDEEMPTY', 'FILTER', 'g=xeb')
+        assert _excl_keys(res) == ['xeb1', 'xeb3']
+
+        res_all = r1.execute_command('TS.MRANGE', 1, 100, 'FILTER', 'g=xeb')
+        assert len(res_all) == 3
+
+
+def test_excludeempty_all_empty(env):
+    """When every series is empty in range the reply is an empty array."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xee1', 'LABELS', 'g', 'xee')
+        r.execute_command('TS.CREATE', 'xee2', 'LABELS', 'g', 'xee')
+        r.execute_command('TS.ADD', 'xee1', 9999, 1.0)
+        r.execute_command('TS.ADD', 'xee2', 9999, 2.0)
+
+        res = r1.execute_command('TS.MRANGE', 1, 100, 'EXCLUDEEMPTY', 'FILTER', 'g=xee')
+        assert res == [] or res == {}
+
+
+def test_excludeempty_all_have_data(env):
+    """When every series has data the result matches a plain MRANGE."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xea1', 'LABELS', 'g', 'xea')
+        r.execute_command('TS.CREATE', 'xea2', 'LABELS', 'g', 'xea')
+        r.execute_command('TS.ADD', 'xea1', 10, 1.0)
+        r.execute_command('TS.ADD', 'xea2', 20, 2.0)
+
+        res_excl = r1.execute_command('TS.MRANGE', 1, 100, 'EXCLUDEEMPTY', 'FILTER', 'g=xea')
+        res_plain = r1.execute_command('TS.MRANGE', 1, 100, 'FILTER', 'g=xea')
+        assert _excl_keys(res_excl) == _excl_keys(res_plain)
+
+
+def test_excludeempty_single_series_empty(env):
+    """Only series: empty → reply is []."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xes1', 'LABELS', 'g', 'xes1')
+        r.execute_command('TS.ADD', 'xes1', 500, 7.0)
+
+        res = r1.execute_command('TS.MRANGE', 1, 10, 'EXCLUDEEMPTY', 'FILTER', 'g=xes1')
+        assert res == [] or res == {}
+
+
+def test_excludeempty_single_series_nonempty(env):
+    """Only series: has data → returned normally."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xes2', 'LABELS', 'g', 'xes2')
+        r.execute_command('TS.ADD', 'xes2', 5, 7.0)
+
+        res = r1.execute_command('TS.MRANGE', 1, 10, 'EXCLUDEEMPTY', 'FILTER', 'g=xes2')
+        assert _excl_keys(res) == ['xes2']
+
+
+def test_excludeempty_withlabels(env):
+    """EXCLUDEEMPTY + WITHLABELS: non-empty series include their labels."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xewl1', 'LABELS', 'g', 'xewl', 'name', 'alpha')
+        r.execute_command('TS.CREATE', 'xewl2', 'LABELS', 'g', 'xewl', 'name', 'beta')
+        r.execute_command('TS.ADD', 'xewl1', 5, 1.0)
+        r.execute_command('TS.ADD', 'xewl2', 5000, 2.0)   # outside range
+
+        res = r1.execute_command('TS.MRANGE', 1, 100, 'WITHLABELS', 'EXCLUDEEMPTY', 'FILTER', 'g=xewl')
+        assert _excl_keys(res) == ['xewl1']
+        labels = dict(next(s[1] for s in res if s[0] == b'xewl1'))
+        assert labels[b'name'] == b'alpha'
+
+
+def test_excludeempty_with_count(env):
+    """EXCLUDEEMPTY + COUNT: count applies to samples within the kept series."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xec1', 'LABELS', 'g', 'xec')
+        r.execute_command('TS.CREATE', 'xec2', 'LABELS', 'g', 'xec')
+        for i in range(1, 11):
+            r.execute_command('TS.ADD', 'xec1', i, float(i))
+        r.execute_command('TS.ADD', 'xec2', 9999, 1.0)
+
+        res = r1.execute_command('TS.MRANGE', 1, 100, 'COUNT', 3, 'EXCLUDEEMPTY', 'FILTER', 'g=xec')
+        assert _excl_keys(res) == ['xec1']
+        assert len(_excl_samples(res, 'xec1')) == 3
+
+
+def test_excludeempty_with_aggregation(env):
+    """EXCLUDEEMPTY + AGGREGATION: series with no raw samples in range are excluded."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xeag1', 'LABELS', 'g', 'xeag')
+        r.execute_command('TS.CREATE', 'xeag2', 'LABELS', 'g', 'xeag')
+        for i in range(0, 100, 10):
+            r.execute_command('TS.ADD', 'xeag1', i, float(i))
+        r.execute_command('TS.ADD', 'xeag2', 9999, 1.0)
+
+        res = r1.execute_command(
+            'TS.MRANGE', 0, 99, 'AGGREGATION', 'avg', 50, 'EXCLUDEEMPTY', 'FILTER', 'g=xeag')
+        assert _excl_keys(res) == ['xeag1']
+
+
+def test_excludeempty_with_filter_by_value(env):
+    """EXCLUDEEMPTY + FILTER_BY_VALUE: series whose values all fall outside the filter are excluded."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xefv1', 'LABELS', 'g', 'xefv')
+        r.execute_command('TS.CREATE', 'xefv2', 'LABELS', 'g', 'xefv')
+        r.execute_command('TS.ADD', 'xefv1', 10, 5.0)
+        r.execute_command('TS.ADD', 'xefv1', 20, 15.0)
+        r.execute_command('TS.ADD', 'xefv2', 10, 100.0)
+        r.execute_command('TS.ADD', 'xefv2', 20, 200.0)
+
+        res = r1.execute_command(
+            'TS.MRANGE', 1, 100, 'FILTER_BY_VALUE', 0, 20, 'EXCLUDEEMPTY', 'FILTER', 'g=xefv')
+        assert _excl_keys(res) == ['xefv1']
+
+
+def test_excludeempty_with_filter_by_ts(env):
+    """EXCLUDEEMPTY + FILTER_BY_TS: series with no matching timestamps are excluded."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xeft1', 'LABELS', 'g', 'xeft')
+        r.execute_command('TS.CREATE', 'xeft2', 'LABELS', 'g', 'xeft')
+        r.execute_command('TS.ADD', 'xeft1', 10, 1.0)
+        r.execute_command('TS.ADD', 'xeft1', 20, 2.0)
+        r.execute_command('TS.ADD', 'xeft2', 30, 3.0)   # not in FILTER_BY_TS list
+
+        res = r1.execute_command(
+            'TS.MRANGE', 1, 100, 'FILTER_BY_TS', 10, 20, 'EXCLUDEEMPTY', 'FILTER', 'g=xeft')
+        assert _excl_keys(res) == ['xeft1']
+
+
+def test_excludeempty_mrevrange(env):
+    """EXCLUDEEMPTY works with TS.MREVRANGE and returns samples in reverse order."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xer1', 'LABELS', 'g', 'xer')
+        r.execute_command('TS.CREATE', 'xer2', 'LABELS', 'g', 'xer')
+        r.execute_command('TS.ADD', 'xer1', 10, 1.0)
+        r.execute_command('TS.ADD', 'xer1', 20, 2.0)
+        r.execute_command('TS.ADD', 'xer1', 30, 3.0)
+        r.execute_command('TS.ADD', 'xer2', 9999, 1.0)
+
+        res = r1.execute_command('TS.MREVRANGE', 1, 100, 'EXCLUDEEMPTY', 'FILTER', 'g=xer')
+        assert _excl_keys(res) == ['xer1']
+        timestamps = [s[0] for s in _excl_samples(res, 'xer1')]
+        assert timestamps == sorted(timestamps, reverse=True)
+
+
+def test_excludeempty_boundary_timestamps(env):
+    """Series with a sample exactly at the range boundary is included."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xebt1', 'LABELS', 'g', 'xebt')
+        r.execute_command('TS.CREATE', 'xebt2', 'LABELS', 'g', 'xebt')
+        r.execute_command('TS.ADD', 'xebt1', 1, 1.0)    # exactly at start
+        r.execute_command('TS.ADD', 'xebt2', 100, 2.0)  # exactly at end
+
+        res = r1.execute_command('TS.MRANGE', 1, 100, 'EXCLUDEEMPTY', 'FILTER', 'g=xebt')
+        assert _excl_keys(res) == ['xebt1', 'xebt2']
+
+        res_out = r1.execute_command('TS.MRANGE', 2, 99, 'EXCLUDEEMPTY', 'FILTER', 'g=xebt')
+        assert res_out == [] or res_out == {}
+
+
+def test_excludeempty_error_with_groupby(env):
+    """EXCLUDEEMPTY combined with GROUPBY must return an error."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xegb1', 'LABELS', 'g', 'xegb')
+        with pytest.raises(redis.ResponseError) as exc:
+            r1.execute_command(
+                'TS.MRANGE', 1, 100,
+                'EXCLUDEEMPTY',
+                'FILTER', 'g=xegb',
+                'GROUPBY', 'g', 'REDUCE', 'sum')
+        assert 'EXCLUDEEMPTY' in str(exc.value)
+
+
+def test_excludeempty_mixed_large(env):
+    """10 series: alternating empty/non-empty — exactly the non-empty ones come back."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        expected = []
+        for i in range(10):
+            key = f'xeml{i}'
+            r.execute_command('TS.CREATE', key, 'LABELS', 'g', 'xeml')
+            if i % 2 == 0:
+                r.execute_command('TS.ADD', key, 50, float(i))
+                expected.append(key)
+            else:
+                r.execute_command('TS.ADD', key, 9999, float(i))
+
+        res = r1.execute_command('TS.MRANGE', 1, 100, 'EXCLUDEEMPTY', 'FILTER', 'g=xeml')
+        assert _excl_keys(res) == sorted(expected)
+
+
+def _run_excludeempty_agg_type(env, agg_type):
+    label_val = f'xeat_{agg_type}'
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', f'xeat1_{agg_type}', 'LABELS', 'g', label_val)
+        r.execute_command('TS.CREATE', f'xeat2_{agg_type}', 'LABELS', 'g', label_val)
+        r.execute_command('TS.ADD', f'xeat1_{agg_type}', 10, 3.0)
+        r.execute_command('TS.ADD', f'xeat1_{agg_type}', 20, 5.0)
+        r.execute_command('TS.ADD', f'xeat2_{agg_type}', 9999, 1.0)
+        res = r1.execute_command(
+            'TS.MRANGE', 1, 100, 'AGGREGATION', agg_type, 100, 'EXCLUDEEMPTY', 'FILTER', f'g={label_val}')
+        assert _excl_keys(res) == [f'xeat1_{agg_type}'], f'agg={agg_type}'
+        assert len(_excl_samples(res, f'xeat1_{agg_type}')) == 1, f'agg={agg_type}'
+
+
+def test_excludeempty_agg_type_avg(env):
+    _run_excludeempty_agg_type(env, 'avg')
+
+def test_excludeempty_agg_type_sum(env):
+    _run_excludeempty_agg_type(env, 'sum')
+
+def test_excludeempty_agg_type_min(env):
+    _run_excludeempty_agg_type(env, 'min')
+
+def test_excludeempty_agg_type_max(env):
+    _run_excludeempty_agg_type(env, 'max')
+
+def test_excludeempty_agg_type_count(env):
+    _run_excludeempty_agg_type(env, 'count')
+
+def test_excludeempty_agg_type_first(env):
+    _run_excludeempty_agg_type(env, 'first')
+
+def test_excludeempty_agg_type_last(env):
+    _run_excludeempty_agg_type(env, 'last')
+
+
+def test_excludeempty_agg_empty_flag_both_sides(env):
+    """AGGREGATION EMPTY + data on BOTH sides of range: NaN buckets are produced →
+    reply is non-empty → series is KEPT by EXCLUDEEMPTY (reply-level semantics)."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xebs', 'LABELS', 'g', 'xebs')
+        r.execute_command('TS.ADD', 'xebs', 10, 1.0)     # before range
+        r.execute_command('TS.ADD', 'xebs', 9999, 2.0)   # after range
+
+        # No raw samples in [1000, 5000], but EMPTY fills NaN buckets because
+        # there's data on both sides → reply is non-empty → series must be kept.
+        res = r1.execute_command(
+            'TS.MRANGE', 1000, 5000, 'AGGREGATION', 'avg', 1000, 'EMPTY', 'EXCLUDEEMPTY', 'FILTER', 'g=xebs')
+        assert _excl_keys(res) == ['xebs']
+        samples = _excl_samples(res, 'xebs')
+        assert len(samples) > 0
+        assert all(math.isnan(float(v)) for _, v in samples)
+
+
+def test_excludeempty_agg_empty_flag_one_side(env):
+    """AGGREGATION EMPTY + data on ONE side only: edge buckets dropped → no NaN buckets
+    in range → series is EXCLUDED by EXCLUDEEMPTY."""
+    with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xeos', 'LABELS', 'g', 'xeos')
+        r.execute_command('TS.ADD', 'xeos', 9999, 2.0)   # after range only
+
+        res = r1.execute_command(
+            'TS.MRANGE', 1000, 5000, 'AGGREGATION', 'avg', 1000, 'EMPTY', 'EXCLUDEEMPTY', 'FILTER', 'g=xeos')
+        assert res == [] or res == {}
+
+
+def test_excludeempty_resp3(env):
+    """EXCLUDEEMPTY returns correct keys under RESP3 (map reply)."""
+    from utils import is_resp3_possible
+    if not is_resp3_possible(env):
+        env.skip()
+    env3 = Env(protocol=3)
+    with env3.getClusterConnectionIfNeeded() as r, env3.getConnection(1) as r1:
+        r.execute_command('TS.CREATE', 'xr3a', 'LABELS', 'g', 'xr3')
+        r.execute_command('TS.CREATE', 'xr3b', 'LABELS', 'g', 'xr3')
+        r.execute_command('TS.ADD', 'xr3a', 10, 1.0)
+        r.execute_command('TS.ADD', 'xr3b', 9999, 2.0)   # outside range
+
+        res = r1.execute_command('TS.MRANGE', 1, 100, 'EXCLUDEEMPTY', 'FILTER', 'g=xr3')
+        assert isinstance(res, dict)
+        assert _excl_keys(res) == ['xr3a']

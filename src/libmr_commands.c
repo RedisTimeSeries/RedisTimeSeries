@@ -308,6 +308,11 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
             tempSeries = array_append(tempSeries, s);
 
+            if (data->args.excludeEmpty &&
+                !SeriesHasSamplesInRange(s, &data->args.rangeArgs, data->args.reverse)) {
+                continue;
+            }
+
             if (data->args.groupByLabel) {
                 ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
             } else {

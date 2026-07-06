@@ -137,9 +137,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
 }
 
 bool SeriesHasSamplesInRange(Series *series, const RangeArgs *args, bool reverse) {
-    RangeArgs oneArgs = *args;
-    oneArgs.count = 1;
-    AbstractIterator *iter = SeriesQuery(series, &oneArgs, reverse, true);
+    AbstractIterator *iter = SeriesQuery(series, args, reverse, true);
     EnrichedChunk *chunk = iter->GetNext(iter);
     bool hasData = chunk && chunk->samples.num_samples > 0;
     iter->Close(iter);
