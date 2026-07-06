@@ -275,20 +275,12 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
         resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
     } else {
-        size_t total_len = 0;
-        for (int i = 0; i < len; i++) {
-            Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-            if (raw_listRecord->recordType != GetListRecordType()) {
-                RedisModule_Log(ctx,
-                                "warning",
-                                "Unexpected record type: %s",
-                                raw_listRecord->recordType->type.type);
-                continue;
-            }
-            total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
-        }
-        ReplyWithMapOrArray(ctx, total_len, false);
+        // ponytail: postponed length — EXCLUDEEMPTY may skip series, so the real
+        // count is only known after emission (see ReplySetMapOrArrayLength below).
+        ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     }
+
+    long long replylen = 0;
 
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
@@ -332,8 +324,13 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
                                     false,
                                     probe,
                                     first_chunk);
+                replylen++;
             }
         }
+    }
+
+    if (!data->args.groupByLabel) {
+        ReplySetMapOrArrayLength(ctx, replylen, false);
     }
 
     if (data->args.groupByLabel) {
