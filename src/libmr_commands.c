@@ -226,7 +226,9 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
                                     args->numLimitLabels,
                                     replyArgs,
                                     args->reverse,
-                                    false);
+                                    false,
+                                    NULL,
+                                    NULL);
             }
         }
     });
@@ -308,9 +310,13 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
             tempSeries = array_append(tempSeries, s);
 
-            if (data->args.excludeEmpty &&
-                !SeriesHasSamplesInRange(s, &data->args.rangeArgs, data->args.reverse)) {
-                continue;
+            EnrichedChunk *first_chunk = NULL;
+            AbstractIterator *probe = NULL;
+            if (data->args.excludeEmpty) {
+                probe = SeriesQueryIfNonEmpty(
+                    s, &data->args.rangeArgs, data->args.reverse, &first_chunk);
+                if (!probe)
+                    continue;
             }
 
             if (data->args.groupByLabel) {
@@ -323,7 +329,9 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
                                     data->args.numLimitLabels,
                                     &data->args.rangeArgs,
                                     data->args.reverse,
-                                    false);
+                                    false,
+                                    probe,
+                                    first_chunk);
             }
         }
     }

@@ -39,10 +39,20 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         uint16_t limitLabelsSize,
                         const RangeArgs *args,
                         bool rev,
-                        bool print_reduced);
+                        bool print_reduced,
+                        AbstractIterator *iter,
+                        EnrichedChunk *first_chunk);
+
+AbstractIterator *SeriesQueryIfNonEmpty(Series *series,
+                                        const RangeArgs *args,
+                                        bool reverse,
+                                        EnrichedChunk **first_chunk_out);
 
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool rev);
-bool SeriesHasSamplesInRange(Series *series, const RangeArgs *args, bool reverse);
+int ReplySeriesRangeFromIter(RedisModuleCtx *ctx,
+                             AbstractIterator *iter,
+                             EnrichedChunk *first_chunk,
+                             const RangeArgs *args);
 
 // Reply one pivoted row: [timestamp, [value_0, value_1, ..., value_{num_values-1}]].
 void ReplyWithPivotSample(RedisModuleCtx *ctx,
