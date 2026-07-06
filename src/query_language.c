@@ -18,10 +18,10 @@
 #define stringify(x) stringify2(x)
 #define stringify2(x) #x
 
-#define QUERY_TOKEN_SIZE 9
+#define QUERY_TOKEN_SIZE 10
 static const char *QUERY_TOKENS[] = {
     "WITHLABELS", "AGGREGATION",     "LIMIT",        "GROUPBY", "REDUCE",
-    "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",
+    "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",   "EXCLUDEEMPTY",
 };
 
 static int parseTimestamp(RedisModuleString *string, timestamp_t *out) {
@@ -990,6 +990,8 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
     args.queryPredicates = queries;
 
+    args.excludeEmpty = RMUtil_ArgIndex("EXCLUDEEMPTY", argv, argc) > 0;
+
     if (groupby_location > 0) {
         if (groupby_location + 1 >= argc) {
             // GROUP BY without any argument
@@ -1016,6 +1018,12 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
             goto error_free_all;
         }
     }
+
+    if (args.excludeEmpty && args.groupByLabel != NULL) {
+        RTS_ReplyGeneralError(ctx, "TSDB: EXCLUDEEMPTY is not allowed with GROUPBY");
+        goto error_free_all;
+    }
+
     *out = args;
     return REDISMODULE_OK;
 

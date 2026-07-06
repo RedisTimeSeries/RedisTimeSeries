@@ -463,6 +463,12 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
             continue;
         }
 
+        if (args->excludeEmpty &&
+            !SeriesHasSamplesInRange(series, &args->rangeArgs, args->reverse)) {
+            RedisModule_CloseKey(key);
+            RedisModule_FreeString(ctx, currentKey);
+            continue;
+        }
         ReplySeriesArrayPos(ctx,
                             series,
                             args->withLabels,

@@ -92,6 +92,7 @@ typedef struct MRangeArgs
     const char *groupByLabel;
     ReducerArgs groupByReducerArgs;
     bool reverse;
+    bool excludeEmpty;
 } MRangeArgs;
 
 typedef struct MGetArgs

@@ -136,6 +136,16 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
     return REDISMODULE_OK;
 }
 
+bool SeriesHasSamplesInRange(Series *series, const RangeArgs *args, bool reverse) {
+    RangeArgs oneArgs = *args;
+    oneArgs.count = 1;
+    AbstractIterator *iter = SeriesQuery(series, &oneArgs, reverse, true);
+    EnrichedChunk *chunk = iter->GetNext(iter);
+    bool hasData = chunk && chunk->samples.num_samples > 0;
+    iter->Close(iter);
+    return hasData;
+}
+
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
     long long arraylen = 0;
     long long _count = LLONG_MAX;

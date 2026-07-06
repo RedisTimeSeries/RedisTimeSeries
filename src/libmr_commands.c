@@ -630,6 +630,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->excludeEmpty = args.excludeEmpty;
     // Always send FILTERBY to shards; they apply it regardless of aggregation.
     queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
     queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;

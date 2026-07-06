@@ -42,6 +42,7 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         bool print_reduced);
 
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool rev);
+bool SeriesHasSamplesInRange(Series *series, const RangeArgs *args, bool reverse);
 
 // Reply one pivoted row: [timestamp, [value_0, value_1, ..., value_{num_values-1}]].
 void ReplyWithPivotSample(RedisModuleCtx *ctx,
