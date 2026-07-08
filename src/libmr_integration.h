@@ -41,6 +41,7 @@ typedef struct QueryPredicates_Arg
     timestamp_t timestampAlignment;
     FilterByValueArgs filterByValueArgs;
     FilterByTSArgs filterByTSArgs;
+    bool excludeEmpty;
 } QueryPredicates_Arg;
 
 typedef struct StringRecord

@@ -79,7 +79,9 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         uint16_t limitLabelsSize,
                         const RangeArgs *args,
                         bool rev,
-                        bool print_reduced) {
+                        bool print_reduced,
+                        AbstractIterator *iter,
+                        EnrichedChunk *first_chunk) {
     if (!_ReplyMap(ctx)) {
         RedisModule_ReplyWithArray(ctx, MRANGE_RESP2_ENTRY_ELEMENTS);
     }
@@ -132,23 +134,47 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
             }
         }
     }
-    ReplySeriesRange(ctx, s, args, rev);
+    if (iter) {
+        ReplySeriesRangeFromIter(ctx, iter, first_chunk, args);
+    } else {
+        ReplySeriesRange(ctx, s, args, rev);
+    }
     return REDISMODULE_OK;
 }
 
-int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
-    long long arraylen = 0;
-    long long _count = LLONG_MAX;
-    unsigned int n;
-    if (args->count != -1) {
-        _count = args->count;
-    }
-
+AbstractIterator *SeriesQueryIfNonEmpty(Series *series,
+                                        const RangeArgs *args,
+                                        bool reverse,
+                                        EnrichedChunk **first_chunk_out) {
     AbstractIterator *iter = SeriesQuery(series, args, reverse, true);
-    EnrichedChunk *enrichedChunk;
+    EnrichedChunk *chunk;
+    while ((chunk = iter->GetNext(iter)) != NULL) {
+        if (chunk->samples.num_samples > 0) {
+            *first_chunk_out = chunk;
+            return iter;
+        }
+    }
+    iter->Close(iter);
+    return NULL;
+}
+
+int ReplySeriesRangeFromIter(RedisModuleCtx *ctx,
+                             AbstractIterator *iter,
+                             EnrichedChunk *first_chunk,
+                             const RangeArgs *args) {
+    long long arraylen = 0;
+    long long _count = (args->count != -1) ? args->count : LLONG_MAX;
+    unsigned int n;
+    EnrichedChunk *enrichedChunk = first_chunk;
+
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
-    while ((arraylen < _count) && (enrichedChunk = iter->GetNext(iter))) {
+    while (arraylen < _count) {
+        if (!enrichedChunk) {
+            enrichedChunk = iter->GetNext(iter);
+            if (!enrichedChunk)
+                break;
+        }
         n = (unsigned int)min(_count - arraylen, enrichedChunk->samples.num_samples);
         size_t vps = enrichedChunk->samples.values_per_sample;
         for (size_t i = 0; i < n; ++i) {
@@ -164,11 +190,16 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
             }
         }
         arraylen += n;
+        enrichedChunk = NULL;
     }
     iter->Close(iter);
 
     RedisModule_ReplySetArrayLength(ctx, arraylen);
     return REDISMODULE_OK;
+}
+
+int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
+    return ReplySeriesRangeFromIter(ctx, SeriesQuery(series, args, reverse, true), NULL, args);
 }
 
 void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,

@@ -1454,6 +1454,11 @@ static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
                 .type = REDISMODULE_ARG_TYPE_ONEOF,
                 .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
               { 0 } } },
+    { .name = "EXCLUDEEMPTY",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "EXCLUDEEMPTY",
+      .since = "8.10.0" },
     { 0 }
 };
 
@@ -1597,6 +1602,11 @@ static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
                 .type = REDISMODULE_ARG_TYPE_ONEOF,
                 .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
               { 0 } } },
+    { .name = "EXCLUDEEMPTY",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "EXCLUDEEMPTY",
+      .since = "8.10.0" },
     { 0 }
 };
 
