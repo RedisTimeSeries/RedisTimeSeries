@@ -226,7 +226,9 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
                                     args->numLimitLabels,
                                     replyArgs,
                                     args->reverse,
-                                    false);
+                                    false,
+                                    NULL,
+                                    NULL);
             }
         }
     });
@@ -273,20 +275,12 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
         resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
     } else {
-        size_t total_len = 0;
-        for (int i = 0; i < len; i++) {
-            Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-            if (raw_listRecord->recordType != GetListRecordType()) {
-                RedisModule_Log(ctx,
-                                "warning",
-                                "Unexpected record type: %s",
-                                raw_listRecord->recordType->type.type);
-                continue;
-            }
-            total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
-        }
-        ReplyWithMapOrArray(ctx, total_len, false);
+        // ponytail: postponed length — EXCLUDEEMPTY may skip series, so the real
+        // count is only known after emission (see ReplySetMapOrArrayLength below).
+        ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     }
+
+    long long replylen = 0;
 
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
@@ -308,6 +302,15 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
             tempSeries = array_append(tempSeries, s);
 
+            EnrichedChunk *first_chunk = NULL;
+            AbstractIterator *probe = NULL;
+            if (data->args.excludeEmpty) {
+                probe = SeriesQueryIfNonEmpty(
+                    s, &data->args.rangeArgs, data->args.reverse, &first_chunk);
+                if (!probe)
+                    continue;
+            }
+
             if (data->args.groupByLabel) {
                 ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
             } else {
@@ -318,9 +321,16 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
                                     data->args.numLimitLabels,
                                     &data->args.rangeArgs,
                                     data->args.reverse,
-                                    false);
+                                    false,
+                                    probe,
+                                    first_chunk);
+                replylen++;
             }
         }
+    }
+
+    if (!data->args.groupByLabel) {
+        ReplySetMapOrArrayLength(ctx, replylen, false);
     }
 
     if (data->args.groupByLabel) {
@@ -630,6 +640,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->excludeEmpty = args.excludeEmpty;
     // Always send FILTERBY to shards; they apply it regardless of aggregation.
     queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
     queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;

@@ -1188,6 +1188,13 @@
                         "name": "reducer"
                     }
                 ]
+            },
+            {
+                "name": "excludeempty",
+                "type": "pure-token",
+                "token": "EXCLUDEEMPTY",
+                "optional": true,
+                "since": "8.10.0"
             }
         ],
         "since": "1.0.0",
@@ -1365,6 +1372,13 @@
                         "name": "reducer"
                     }
                 ]
+            },
+            {
+                "name": "excludeempty",
+                "type": "pure-token",
+                "token": "EXCLUDEEMPTY",
+                "optional": true,
+                "since": "8.10.0"
             }
         ],
         "group": "timeseries"

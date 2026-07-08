@@ -463,6 +463,16 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
             continue;
         }
 
+        EnrichedChunk *first_chunk = NULL;
+        AbstractIterator *probe = NULL;
+        if (args->excludeEmpty) {
+            probe = SeriesQueryIfNonEmpty(series, &args->rangeArgs, args->reverse, &first_chunk);
+            if (!probe) {
+                RedisModule_CloseKey(key);
+                RedisModule_FreeString(ctx, currentKey);
+                continue;
+            }
+        }
         ReplySeriesArrayPos(ctx,
                             series,
                             args->withLabels,
@@ -470,7 +480,9 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
                             args->numLimitLabels,
                             &args->rangeArgs,
                             args->reverse,
-                            false);
+                            false,
+                            probe,
+                            first_chunk);
         replylen++;
         RedisModule_CloseKey(key);
         RedisModule_FreeString(ctx, currentKey);
