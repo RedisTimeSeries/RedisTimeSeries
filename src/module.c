@@ -336,6 +336,134 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+static int ParseQueryLabelsSubtype(RedisModuleCtx *ctx,
+                                   RedisModuleString *token,
+                                   QueryLabelsSubtype *out) {
+    static const struct
+    {
+        const char *name;
+        QueryLabelsSubtype value;
+    } subtypes[] = {
+        { "LABELS", QueryLabelsSubtype_Labels },
+        { "VALUES", QueryLabelsSubtype_Values },
+    };
+    const char *str = RedisModule_StringPtrLen(token, NULL);
+    for (size_t i = 0; i < sizeof(subtypes) / sizeof(subtypes[0]); i++) {
+        if (strcasecmp(str, subtypes[i].name) == 0) {
+            *out = subtypes[i].value;
+            return REDISMODULE_OK;
+        }
+    }
+    RTS_ReplyGeneralError(ctx, "TSDB: unknown subtype, must be one of LABELS|VALUES");
+    return REDISMODULE_ERR;
+}
+
+static void QueryLabelsEmitToDict(void *userData, const char *buf, size_t len) {
+    RedisModule_DictSetC((RedisModuleDict *)userData, (void *)buf, len, NULL);
+}
+
+// ACL: skips candidates the caller can't read.
+static void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
+                                               QueryLabelsSubtype subtype,
+                                               RedisModuleString *labelFilter,
+                                               RedisModuleDict *candidates,
+                                               RedisModuleDict *agg) {
+    User_Ctx_t userCtx = GetUserFromContext(ctx);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(candidates, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        if (!CheckKeyIsAllowedToReadC(ctx, userCtx.user, currentKey, currentKeyLen)) {
+            continue;
+        }
+        QueryLabelsFromIndex(
+            currentKey, currentKeyLen, subtype, labelFilter, QueryLabelsEmitToDict, agg);
+    }
+    RedisModule_DictIteratorStop(iter);
+    FreeUser(&userCtx);
+}
+
+static void _TSDB_querylabels_impl(RedisModuleCtx *ctx,
+                                   QueryLabelsSubtype subtype,
+                                   RedisModuleString *label,
+                                   QueryPredicateList *queries) {
+    RedisModuleDict *candidates = queries != NULL
+                                      ? QueryIndex(ctx, queries->list, queries->count, NULL)
+                                      : GetAllIndexedSeriesKeys(ctx);
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    QueryLabelsAggregateFromCandidates(ctx, subtype, label, candidates, agg);
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+    RedisModule_FreeDict(ctx, candidates);
+}
+
+int TSDB_querylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 2) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    QueryLabelsSubtype subtype;
+    if (ParseQueryLabelsSubtype(ctx, argv[1], &subtype) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    RedisModuleString *label = NULL;
+    int filter_start = 2;
+    if (subtype == QueryLabelsSubtype_Values) {
+        if (argc < 3) {
+            return RedisModule_WrongArity(ctx);
+        }
+        label = argv[2];
+        filter_start = 3;
+    }
+
+    const int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
+    if (filter_location != -1 && filter_location != filter_start) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: FILTER must immediately follow the subtype");
+    }
+    if (filter_location == -1 && argc > filter_start) {
+        return RTS_ReplyGeneralError(ctx, "TSDB: unknown argument, expected FILTER");
+    }
+
+    QueryPredicateList *queries = NULL;
+    if (filter_location != -1) {
+        const int query_count = argc - 1 - filter_location;
+        if (query_count <= 0) {
+            return RTS_ReplyGeneralError(ctx, "TSDB: FILTER given with no filter expressions");
+        }
+        if (parseFilter(ctx, argv, argc, filter_location, query_count, &queries) !=
+            REDISMODULE_OK) {
+            return REDISMODULE_ERR;
+        }
+    }
+
+    if (IsMRCluster()) {
+        int ctxFlags = RedisModule_GetContextFlags(ctx);
+
+        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+            RedisModule_ReplyWithError(ctx,
+                                       "Can not run multi sharded command inside a multi exec, "
+                                       "lua, or when blocking is not allowed");
+            if (queries != NULL) {
+                QueryPredicateList_Free(queries);
+            }
+            return REDISMODULE_OK;
+        }
+        TSDB_querylabels_MR(ctx, subtype, label, queries);
+    } else {
+        _TSDB_querylabels_impl(ctx, subtype, label, queries);
+    }
+
+    if (queries != NULL) {
+        QueryPredicateList_Free(queries);
+    }
+    return REDISMODULE_OK;
+}
+
 // multi-series groupby logic
 static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                   TS_ResultSet *resultset,
@@ -2598,6 +2726,15 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     SetCommandAcls(ctx, "ts.queryindex", "read");
+
+    if (RedisModule_CreateCommand(ctx, "ts.querylabels", TSDB_querylabels, "readonly", 0, 0, -1) ==
+        REDISMODULE_ERR) {
+        FreeConfigAndStaticCtx();
+
+        return REDISMODULE_ERR;
+    }
+
+    SetCommandAcls(ctx, "ts.querylabels", "read");
 
     RegisterCommandWithModesAndAcls(ctx, "ts.info", TSDB_info, "readonly", "read fast");
     RegisterCommandWithModesAndAcls(ctx, "ts.get", TSDB_get, "readonly", "read fast");

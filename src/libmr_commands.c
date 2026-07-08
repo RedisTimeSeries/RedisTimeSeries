@@ -5,6 +5,7 @@
 #include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "libmr_integration.h"
+#include "module.h"
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
@@ -744,6 +745,76 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
+
+    MR_Run(exec);
+    MR_FreeExecution(exec);
+    MR_FreeExecutionBuilder(builder);
+    return REDISMODULE_OK;
+}
+
+static void querylabels_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
+    if (!nodesResults) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    array_foreach(nodesResults, stringList, {
+        array_foreach(stringList, s, { RedisModule_DictSet(agg, s, NULL); });
+    });
+    array_free(nodesResults);
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
+static void querylabels_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    querylabels_done_internal(eCtx, ctx);
+
+    RTS_UnblockClient(bc, ctx);
+}
+
+int TSDB_querylabels_MR(RedisModuleCtx *ctx,
+                        QueryLabelsSubtype subtype,
+                        RedisModuleString *label,
+                        QueryPredicateList *queries) {
+    // Since this command will be supported only in newer versions.
+    if (TSGlobalConfig.libmrProtocol != LIBMR_PROTOCOL_INTERNAL) {
+        RedisModule_ReplyWithError(
+            ctx, "TS.QUERYLABELS multi-shard fan-out requires the INTERNAL LibMR protocol");
+        return REDISMODULE_OK;
+    }
+
+    QueryLabelsArg *queryArg = calloc(1, sizeof(QueryLabelsArg));
+    queryArg->refCount = 1;
+    queryArg->subtype = subtype;
+    queryArg->userName = CopyCurrentUserName(ctx);
+    if (label != NULL) {
+        queryArg->label = RedisModule_CreateStringFromString(NULL, label);
+    }
+    if (queries != NULL) {
+        queries->ref++;
+        queryArg->predicates = queries;
+        queryArg->hasFilter = true;
+    }
+
+    ExecutionBuilder *builder = MR_CreateEmptyExecutionBuilder();
+    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYLABELS", queryArg);
+
+    MRError *err = NULL;
+    Execution *exec = MR_CreateExecution(builder, &err);
+    if (err) {
+        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        MR_FreeExecutionBuilder(builder);
+        return REDISMODULE_OK;
+    }
+
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
+    MR_ExecutionSetOnDoneHandler(exec, querylabels_done, bc);
 
     MR_Run(exec);
     MR_FreeExecution(exec);

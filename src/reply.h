@@ -32,6 +32,9 @@ static inline bool _is_resp3(RedisModuleCtx *ctx) {
 #define _ReplyMap(ctx) (RedisModule_ReplyWithMap != NULL && _is_resp3(ctx))
 #define _ReplySet(ctx) (RedisModule_ReplyWithSet != NULL && _is_resp3(ctx))
 
+// Reply a set/array of raw dict keys as strings (e.g. a set of ts_keys or label values).
+void ReplyWithKeySetFromDict(RedisModuleCtx *ctx, RedisModuleDict *keySet);
+
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *series,
                         bool withlabels,

@@ -551,6 +551,54 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     return res;
 }
 
+RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx) {
+    RedisModuleDict *res = RedisModule_CreateDict(ctx);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(tsLabelIndex, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
+    }
+    RedisModule_DictIteratorStop(iter);
+    return res;
+}
+
+void QueryLabelsFromIndex(const char *tsKey,
+                         size_t tsKeyLen,
+                         QueryLabelsSubtype subtype,
+                         RedisModuleString *labelFilter,
+                         void (*emit)(void *userData, const char *buf, size_t len),
+                         void *userData) {
+    int nokey = 0;
+    RedisModuleDict *leaf = RedisModule_DictGetC(tsLabelIndex, (void *)tsKey, tsKeyLen, &nokey);
+    if (nokey) {
+        return;
+    }
+
+    RedisModuleString *prefix = subtype == QueryLabelsSubtype_Labels
+                                     ? RedisModule_CreateStringPrintf(NULL, K_PREFIX, "")
+                                     : RedisModule_CreateStringPrintf(
+                                           NULL, KV_PREFIX, RedisModule_StringPtrLen(labelFilter, NULL), "");
+    size_t prefixLen;
+    const char *prefixBuf = RedisModule_StringPtrLen(prefix, &prefixLen);
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(leaf, "^", NULL, 0);
+    char *entryBuf;
+    size_t entryLen;
+    while ((entryBuf = RedisModule_DictNextC(iter, &entryLen, NULL)) != NULL) {
+        if (entryLen < prefixLen || memcmp(entryBuf, prefixBuf, prefixLen) != 0) {
+            continue;
+        }
+        emit(userData, entryBuf + prefixLen, entryLen - prefixLen);
+        if (subtype == QueryLabelsSubtype_Values) {
+            break; // a series has at most one value for a given label name
+        }
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    RedisModule_FreeString(NULL, prefix);
+}
+
 void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
     for (size_t predicate_index = 0; predicate_index < count; predicate_index++) {
         QueryPredicate *predicate = &predicate_list[predicate_index];

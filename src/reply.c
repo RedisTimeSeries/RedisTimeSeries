@@ -72,6 +72,20 @@ void ReplyWithSetOrArray(RedisModuleCtx *ctx, long len) {
     }
 }
 
+void ReplyWithKeySetFromDict(RedisModuleCtx *ctx, RedisModuleDict *keySet) {
+    ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(keySet, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    long long replylen = 0;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        replylen++;
+    }
+    RedisModule_DictIteratorStop(iter);
+    ReplySetSetOrArrayLength(ctx, replylen);
+}
+
 int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         Series *s,
                         bool withlabels,

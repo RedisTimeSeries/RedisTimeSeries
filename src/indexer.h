@@ -20,6 +20,12 @@ typedef struct
     RedisModuleString *value;
 } Label;
 
+typedef enum QueryLabelsSubtype
+{
+    QueryLabelsSubtype_Labels = 0,
+    QueryLabelsSubtype_Values,
+} QueryLabelsSubtype;
+
 typedef enum
 {
     EQ,
@@ -73,6 +79,20 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count,
                             bool *hasPermissionError);
+
+// Returns a fresh dict of every currently-indexed series key (ts_key -> dummy).
+// Used by TS.QUERYLABELS when no FILTER is given ("all series").
+RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx);
+
+// Reads ts_key's label names (LABELS) or the value of the label named by `labelFilter` (VALUES).
+// Calls `emit` once per match: once per label name for LABELS, at most once for VALUES (a series
+// has at most one value per label name). No-op if ts_key isn't indexed.
+void QueryLabelsFromIndex(const char *tsKey,
+                         size_t tsKeyLen,
+                         QueryLabelsSubtype subtype,
+                         RedisModuleString *labelFilter,
+                         void (*emit)(void *userData, const char *buf, size_t len),
+                         void *userData);
 
 int CountPredicateType(QueryPredicateList *queries, PredicateType type);
 #endif
