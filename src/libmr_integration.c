@@ -221,6 +221,7 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
             MR_SerializationCtxWriteLongLong(sctx, predicate_list->filterByTSArgs.values[i], error);
         }
     }
+    MR_SerializationCtxWriteLongLong(sctx, predicate_list->excludeEmpty, error);
 }
 
 static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
@@ -356,6 +357,7 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
             predicates->filterByTSArgs.values[i] = MR_SerializationCtxReadLongLong(sctx, error);
         }
     }
+    predicates->excludeEmpty = MR_SerializationCtxReadLongLong(sctx, error);
 
     if (unlikely(expect_resp && *error)) {
         goto err;
@@ -846,6 +848,7 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.groupByReducerArgs.aggregationClass = NULL;
     mrangeArgs.groupByReducerArgs.agg_type = TS_AGG_NONE;
     mrangeArgs.reverse = false;
+    mrangeArgs.excludeEmpty = queryArg->excludeEmpty;
 
     AggregationClass *aggClasses[TS_AGG_TYPES_MAX] = { 0 };
     if (queryArg->numAggClasses > 0) {
