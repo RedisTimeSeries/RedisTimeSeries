@@ -103,7 +103,9 @@ def test_querylabels_acl_filters_unreadable_keys(env):
         r.execute_command('TS.CREATE', 'allowed_key', 'LABELS', 'group', 'acltest', 'onlyallowed', 'x')
         r.execute_command('TS.CREATE', 'blocked_key', 'LABELS', 'group', 'acltest', 'onlyblocked', 'y')
 
-        r.execute_command('ACL', 'SETUSER', 'ql_acl_user', 'on', '>pass', '+@all', '~allowed_key*')
+        for i in range(env.shardsCount):
+            env.getConnection(i).execute_command(
+                'ACL', 'SETUSER', 'ql_acl_user', 'on', '>pass', '+@all', '~allowed_key*')
         r1.execute_command('AUTH', 'ql_acl_user', 'pass')
         try:
             res = r1.execute_command('TS.QUERYLABELS', 'LABELS', 'FILTER', 'group=acltest')
@@ -120,4 +122,5 @@ def test_querylabels_acl_filters_unreadable_keys(env):
             assert sorted(res) == sorted([b'group', b'onlyallowed'])
         finally:
             r1.execute_command('AUTH', 'default', '')
-            r.execute_command('ACL', 'DELUSER', 'ql_acl_user')
+            for i in range(env.shardsCount):
+                env.getConnection(i).execute_command('ACL', 'DELUSER', 'ql_acl_user')
