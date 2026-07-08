@@ -453,7 +453,7 @@ static void QueryLabelsArg_CleanupFailedDeserialization(QueryLabelsArg *a) {
                 }
                 if (predicate->valuesList) {
                     for (size_t j = 0; j < predicate->valueListCount && predicate->valuesList[j];
-                        j++) {
+                         j++) {
                         RedisModule_FreeString(NULL, predicate->valuesList[j]);
                     }
                     free(predicate->valuesList);
@@ -1307,11 +1307,11 @@ static void TS_INTERNAL_QUERYLABELS(RedisModuleCtx *ctx, void *args) {
             continue;
         }
         QueryLabelsFromIndex(currentKey,
-                            currentKeyLen,
-                            queryArg->subtype,
-                            queryArg->label,
-                            QueryLabelsEmitReply,
-                            &replyCtx);
+                             currentKeyLen,
+                             queryArg->subtype,
+                             queryArg->label,
+                             QueryLabelsEmitReply,
+                             &replyCtx);
     }
     RedisModule_DictIteratorStop(iter);
     FreeUser(&userCtx);
@@ -1354,11 +1354,11 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     }
 
     MRObjectType *QueryLabelsArgType = MR_CreateType("QueryLabelsArgType",
-                                                      QueryLabelsArg_ObjectFree,
-                                                      QueryLabelsArg_Duplicate,
-                                                      QueryLabelsArg_Serialize,
-                                                      QueryLabelsArg_Deserialize,
-                                                      QueryLabelsArg_ToString);
+                                                     QueryLabelsArg_ObjectFree,
+                                                     QueryLabelsArg_Duplicate,
+                                                     QueryLabelsArg_Serialize,
+                                                     QueryLabelsArg_Deserialize,
+                                                     QueryLabelsArg_ToString);
 
     if (MR_RegisterObject(QueryLabelsArgType) != REDISMODULE_OK) {
         return REDISMODULE_ERR;

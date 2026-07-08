@@ -480,6 +480,26 @@ static inline bool OwnKeyDuringASM(RedisModuleString *key) { // ASM version
     return RedisModule_ClusterCanAccessKeysInSlot(slot);
 }
 
+// During resharding/ASM trimming/importing, modules might see keys whose slots are no
+// longer (or not yet) owned by the current shard, so we need to filter them out of the results.
+static void TrimUnownedKeysDuringReshard(RedisModuleDict *res) {
+    if (likely(!(isReshardTrimming || isAsmTrimming || isAsmImporting))) {
+        return;
+    }
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
+    RedisModuleString *currentKey;
+    while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
+        bool ownCurrentKey =
+            (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(currentKey);
+        if (!ownCurrentKey) {
+            RedisModule_DictDel(res, currentKey, NULL);
+            RedisModule_DictIteratorReseek(iter, ">", currentKey);
+        }
+        RedisModule_FreeString(NULL, currentKey);
+    }
+    RedisModule_DictIteratorStop(iter);
+}
+
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count,
@@ -531,22 +551,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     FreeUser(&userCtx);
     free(dicts);
 
-    if (unlikely(isReshardTrimming || isAsmTrimming || isAsmImporting)) {
-        // During those periods modules might see keys whose slots are no longer
-        // (or not yet) owned by the current shard, so we need to filter them out of the results
-        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
-        RedisModuleString *currentKey;
-        while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
-            bool ownCurrentKey =
-                (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(currentKey);
-            if (!ownCurrentKey) {
-                RedisModule_DictDel(res, currentKey, NULL);
-                RedisModule_DictIteratorReseek(iter, ">", currentKey);
-            }
-            RedisModule_FreeString(NULL, currentKey);
-        }
-        RedisModule_DictIteratorStop(iter);
-    }
+    TrimUnownedKeysDuringReshard(res);
 
     return res;
 }
@@ -560,25 +565,29 @@ RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx) {
         RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
     }
     RedisModule_DictIteratorStop(iter);
+
+    TrimUnownedKeysDuringReshard(res);
+
     return res;
 }
 
 void QueryLabelsFromIndex(const char *tsKey,
-                         size_t tsKeyLen,
-                         QueryLabelsSubtype subtype,
-                         RedisModuleString *labelFilter,
-                         void (*emit)(void *userData, const char *buf, size_t len),
-                         void *userData) {
+                          size_t tsKeyLen,
+                          QueryLabelsSubtype subtype,
+                          RedisModuleString *labelFilter,
+                          void (*emit)(void *userData, const char *buf, size_t len),
+                          void *userData) {
     int nokey = 0;
     RedisModuleDict *leaf = RedisModule_DictGetC(tsLabelIndex, (void *)tsKey, tsKeyLen, &nokey);
     if (nokey) {
         return;
     }
 
-    RedisModuleString *prefix = subtype == QueryLabelsSubtype_Labels
-                                     ? RedisModule_CreateStringPrintf(NULL, K_PREFIX, "")
-                                     : RedisModule_CreateStringPrintf(
-                                           NULL, KV_PREFIX, RedisModule_StringPtrLen(labelFilter, NULL), "");
+    RedisModuleString *prefix =
+        subtype == QueryLabelsSubtype_Labels
+            ? RedisModule_CreateStringPrintf(NULL, K_PREFIX, "")
+            : RedisModule_CreateStringPrintf(
+                  NULL, KV_PREFIX, RedisModule_StringPtrLen(labelFilter, NULL), "");
     size_t prefixLen;
     const char *prefixBuf = RedisModule_StringPtrLen(prefix, &prefixLen);
 

@@ -1249,7 +1249,7 @@ static const RedisModuleCommandArg TS_QUERYLABELS_ARGS[] = {
 static const RedisModuleCommandInfo TS_QUERYLABELS_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
     .summary = "Get all label names, or all values of a given label, for time series matching a "
-              "filter list, or all series",
+               "filter list, or all series",
     .complexity = "O(n) where n is the number of time-series that match the filters (all "
                   "indexed series when FILTER is omitted)",
     .since = "8.10.0",

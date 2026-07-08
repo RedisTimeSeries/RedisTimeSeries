@@ -88,11 +88,11 @@ RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx);
 // Calls `emit` once per match: once per label name for LABELS, at most once for VALUES (a series
 // has at most one value per label name). No-op if ts_key isn't indexed.
 void QueryLabelsFromIndex(const char *tsKey,
-                         size_t tsKeyLen,
-                         QueryLabelsSubtype subtype,
-                         RedisModuleString *labelFilter,
-                         void (*emit)(void *userData, const char *buf, size_t len),
-                         void *userData);
+                          size_t tsKeyLen,
+                          QueryLabelsSubtype subtype,
+                          RedisModuleString *labelFilter,
+                          void (*emit)(void *userData, const char *buf, size_t len),
+                          void *userData);
 
 int CountPredicateType(QueryPredicateList *queries, PredicateType type);
 #endif
