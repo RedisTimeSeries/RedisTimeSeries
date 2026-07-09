@@ -92,12 +92,16 @@ jobs:
       - name: Set Docker Image
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          version="$(echo "$REDIS_REF" | tr '[:upper:]' '[:lower:]' | sed 's|[^a-z0-9_.-]|-|g')"
-          tag="$OS"
-          if [ -n "$VARIANT" ]; then
-            tag="${tag}-${VARIANT}"
+          ref="$(echo "$REDIS_REF" | tr '[:upper:]' '[:lower:]')"
+          image_tag="unstable"
+          if [[ "$ref" =~ ^v?[0-9]+(\.[0-9]+){1,2}([.-][a-z0-9]+)*$ ]]; then
+            image_tag="${ref#v}"
           fi
-          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${version}-${IMAGE_ARCH}:${tag}" >> "$GITHUB_ENV"
+          image_os="$OS"
+          if [ -n "$VARIANT" ]; then
+            image_os="${image_os}-${VARIANT}"
+          fi
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-unstable-${IMAGE_ARCH}-${image_os}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Build Docker Image
         run: |
