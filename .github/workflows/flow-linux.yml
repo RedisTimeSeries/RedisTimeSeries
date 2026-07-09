@@ -1,10 +1,5 @@
 name: Flow Linux
 
-permissions:
-  id-token: write
-  contents: read
-  packages: read
-
 on:
   workflow_dispatch:
     inputs:
@@ -36,6 +31,14 @@ on:
         default: false
       build_only:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
+        type: boolean
+        default: false
+      build_images:
+        description: 'Build Docker images locally instead of pulling prebuilt images'
+        type: boolean
+        default: false
+      use_prebuilt_images:
+        description: 'Pull prebuilt Docker images instead of building locally'
         type: boolean
         default: false
       shard_topologies:
@@ -76,6 +79,14 @@ on:
         default: false
       build_only:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
+        type: boolean
+        default: false
+      build_images:
+        description: 'Build Docker images locally instead of pulling prebuilt images'
+        type: boolean
+        default: false
+      use_prebuilt_images:
+        description: 'Pull prebuilt Docker images instead of building locally'
         type: boolean
         default: false
       shard_topologies:
@@ -193,8 +204,10 @@ jobs:
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_TAG}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
+        if: ${{ inputs.use_prebuilt_images && !inputs.build_images }}
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "Pulling ${DOCKER_IMAGE}"
           docker pull "${DOCKER_IMAGE}"
 
       # Local image build kept for the next migration step:
@@ -207,6 +220,17 @@ jobs:
       #       --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
       #       -t "${DOCKER_IMAGE}" \
       #       .
+
+      - name: Build Docker Image
+        if: ${{ inputs.build_images || !inputs.use_prebuilt_images }}
+        run: |
+          docker build \
+            -f Dockerfile.${{ matrix.platform.os }} \
+            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
+            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
+            --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
+            -t "${DOCKER_IMAGE}" \
+            .
 
       - name: Build module
         run: |
