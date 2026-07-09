@@ -39,9 +39,20 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         uint16_t limitLabelsSize,
                         const RangeArgs *args,
                         bool rev,
-                        bool print_reduced);
+                        bool print_reduced,
+                        AbstractIterator *iter,
+                        EnrichedChunk *first_chunk);
+
+AbstractIterator *SeriesQueryIfNonEmpty(Series *series,
+                                        const RangeArgs *args,
+                                        bool reverse,
+                                        EnrichedChunk **first_chunk_out);
 
 int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool rev);
+int ReplySeriesRangeFromIter(RedisModuleCtx *ctx,
+                             AbstractIterator *iter,
+                             EnrichedChunk *first_chunk,
+                             const RangeArgs *args);
 
 // Reply one pivoted row: [timestamp, [value_0, value_1, ..., value_{num_values-1}]].
 void ReplyWithPivotSample(RedisModuleCtx *ctx,
@@ -49,12 +60,14 @@ void ReplyWithPivotSample(RedisModuleCtx *ctx,
                           const double *values,
                           size_t num_values);
 
-// Merge num_keys time-ordered per-key sample iterators into a timestamp-major
-// reply (one row per distinct timestamp, NaN where a key has no sample). Used by
-// TS.NRANGE / TS.NREVRANGE. Consumes and closes each iterator.
+// Merge num_keys time-ordered per-key chunk iterators into a timestamp-major reply (one row per
+// distinct timestamp, NaN where a key has no sample). aggs_per_key[i] is the number of aggregation
+// values key i contributes per row. Each row is flat: [ts, [v0, v1, ...]].
+// Consumes and closes each iterator.
 int ReplySeriesNRange(RedisModuleCtx *ctx,
-                      AbstractSampleIterator **iters,
+                      AbstractIterator **iters,
                       size_t num_keys,
+                      const size_t *aggs_per_key,
                       long long count,
                       bool reverse);
 
@@ -75,5 +88,17 @@ void ReplyWithMultiAggSample(RedisModuleCtx *ctx,
                              size_t num_values);
 
 void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
+
+// Reply for one key's pre-aggregated group in the multi-agg cluster path.
+// group[0] provides the key name and labels; group[0..numAggTypes-1] each hold one agg type's
+// values.
+int ReplyMultiAggSeriesGroup(RedisModuleCtx *ctx,
+                             Series **group,
+                             size_t numAggTypes,
+                             bool withLabels,
+                             RedisModuleString *limitLabels[],
+                             uint16_t limitLabelsSize,
+                             const RangeArgs *args,
+                             bool rev);
 
 #endif // REDISTIMESERIES_REPLY_H

@@ -18,10 +18,13 @@
 #define stringify(x) stringify2(x)
 #define stringify2(x) #x
 
-#define QUERY_TOKEN_SIZE 9
+#define QUERY_TOKEN_SIZE 10
+
+// Offset of the GROUPBY label token relative to the GROUPBY keyword position.
+#define GROUPBY_LABEL_OFFSET 1
 static const char *QUERY_TOKENS[] = {
     "WITHLABELS", "AGGREGATION",     "LIMIT",        "GROUPBY", "REDUCE",
-    "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",
+    "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",   "EXCLUDEEMPTY",
 };
 
 static int parseTimestamp(RedisModuleString *string, timestamp_t *out) {
@@ -339,6 +342,35 @@ static int _parseAlignmentTS(RedisModuleCtx *ctx,
     return TSDB_OK;
 }
 
+// Parse a comma-separated aggregator spec string (e.g. "avg,sum") into agg_types[].
+// Returns the number of types written, or -1 on error (error already replied).
+int ParseAggSpec(RedisModuleCtx *ctx, const char *spec, size_t specLen, int *agg_types) {
+    int count = 0;
+    const char *cursor = spec, *end = spec + specLen;
+    while (true) {
+        const char *comma = memchr(cursor, ',', (size_t)(end - cursor));
+        size_t tokenLen = comma ? (size_t)(comma - cursor) : (size_t)(end - cursor);
+        if (tokenLen == 0) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
+            return -1;
+        }
+        if (count >= TS_AGG_TYPES_MAX) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Too many aggregation types");
+            return -1;
+        }
+        int agg = StringLenAggTypeToEnum(cursor, tokenLen);
+        if (agg < 0 || agg >= TS_AGG_TYPES_MAX) {
+            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+            return -1;
+        }
+        agg_types[count++] = agg;
+        if (!comma)
+            break;
+        cursor = comma + 1;
+    }
+    return count;
+}
+
 int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
@@ -366,42 +398,10 @@ int _parseAggregationArgs(RedisModuleCtx *ctx,
         size_t aggStr_len;
         const char *aggStr = RedisModule_StringPtrLen(aggTypeStr, &aggStr_len);
 
-        size_t count = 0;
-        const char *p = aggStr;
-        const char *end = aggStr + aggStr_len;
-        while (p < end) {
-            const char *comma = memchr(p, ',', end - p);
-            size_t token_len = comma ? (size_t)(comma - p) : (size_t)(end - p);
-            if (token_len == 0) {
-                RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
-                return TSDB_ERROR;
-            }
-            if (count >= TS_AGG_TYPES_MAX) {
-                RTS_ReplyGeneralError(ctx, "TSDB: Too many aggregation types");
-                return TSDB_ERROR;
-            }
-            int agg = StringLenAggTypeToEnum(p, token_len);
-            if (agg < 0 || agg >= TS_AGG_TYPES_MAX) {
-                RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
-                return TSDB_ERROR;
-            }
-            agg_types[count++] = agg;
-            if (comma) {
-                p = comma + 1;
-                if (p == end) {
-                    RTS_ReplyGeneralError(ctx, "TSDB: Empty aggregation type in list");
-                    return TSDB_ERROR;
-                }
-            } else {
-                p = end;
-            }
-        }
-
-        if (count == 0) {
-            RTS_ReplyGeneralError(ctx, "TSDB: Unknown aggregation type");
+        int count = ParseAggSpec(ctx, aggStr, aggStr_len, agg_types);
+        if (count <= 0)
             return TSDB_ERROR;
-        }
-        *num_agg_types = count;
+        *num_agg_types = (size_t)count;
 
         if (temp_time_delta <= 0) {
             RTS_ReplyGeneralError(ctx, "TSDB: bucketDuration must be greater than zero");
@@ -453,6 +453,8 @@ int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,
                          AggregationArgs *out) {
+    // _parseAggregationArgs caps the count at TS_AGG_TYPES_MAX before writing, so a fixed array
+    // of that size always fits -- no dynamic sizing on the comma count needed.
     int agg_types[TS_AGG_TYPES_MAX];
     size_t num_agg_types = 0;
     AggregationArgs aggregationArgs = { 0 };
@@ -969,6 +971,8 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
+    // The GROUPBY label is the token immediately following the GROUPBY keyword.
+    const int groupby_label_location = groupby_location + GROUPBY_LABEL_OFFSET;
 
     if (groupby_location > 0 && groupby_location < filter_location) {
         RTS_ReplyGeneralError(ctx, "TSDB: GROUPBY should always come after filter");
@@ -991,13 +995,24 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
     args.queryPredicates = queries;
 
+    const int excludeEmptyPos = RMUtil_ArgIndex("EXCLUDEEMPTY", argv, argc);
+    // ponytail: ignore a GROUPBY label literally named EXCLUDEEMPTY (the only
+    // unconstrained token slot); otherwise it falsely trips the guard below.
+    args.excludeEmpty =
+        excludeEmptyPos > 0 && !(groupby_location > 0 && excludeEmptyPos == groupby_label_location);
+
+    if (args.excludeEmpty && groupby_location > 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: EXCLUDEEMPTY is not allowed with GROUPBY");
+        goto error_free_all;
+    }
+
     if (groupby_location > 0) {
-        if (groupby_location + 1 >= argc) {
+        if (groupby_label_location >= argc) {
             // GROUP BY without any argument
             RedisModule_WrongArity(ctx);
             goto error_free_all;
         }
-        args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_location + 1], NULL);
+        args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_label_location], NULL);
 
         const int reduce_location = RMUtil_ArgIndex("REDUCE", argv, argc);
         // If we've detected a groupby but not a reduce
@@ -1017,6 +1032,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
             goto error_free_all;
         }
     }
+
     *out = args;
     return REDISMODULE_OK;
 

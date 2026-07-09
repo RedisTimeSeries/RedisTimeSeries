@@ -723,9 +723,9 @@ static const RedisModuleCommandInfo TS_GET_INFO = {
 };
 
 // ===============================
-// TS.BGET key timestamp timeout [MIN_COUNT min_count] [MAX_COUNT max_count]
+// TS.READ key timestamp [BLOCK milliseconds min_count] [MAX_COUNT max_count]
 // ===============================
-static const RedisModuleCommandKeySpec TS_BGET_KEYSPECS[] = {
+static const RedisModuleCommandKeySpec TS_READ_KEYSPECS[] = {
     { .flags = REDISMODULE_CMD_KEY_RO,
       .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
       .bs.index = { .pos = 1 },
@@ -734,16 +734,16 @@ static const RedisModuleCommandKeySpec TS_BGET_KEYSPECS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandArg TS_BGET_ARGS[] = {
+static const RedisModuleCommandArg TS_READ_ARGS[] = {
     { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
     { .name = "timestamp", .type = REDISMODULE_ARG_TYPE_STRING },
-    { .name = "timeout", .type = REDISMODULE_ARG_TYPE_INTEGER },
-    { .name = "MIN_COUNT",
+    { .name = "BLOCK",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
       .flags = REDISMODULE_CMD_ARG_OPTIONAL,
       .subargs =
           (RedisModuleCommandArg[]){
-              { .name = "min_count", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "MIN_COUNT" },
+              { .name = "milliseconds", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "BLOCK" },
+              { .name = "min_count", .type = REDISMODULE_ARG_TYPE_INTEGER },
               { 0 } } },
     { .name = "MAX_COUNT",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
@@ -755,17 +755,17 @@ static const RedisModuleCommandArg TS_BGET_ARGS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandInfo TS_BGET_INFO = {
+static const RedisModuleCommandInfo TS_READ_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
-    .summary = "Blocking GET: wait up to timeout ms or until min_count samples with timestamp >= "
-               "timestamp are available, then return up to max_count of the oldest such samples",
+    .summary = "Read: return up to max_count samples with timestamp >= timestamp. With BLOCK, "
+               "waits up to milliseconds ms until at least min_count qualifying samples exist",
     .complexity = "O(log(n)+k) where n is the number of samples in the series and k is the number "
                   "of returned samples",
     .since = "8.10.0",
     .tips = "dont_cache",
-    .arity = -4,
-    .key_specs = (RedisModuleCommandKeySpec *)TS_BGET_KEYSPECS,
-    .args = (RedisModuleCommandArg *)TS_BGET_ARGS,
+    .arity = -3,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_READ_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_READ_ARGS,
 };
 
 // ===============================
@@ -1454,6 +1454,11 @@ static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
                 .type = REDISMODULE_ARG_TYPE_ONEOF,
                 .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
               { 0 } } },
+    { .name = "EXCLUDEEMPTY",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "EXCLUDEEMPTY",
+      .since = "8.10.0" },
     { 0 }
 };
 
@@ -1597,6 +1602,11 @@ static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
                 .type = REDISMODULE_ARG_TYPE_ONEOF,
                 .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
               { 0 } } },
+    { .name = "EXCLUDEEMPTY",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "EXCLUDEEMPTY",
+      .since = "8.10.0" },
     { 0 }
 };
 
@@ -1675,9 +1685,9 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     if (!cmd_get || RedisModule_SetCommandInfo(cmd_get, &TS_GET_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    // Register TS.BGET command info
-    RedisModuleCommand *cmd_bget = RedisModule_GetCommand(ctx, "TS.BGET");
-    if (!cmd_bget || RedisModule_SetCommandInfo(cmd_bget, &TS_BGET_INFO) == REDISMODULE_ERR)
+    // Register TS.READ command info
+    RedisModuleCommand *cmd_read = RedisModule_GetCommand(ctx, "TS.READ");
+    if (!cmd_read || RedisModule_SetCommandInfo(cmd_read, &TS_READ_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.RANGE command info

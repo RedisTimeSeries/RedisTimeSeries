@@ -11,6 +11,7 @@
 
 #include "enriched_chunk.h"
 #include "query_language.h"
+#include "sample_iterator.h"
 #include "series_iterator.h"
 #include "tsdb.h"
 
@@ -20,6 +21,11 @@
 #include "rmutil/alloc.h"
 
 #include <math.h> // NAN
+
+// MRANGE reply structure element counts
+#define MRANGE_RESP2_ENTRY_ELEMENTS 3   // [name, labels, samples]
+#define MRANGE_RESP3_VALUE_ELEMENTS 3   // [labels, aggregators, samples]
+#define MRANGE_RESP3_REDUCED_ELEMENTS 4 // [labels, reducers, sources, samples]
 
 // double string presentation requires 15 digit integers +
 // '.' + "e+" or "e-" + 3 digits of exponent
@@ -73,13 +79,16 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
                         uint16_t limitLabelsSize,
                         const RangeArgs *args,
                         bool rev,
-                        bool print_reduced) {
+                        bool print_reduced,
+                        AbstractIterator *iter,
+                        EnrichedChunk *first_chunk) {
     if (!_ReplyMap(ctx)) {
-        RedisModule_ReplyWithArray(ctx, 3);
+        RedisModule_ReplyWithArray(ctx, MRANGE_RESP2_ENTRY_ELEMENTS);
     }
     RedisModule_ReplyWithString(ctx, s->keyName);
     if (_ReplyMap(ctx)) {
-        RedisModule_ReplyWithArray(ctx, print_reduced ? 4 : 3);
+        RedisModule_ReplyWithArray(
+            ctx, print_reduced ? MRANGE_RESP3_REDUCED_ELEMENTS : MRANGE_RESP3_VALUE_ELEMENTS);
     }
     if (withlabels) {
         if (_ReplyMap(ctx) && print_reduced) {
@@ -125,23 +134,47 @@ int ReplySeriesArrayPos(RedisModuleCtx *ctx,
             }
         }
     }
-    ReplySeriesRange(ctx, s, args, rev);
+    if (iter) {
+        ReplySeriesRangeFromIter(ctx, iter, first_chunk, args);
+    } else {
+        ReplySeriesRange(ctx, s, args, rev);
+    }
     return REDISMODULE_OK;
 }
 
-int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
-    long long arraylen = 0;
-    long long _count = LLONG_MAX;
-    unsigned int n;
-    if (args->count != -1) {
-        _count = args->count;
-    }
-
+AbstractIterator *SeriesQueryIfNonEmpty(Series *series,
+                                        const RangeArgs *args,
+                                        bool reverse,
+                                        EnrichedChunk **first_chunk_out) {
     AbstractIterator *iter = SeriesQuery(series, args, reverse, true);
-    EnrichedChunk *enrichedChunk;
+    EnrichedChunk *chunk;
+    while ((chunk = iter->GetNext(iter)) != NULL) {
+        if (chunk->samples.num_samples > 0) {
+            *first_chunk_out = chunk;
+            return iter;
+        }
+    }
+    iter->Close(iter);
+    return NULL;
+}
+
+int ReplySeriesRangeFromIter(RedisModuleCtx *ctx,
+                             AbstractIterator *iter,
+                             EnrichedChunk *first_chunk,
+                             const RangeArgs *args) {
+    long long arraylen = 0;
+    long long _count = (args->count != -1) ? args->count : LLONG_MAX;
+    unsigned int n;
+    EnrichedChunk *enrichedChunk = first_chunk;
+
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
-    while ((arraylen < _count) && (enrichedChunk = iter->GetNext(iter))) {
+    while (arraylen < _count) {
+        if (!enrichedChunk) {
+            enrichedChunk = iter->GetNext(iter);
+            if (!enrichedChunk)
+                break;
+        }
         n = (unsigned int)min(_count - arraylen, enrichedChunk->samples.num_samples);
         size_t vps = enrichedChunk->samples.values_per_sample;
         for (size_t i = 0; i < n; ++i) {
@@ -157,11 +190,16 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args,
             }
         }
         arraylen += n;
+        enrichedChunk = NULL;
     }
     iter->Close(iter);
 
     RedisModule_ReplySetArrayLength(ctx, arraylen);
     return REDISMODULE_OK;
+}
+
+int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, const RangeArgs *args, bool reverse) {
+    return ReplySeriesRangeFromIter(ctx, SeriesQuery(series, args, reverse, true), NULL, args);
 }
 
 void ReplyWithSeriesLabelsWithLimit(RedisModuleCtx *ctx,
@@ -236,6 +274,75 @@ void ReplyWithMultiAggSample(RedisModuleCtx *ctx,
     }
 }
 
+int ReplyMultiAggSeriesGroup(RedisModuleCtx *ctx,
+                             Series **group,
+                             size_t numAggTypes,
+                             bool withLabels,
+                             RedisModuleString *limitLabels[],
+                             uint16_t limitLabelsSize,
+                             const RangeArgs *args,
+                             bool rev) {
+    if (!_ReplyMap(ctx))
+        RedisModule_ReplyWithArray(ctx, MRANGE_RESP2_ENTRY_ELEMENTS);
+    RedisModule_ReplyWithString(ctx, group[0]->keyName);
+    if (_ReplyMap(ctx))
+        RedisModule_ReplyWithArray(ctx, MRANGE_RESP3_VALUE_ELEMENTS);
+
+    if (withLabels)
+        ReplyWithSeriesLabels(ctx, group[0]);
+    else if (limitLabelsSize > 0)
+        ReplyWithSeriesLabelsWithLimit(ctx, group[0], limitLabels, limitLabelsSize);
+    else
+        ReplyWithMapOrArray(ctx, 0, false);
+
+    if (_ReplyMap(ctx)) {
+        RedisModule_ReplyWithMap(ctx, 1);
+        RedisModule_ReplyWithCString(ctx, "aggregators");
+        if (args->aggregationArgs.numClasses == 0) {
+            RedisModule_ReplyWithArray(ctx, 0);
+        } else {
+            RedisModule_ReplyWithArray(ctx, args->aggregationArgs.numClasses);
+            for (size_t i = 0; i < args->aggregationArgs.numClasses; i++) {
+                RedisModule_ReplyWithCString(
+                    ctx, AggTypeEnumToStringLowerCase(args->aggregationArgs.classes[i]->type));
+            }
+        }
+    }
+
+    RangeArgs rawArgs = *args;
+    rawArgs.filterByValueArgs.hasValue = false;
+    rawArgs.filterByTSArgs.hasValue = false;
+
+    // All series share the same timestamps — advance N sample iterators in lockstep and emit
+    // directly.
+    AbstractSampleIterator *iters[TS_AGG_TYPES_MAX];
+    for (size_t aggIdx = 0; aggIdx < numAggTypes; aggIdx++)
+        iters[aggIdx] = (AbstractSampleIterator *)SeriesSampleIterator_New(
+            SeriesQuery(group[aggIdx], &rawArgs, rev, true));
+
+    long long limit = (args->count != -1) ? args->count : LLONG_MAX;
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    long long emitted = 0;
+    Sample lead;
+    double row[TS_AGG_TYPES_MAX];
+    while (emitted < limit && iters[0]->GetNext(iters[0], &lead) == CR_OK) {
+        row[0] = lead.value;
+        for (size_t aggIdx = 1; aggIdx < numAggTypes; aggIdx++) {
+            Sample s;
+            iters[aggIdx]->GetNext(iters[aggIdx], &s);
+            row[aggIdx] = s.value;
+        }
+        ReplyWithMultiAggSample(ctx, lead.timestamp, row, numAggTypes);
+        emitted++;
+    }
+    RedisModule_ReplySetArrayLength(ctx, emitted);
+
+    for (size_t aggIdx = 0; aggIdx < numAggTypes; aggIdx++)
+        iters[aggIdx]->Close(iters[aggIdx]);
+
+    return REDISMODULE_OK;
+}
+
 void ReplyWithPivotSample(RedisModuleCtx *ctx,
                           uint64_t timestamp,
                           const double *values,
@@ -248,63 +355,93 @@ void ReplyWithPivotSample(RedisModuleCtx *ctx,
     }
 }
 
+static EnrichedChunk *NextNonemptyChunk(AbstractIterator *iter) {
+    EnrichedChunk *chunk;
+    while ((chunk = iter->GetNext(iter)) != NULL) {
+        if (chunk->samples.num_samples > 0)
+            return chunk;
+    }
+    return NULL;
+}
+
 int ReplySeriesNRange(RedisModuleCtx *ctx,
-                      AbstractSampleIterator **iters,
+                      AbstractIterator **iters,
                       size_t num_keys,
+                      const size_t *aggs_per_key,
                       long long count,
                       bool reverse) {
     const long long limit = (count < 0) ? LLONG_MAX : count;
 
-    // Streaming k-way merge: hold only one "front" sample per key at a time.
-    Sample *front = malloc(num_keys * sizeof(*front));
-    bool *active = malloc(num_keys * sizeof(*active));
-    double *row = malloc(num_keys * sizeof(*row));
-    size_t active_count = 0;
+    // Per-key chunk state for the k-way merge.
+    EnrichedChunk **key_chunks =
+        malloc(num_keys * sizeof(*key_chunks)); // current data batch per key
+    size_t *chunk_pos =
+        malloc(num_keys * sizeof(*chunk_pos)); // position inside current batch per key
+    bool *key_active = malloc(num_keys * sizeof(*key_active)); // whether key still has data
 
+    // Pre-compute where each key's values start in the flat row buffer, and the total row width.
+    size_t *key_row_offset = malloc(num_keys * sizeof(*key_row_offset));
+    size_t row_width = 0;
     for (size_t i = 0; i < num_keys; i++) {
-        active[i] = (iters[i]->GetNext(iters[i], &front[i]) == CR_OK);
-        if (active[i]) {
+        key_row_offset[i] = row_width;
+        row_width += aggs_per_key[i];
+    }
+    double *row_buf = malloc(row_width * sizeof(*row_buf)); // scratch buffer for one output row
+
+    size_t active_count = 0;
+    for (size_t i = 0; i < num_keys; i++) {
+        key_chunks[i] = NextNonemptyChunk(iters[i]);
+        chunk_pos[i] = 0;
+        key_active[i] = (key_chunks[i] != NULL);
+        if (key_active[i])
             active_count++;
-        }
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     long long emitted = 0;
     while (active_count > 0 && emitted < limit) {
-        // Next output timestamp: smallest front (largest when reverse).
+        // Next output timestamp: smallest front ts (largest when reverse).
         // Linear over the fronts; a heap could replace it if num_keys grows large.
         bool found = false;
         timestamp_t target = 0;
         for (size_t i = 0; i < num_keys; i++) {
-            if (!active[i]) {
+            if (!key_active[i])
                 continue;
-            }
-            if (!found ||
-                (reverse ? (front[i].timestamp > target) : (front[i].timestamp < target))) {
-                target = front[i].timestamp;
+            timestamp_t ts = key_chunks[i]->samples.timestamps[chunk_pos[i]];
+            if (!found || (reverse ? ts > target : ts < target)) {
+                target = ts;
                 found = true;
             }
         }
 
-        // Build the pivoted row. A missing sample for a key at this timestamp is
-        // reported as NaN -- indistinguishable from a key that has a real sample
-        // whose value is NaN. This conflation is intended behavior (see the
-        // TS.NRANGE/TS.NREVRANGE command docs); disambiguating would require a
-        // separate null cell.
+        // Build the pivoted row. A missing sample for a key at this timestamp is reported as
+        // NaN -- indistinguishable from a key that has a real NaN sample. This conflation is
+        // intended (see TS.NRANGE/TS.NREVRANGE docs); disambiguating needs a separate null cell.
         for (size_t i = 0; i < num_keys; i++) {
-            if (active[i] && front[i].timestamp == target) {
-                row[i] = front[i].value;
-                if (iters[i]->GetNext(iters[i], &front[i]) != CR_OK) {
-                    active[i] = false;
-                    active_count--;
+            double *slot = row_buf + key_row_offset[i];
+            if (key_active[i] && key_chunks[i]->samples.timestamps[chunk_pos[i]] == target) {
+                for (size_t j = 0; j < aggs_per_key[i]; j++) {
+                    slot[j] = Samples_value_at(&key_chunks[i]->samples, chunk_pos[i], j);
+                }
+                chunk_pos[i]++;
+                if (chunk_pos[i] >= key_chunks[i]->samples.num_samples) {
+                    key_chunks[i] = NextNonemptyChunk(iters[i]);
+                    if (!key_chunks[i]) {
+                        key_active[i] = false;
+                        active_count--;
+                    } else {
+                        chunk_pos[i] = 0;
+                    }
                 }
             } else {
-                row[i] = NAN;
+                for (size_t j = 0; j < aggs_per_key[i]; j++) {
+                    slot[j] = NAN;
+                }
             }
         }
 
-        ReplyWithPivotSample(ctx, target, row, num_keys);
+        ReplyWithPivotSample(ctx, target, row_buf, row_width);
         emitted++;
     }
 
@@ -313,9 +450,11 @@ int ReplySeriesNRange(RedisModuleCtx *ctx,
     for (size_t i = 0; i < num_keys; i++) {
         iters[i]->Close(iters[i]);
     }
-    free(front);
-    free(active);
-    free(row);
+    free(key_chunks);
+    free(chunk_pos);
+    free(key_active);
+    free(key_row_offset);
+    free(row_buf);
     return REDISMODULE_OK;
 }
 

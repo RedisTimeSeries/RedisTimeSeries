@@ -78,6 +78,7 @@ typedef struct RangeArgs
     FilterByTSArgs filterByTSArgs;
     RangeAlignment alignment;
     timestamp_t timestampAlignment;
+    bool skipAggregation; // data is already aggregated; keep agg info for RESP3 but skip re-agg
 } RangeArgs;
 
 #define LIMIT_LABELS_SIZE 50
@@ -91,6 +92,7 @@ typedef struct MRangeArgs
     const char *groupByLabel;
     ReducerArgs groupByReducerArgs;
     bool reverse;
+    bool excludeEmpty;
 } MRangeArgs;
 
 typedef struct MGetArgs
@@ -139,6 +141,8 @@ int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, i
 
 int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, CreateCtx *cCtx);
 
+int ParseAggSpec(RedisModuleCtx *ctx, const char *spec, size_t specLen, int *agg_types);
+
 int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
@@ -181,5 +185,20 @@ void MGetArgs_Free(MGetArgs *args);
 bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes, RedisModuleString **err);
 bool ValidateChunkSizeSimple(long long chunkSizeBytes);
 int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest);
+
+// Build a pass-through RangeArgs for replyResultSet after group-by reduce: no re-aggregation,
+// no filters, full timestamp range. Preserves count and alignment from src.
+static inline RangeArgs RangeArgs_ZeroProcessing(const RangeArgs *src) {
+    RangeArgs r = *src;
+    r.startTimestamp = 0;
+    r.endTimestamp = UINT64_MAX;
+    r.aggregationArgs.numClasses = 0;
+    r.aggregationArgs.classes = NULL;
+    r.aggregationArgs.timeDelta = 0;
+    r.filterByTSArgs.hasValue = false;
+    r.filterByValueArgs.hasValue = false;
+    r.latest = false;
+    return r;
+}
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H
