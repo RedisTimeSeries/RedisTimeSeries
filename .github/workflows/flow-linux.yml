@@ -3,6 +3,7 @@ name: Flow Linux
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 on:
   workflow_dispatch:
@@ -182,7 +183,9 @@ jobs:
 
       - name: Pull Docker Image
         if: ${{ inputs.arch == 'x64' && matrix.platform.os == 'jammy' && !inputs.run_sanitizer && !inputs.run_valgrind }}
-        run: docker pull ${{ env.DOCKER_IMAGE }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "${{ env.DOCKER_IMAGE }}"
 
       - name: Build Docker Image
         if: ${{ !(inputs.arch == 'x64' && matrix.platform.os == 'jammy' && !inputs.run_sanitizer && !inputs.run_valgrind) }}
