@@ -173,14 +173,19 @@ jobs:
       BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
       TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH }}
       REDIS_REF: ${{ needs.setup-environment.outputs.redis-ref }}
-      DOCKER_IMAGE: redistimeseries-${{ matrix.platform.os }}:latest
+      DOCKER_IMAGE: ${{ inputs.arch == 'x64' && matrix.platform.os == 'jammy' && !inputs.run_sanitizer && !inputs.run_valgrind && 'ghcr.io/redistimeseries/redistimeseries/redistimeseries-builder:dirty-tal-ci-pull-test-x64' || format('redistimeseries-{0}:latest', matrix.platform.os) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           submodules: 'recursive'
 
+      - name: Pull Docker Image
+        if: ${{ inputs.arch == 'x64' && matrix.platform.os == 'jammy' && !inputs.run_sanitizer && !inputs.run_valgrind }}
+        run: docker pull ${{ env.DOCKER_IMAGE }}
+
       - name: Build Docker Image
+        if: ${{ !(inputs.arch == 'x64' && matrix.platform.os == 'jammy' && !inputs.run_sanitizer && !inputs.run_valgrind) }}
         run: |
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
