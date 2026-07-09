@@ -1,0 +1,79 @@
+name: Push Dirty CI Image
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/push-dirty-image.yml'
+      - 'Dockerfile.*'
+      - '.install/**'
+      - 'pack/ramp.yml'
+      - 'requirements_docker.txt'
+  workflow_dispatch:
+    inputs:
+      redis-ref:
+        description: 'Redis ref to checkout'
+        type: string
+        required: true
+        default: 'unstable'
+      arch:
+        description: 'Architecture (x64 or arm64)'
+        type: choice
+        required: true
+        default: 'arm64'
+        options:
+          - x64
+          - arm64
+      os:
+        description: 'OS Dockerfile suffix'
+        type: string
+        required: true
+        default: 'jammy'
+      dirty_image_tag:
+        description: 'Temporary GHCR tag'
+        type: string
+        required: true
+        default: 'dirty-tal-ci-pull-test-arm64'
+      run_valgrind:
+        description: 'Build Redis for valgrind'
+        type: boolean
+        default: false
+      run_sanitizer:
+        description: 'Build Redis with address sanitizer'
+        type: boolean
+        default: false
+
+jobs:
+  push-dirty-image:
+    name: push-dirty-${{ inputs.arch || 'arm64' }}-${{ inputs.os || 'jammy' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ${{ (inputs.arch || 'arm64') == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    env:
+      DIRTY_IMAGE_TAG: ${{ inputs.dirty_image_tag || 'dirty-tal-ci-pull-test-arm64' }}
+      OS: ${{ inputs.os || 'jammy' }}
+      REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
+      DOCKER_IMAGE: ghcr.io/redis/redis/redistimeseries-builder:${{ inputs.dirty_image_tag || 'dirty-tal-ci-pull-test-arm64' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: 'recursive'
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -f "Dockerfile.${OS}" \
+            --build-arg REDIS_REF="${REDIS_REF}" \
+            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
+            --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
+            -t "${DOCKER_IMAGE}" \
+            .
+
+      - name: Push Docker Image
+        run: docker push "${DOCKER_IMAGE}"
