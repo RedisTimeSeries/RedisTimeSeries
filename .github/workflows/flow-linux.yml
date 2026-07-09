@@ -190,7 +190,7 @@ jobs:
           if [[ "$ref" =~ ^v?[0-9]+(\.[0-9]+){1,2}([.-][a-z0-9]+)*$ ]]; then
             image_tag="${ref#v}"
           fi
-          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-unstable-${IMAGE_ARCH}-${IMAGE_TAG}:${image_tag}" >> "$GITHUB_ENV"
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_TAG}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
         run: |
