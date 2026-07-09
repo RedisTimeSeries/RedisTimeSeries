@@ -5,6 +5,13 @@ permissions:
   packages: write
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/push-dirty-image.yml'
+      - 'Dockerfile.*'
+      - '.install/**'
+      - 'pack/ramp.yml'
+      - 'requirements_docker.txt'
   workflow_dispatch:
     inputs:
       redis-ref:
@@ -60,6 +67,7 @@ jobs:
 
   push-images:
     name: ${{ matrix.image.os }}-${{ matrix.image.image_arch }}${{ matrix.image.variant && format('-{0}', matrix.image.variant) || '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
     needs: setup-matrix
     runs-on: ${{ matrix.image.runner }}
     strategy:
