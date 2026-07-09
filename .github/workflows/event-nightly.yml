@@ -136,6 +136,12 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       run_valgrind: true
+      # Valgrind is ~20-30x slower and the pole shard (oss_cluster) takes ~3h on
+      # the 4-vCPU default runner. RLTest parallelism scales with nproc, so a
+      # 16-core larger runner cuts that to roughly the longest single test
+      # (test_max_extensive, ~1h under valgrind). Label must match a GitHub-hosted
+      # larger runner configured in the org.
+      runner: ubuntu-latest-16-cores
     secrets: inherit
   linux-sanitizer:
     uses: ./.github/workflows/flow-linux.yml
