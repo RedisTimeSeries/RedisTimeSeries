@@ -5,13 +5,6 @@ permissions:
   packages: write
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/push-dirty-image.yml'
-      - 'Dockerfile.*'
-      - '.install/**'
-      - 'pack/ramp.yml'
-      - 'requirements_docker.txt'
   workflow_dispatch:
     inputs:
       redis-ref:
@@ -49,7 +42,6 @@ on:
 jobs:
   push-dirty-image:
     name: push-dirty-${{ inputs.arch || 'x64' }}-${{ inputs.os || 'jammy' }}
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ${{ (inputs.arch || 'x64') == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-22.04' }}
     env:
       DIRTY_IMAGE_TAG: ${{ inputs.dirty_image_tag || 'dirty-tal-ci-pull-test-x64' }}
