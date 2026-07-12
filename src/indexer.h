@@ -84,13 +84,21 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 // Used by TS.QUERYLABELS when no FILTER is given ("all series").
 RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx);
 
-// Reads ts_key's label names (LABELS) or the value of the label named by `labelFilter` (VALUES).
-// Calls `emit` once per match: once per label name for LABELS, at most once for VALUES (a series
-// has at most one value per label name). No-op if ts_key isn't indexed.
+// Builds the index-entry prefix for a LABELS or VALUES query (see QueryLabelsFromIndex).
+// Caller owns the returned string and must free it with RedisModule_FreeString(NULL, ...).
+RedisModuleString *QueryLabelsBuildPrefix(QueryLabelsSubtype subtype,
+                                          RedisModuleString *labelFilter);
+
+// Reads ts_key's label names (LABELS) or the value of the label named by the prefix built via
+// QueryLabelsBuildPrefix (VALUES). Calls `emit` once per match: once per label name for LABELS,
+// at most once for VALUES (a series has at most one value per label name). No-op if ts_key isn't
+// indexed. `prefixBuf`/`prefixLen` are loop-invariant across candidate series, so callers scanning
+// many series should build the prefix once and reuse it.
 void QueryLabelsFromIndex(const char *tsKey,
                           size_t tsKeyLen,
                           QueryLabelsSubtype subtype,
-                          RedisModuleString *labelFilter,
+                          const char *prefixBuf,
+                          size_t prefixLen,
                           void (*emit)(void *userData, const char *buf, size_t len),
                           void *userData);
 

@@ -488,6 +488,9 @@ static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **
         goto err;
     }
     a->predicates->list = calloc(a->predicates->count, sizeof(*a->predicates->list));
+    if (a->predicates->count && !a->predicates->list) {
+        goto err;
+    }
     for (size_t i = 0; i < a->predicates->count; i++) {
         QueryPredicate *predicate = &a->predicates->list[i];
         predicate->type = MR_SerializationCtxReadLongLong(sctx, error);
@@ -503,6 +506,9 @@ static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **
             goto err;
         }
         predicate->valuesList = calloc(predicate->valueListCount, sizeof(*predicate->valuesList));
+        if (predicate->valueListCount && !predicate->valuesList) {
+            goto err;
+        }
         for (size_t value_index = 0; value_index < predicate->valueListCount; value_index++) {
             predicate->valuesList[value_index] = SerializationCtxReadRedisString(sctx, error);
             if (*error) {
@@ -513,6 +519,7 @@ static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **
     return a;
 
 err:
+    *error = NULL;
     QueryLabelsArg_CleanupFailedDeserialization(a);
     return NULL;
 }
@@ -1274,18 +1281,6 @@ static Record *StringListReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks QueryIndexCallbacks = { .command = TS_INTERNAL_QUERYINDEX,
                                                         .replyParser = StringListReplyParser };
 
-typedef struct QueryLabelsReplyCtx
-{
-    RedisModuleCtx *ctx;
-    long long replylen;
-} QueryLabelsReplyCtx;
-
-static void QueryLabelsEmitReply(void *userData, const char *buf, size_t len) {
-    QueryLabelsReplyCtx *rc = userData;
-    RedisModule_ReplyWithStringBuffer(rc->ctx, buf, len);
-    rc->replylen++;
-}
-
 static void TS_INTERNAL_QUERYLABELS(RedisModuleCtx *ctx, void *args) {
     QueryLabelsArg *queryArg = args;
     ApplyCtxUser(ctx, queryArg->userName);
@@ -1295,28 +1290,24 @@ static void TS_INTERNAL_QUERYLABELS(RedisModuleCtx *ctx, void *args) {
             ? QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL)
             : GetAllIndexedSeriesKeys(ctx);
 
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    QueryLabelsReplyCtx replyCtx = { .ctx = ctx, .replylen = 0 };
+    // Aggregate into a dict (shared with the non-cluster path) so per-shard duplicates
+    // (e.g. a label shared by many series) are collapsed before crossing the wire.
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    QueryLabelsAggregateFromCandidates(ctx, queryArg->subtype, queryArg->label, candidates, agg);
 
-    User_Ctx_t userCtx = GetUserFromContext(ctx);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(candidates, "^", NULL, 0);
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(agg, "^", NULL, 0);
     char *currentKey;
     size_t currentKeyLen;
+    long long replylen = 0;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        if (!CheckKeyIsAllowedToReadC(ctx, userCtx.user, currentKey, currentKeyLen)) {
-            continue;
-        }
-        QueryLabelsFromIndex(currentKey,
-                             currentKeyLen,
-                             queryArg->subtype,
-                             queryArg->label,
-                             QueryLabelsEmitReply,
-                             &replyCtx);
+        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        replylen++;
     }
     RedisModule_DictIteratorStop(iter);
-    FreeUser(&userCtx);
-    RedisModule_ReplySetArrayLength(ctx, replyCtx.replylen);
+    RedisModule_ReplySetArrayLength(ctx, replylen);
 
+    RedisModule_FreeDict(NULL, agg);
     RedisModule_FreeDict(ctx, candidates);
     ReleaseCtxUser(ctx);
 }

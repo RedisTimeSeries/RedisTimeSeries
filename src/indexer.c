@@ -13,7 +13,6 @@
 #include "consts.h"
 #include "utils/overflow.h"
 
-#include <assert.h>
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
@@ -571,10 +570,19 @@ RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx) {
     return res;
 }
 
+RedisModuleString *QueryLabelsBuildPrefix(QueryLabelsSubtype subtype,
+                                          RedisModuleString *labelFilter) {
+    return subtype == QueryLabelsSubtype_Labels
+               ? RedisModule_CreateStringPrintf(NULL, K_PREFIX, "")
+               : RedisModule_CreateStringPrintf(
+                     NULL, KV_PREFIX, RedisModule_StringPtrLen(labelFilter, NULL), "");
+}
+
 void QueryLabelsFromIndex(const char *tsKey,
                           size_t tsKeyLen,
                           QueryLabelsSubtype subtype,
-                          RedisModuleString *labelFilter,
+                          const char *prefixBuf,
+                          size_t prefixLen,
                           void (*emit)(void *userData, const char *buf, size_t len),
                           void *userData) {
     int nokey = 0;
@@ -582,14 +590,6 @@ void QueryLabelsFromIndex(const char *tsKey,
     if (nokey) {
         return;
     }
-
-    RedisModuleString *prefix =
-        subtype == QueryLabelsSubtype_Labels
-            ? RedisModule_CreateStringPrintf(NULL, K_PREFIX, "")
-            : RedisModule_CreateStringPrintf(
-                  NULL, KV_PREFIX, RedisModule_StringPtrLen(labelFilter, NULL), "");
-    size_t prefixLen;
-    const char *prefixBuf = RedisModule_StringPtrLen(prefix, &prefixLen);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(leaf, "^", NULL, 0);
     char *entryBuf;
@@ -604,8 +604,6 @@ void QueryLabelsFromIndex(const char *tsKey,
         }
     }
     RedisModule_DictIteratorStop(iter);
-
-    RedisModule_FreeString(NULL, prefix);
 }
 
 void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
@@ -624,12 +622,11 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
 }
 
 void QueryPredicateList_Free(QueryPredicateList *list) {
-    if (list->ref > 1) {
-        --list->ref;
+    // Atomic: this can race with LibMR's dispose thread freeing the same list
+    // (see QueryLabelsArg_ObjectFree and friends) once a cluster execution completes.
+    if (__atomic_sub_fetch(&list->ref, 1, __ATOMIC_RELAXED) > 0) {
         return;
     }
-
-    assert(list->ref == 1);
 
     for (size_t i = 0; i < list->count; i++) {
         QueryPredicate_Free(&list->list[i], 1);

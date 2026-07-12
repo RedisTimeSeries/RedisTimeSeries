@@ -362,12 +362,16 @@ static void QueryLabelsEmitToDict(void *userData, const char *buf, size_t len) {
     RedisModule_DictSetC((RedisModuleDict *)userData, (void *)buf, len, NULL);
 }
 
-// ACL: skips candidates the caller can't read.
-static void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
-                                               QueryLabelsSubtype subtype,
-                                               RedisModuleString *labelFilter,
-                                               RedisModuleDict *candidates,
-                                               RedisModuleDict *agg) {
+// ACL: skips candidates the caller can't read. Shared by the local and cluster-fanout paths.
+void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
+                                        QueryLabelsSubtype subtype,
+                                        RedisModuleString *labelFilter,
+                                        RedisModuleDict *candidates,
+                                        RedisModuleDict *agg) {
+    RedisModuleString *prefix = QueryLabelsBuildPrefix(subtype, labelFilter);
+    size_t prefixLen;
+    const char *prefixBuf = RedisModule_StringPtrLen(prefix, &prefixLen);
+
     User_Ctx_t userCtx = GetUserFromContext(ctx);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(candidates, "^", NULL, 0);
     char *currentKey;
@@ -377,10 +381,12 @@ static void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
             continue;
         }
         QueryLabelsFromIndex(
-            currentKey, currentKeyLen, subtype, labelFilter, QueryLabelsEmitToDict, agg);
+            currentKey, currentKeyLen, subtype, prefixBuf, prefixLen, QueryLabelsEmitToDict, agg);
     }
     RedisModule_DictIteratorStop(iter);
     FreeUser(&userCtx);
+
+    RedisModule_FreeString(NULL, prefix);
 }
 
 static void _TSDB_querylabels_impl(RedisModuleCtx *ctx,
@@ -420,22 +426,16 @@ int TSDB_querylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         filter_start = 3;
     }
 
-    const int filter_location = RMUtil_ArgIndex("FILTER", argv, argc);
-    if (filter_location != -1 && filter_location != filter_start) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: FILTER must immediately follow the subtype");
-    }
-    if (filter_location == -1 && argc > filter_start) {
-        return RTS_ReplyGeneralError(ctx, "TSDB: unknown argument, expected FILTER");
-    }
-
     QueryPredicateList *queries = NULL;
-    if (filter_location != -1) {
-        const int query_count = argc - 1 - filter_location;
+    if (argc > filter_start) {
+        if (!RMUtil_StringEqualsCaseC(argv[filter_start], "FILTER")) {
+            return RTS_ReplyGeneralError(ctx, "TSDB: unknown argument, expected FILTER");
+        }
+        const int query_count = argc - 1 - filter_start;
         if (query_count <= 0) {
             return RTS_ReplyGeneralError(ctx, "TSDB: FILTER given with no filter expressions");
         }
-        if (parseFilter(ctx, argv, argc, filter_location, query_count, &queries) !=
-            REDISMODULE_OK) {
+        if (parseFilter(ctx, argv, argc, filter_start, query_count, &queries) != REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
     }

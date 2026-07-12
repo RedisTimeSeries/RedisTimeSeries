@@ -628,7 +628,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
     queryArg->latest = args.rangeArgs.latest;
-    args.queryPredicates->ref++;
+    __atomic_add_fetch(&args.queryPredicates->ref, 1, __ATOMIC_RELAXED);
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
     queryArg->limitLabelsSize = args.numLimitLabels;
@@ -707,7 +707,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
-    queries->ref++;
+    __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED);
     queryArg->predicates = queries;
     queryArg->withLabels = false;
     queryArg->limitLabelsSize = 0;
@@ -783,8 +783,9 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
                         QueryPredicateList *queries) {
     // Since this command will be supported only in newer versions.
     if (TSGlobalConfig.libmrProtocol != LIBMR_PROTOCOL_INTERNAL) {
-        RedisModule_ReplyWithError(
-            ctx, "TS.QUERYLABELS multi-shard fan-out requires the INTERNAL LibMR protocol");
+        RedisModule_ReplyWithError(ctx,
+                                   "TS.QUERYLABELS multi-shard fan-out requires "
+                                   "'ts-libmr-protocol INTERNAL' (GEARS protocol unsupported)");
         return REDISMODULE_OK;
     }
 
@@ -796,7 +797,7 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
         queryArg->label = RedisModule_CreateStringFromString(NULL, label);
     }
     if (queries != NULL) {
-        queries->ref++;
+        __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED);
         queryArg->predicates = queries;
         queryArg->hasFilter = true;
     }
@@ -809,6 +810,10 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        // MR_CreateExecution always allocates and returns exec, even on error (it copies
+        // and dups every step's args before checking the error) - free it or exec plus its
+        // duplicated QueryLabelsArg reference leak on every failed call.
+        MR_FreeExecution(exec);
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
