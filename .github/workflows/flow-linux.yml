@@ -200,11 +200,18 @@ jobs:
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
+        id: pull-image
         if: ${{ inputs.use_prebuilt_images && !inputs.build_images }}
+        continue-on-error: true
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          echo "Pulling ${DOCKER_IMAGE}"
+          echo "::notice title=Docker image::Trying to pull prebuilt image ${DOCKER_IMAGE}"
           docker pull "${DOCKER_IMAGE}"
+
+      - name: Use Pulled Docker Image
+        if: ${{ inputs.use_prebuilt_images && !inputs.build_images && steps.pull-image.outcome == 'success' }}
+        run: |
+          echo "::notice title=Docker image::Using pulled prebuilt image ${DOCKER_IMAGE}"
 
       # Local image build kept for the next migration step:
       # - name: Build Docker Image
@@ -218,8 +225,15 @@ jobs:
       #       .
 
       - name: Build Docker Image
-        if: ${{ inputs.build_images || !inputs.use_prebuilt_images }}
+        if: ${{ inputs.build_images || !inputs.use_prebuilt_images || steps.pull-image.outcome == 'failure' }}
         run: |
+          if [ "${{ inputs.build_images }}" = "true" ]; then
+            echo "::notice title=Docker image::Building image locally because build_images=true: ${DOCKER_IMAGE}"
+          elif [ "${{ steps.pull-image.outcome }}" = "failure" ]; then
+            echo "::notice title=Docker image::Prebuilt image pull failed; building locally: ${DOCKER_IMAGE}"
+          else
+            echo "::notice title=Docker image::Building image locally because prebuilt images are disabled: ${DOCKER_IMAGE}"
+          fi
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
             --build-arg REDIS_REF=${{ env.REDIS_REF }} \
