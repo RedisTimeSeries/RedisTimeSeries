@@ -1,5 +1,9 @@
 name: Flow Random Traffic
 
+permissions:
+  contents: read
+  packages: read
+
 on:
   workflow_dispatch:
     inputs:
@@ -55,7 +59,6 @@ jobs:
     needs: pick-os
     runs-on: ubuntu-latest
     env:
-      DOCKER_IMAGE: redistimeseries-${{ needs.pick-os.outputs.os }}:latest
       REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
     steps:
       - name: Checkout
@@ -63,10 +66,33 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Build Docker Image
+      - name: Set Docker Image
         env:
           SELECTED_OS: ${{ needs.pick-os.outputs.os }}
         run: |
+          repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          image_tag="$(.install/get-image-tag.sh)"
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-x86-${SELECTED_OS}:${image_tag}" >> "$GITHUB_ENV"
+
+      - name: Pull Docker Image
+        id: pull-image
+        continue-on-error: true
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "::notice title=Docker image::Trying to pull prebuilt image ${DOCKER_IMAGE}"
+          docker pull "${DOCKER_IMAGE}"
+
+      - name: Use Pulled Docker Image
+        if: ${{ steps.pull-image.outcome == 'success' }}
+        run: |
+          echo "::notice title=Docker image::Using pulled prebuilt image ${DOCKER_IMAGE}"
+
+      - name: Build Docker Image
+        if: ${{ steps.pull-image.outcome == 'failure' }}
+        env:
+          SELECTED_OS: ${{ needs.pick-os.outputs.os }}
+        run: |
+          echo "::notice title=Docker image::Prebuilt image pull failed; building locally: ${DOCKER_IMAGE}"
           docker build \
             -f "Dockerfile.${SELECTED_OS}" \
             --build-arg REDIS_REF="${REDIS_REF}" \
