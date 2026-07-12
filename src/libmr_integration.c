@@ -377,7 +377,7 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
                ?: QueryPredicates_ArgDeserialize_impl(sctx, error, false);
 }
 
-static void QueryLabelsArg_ObjectFree(void *arg) {
+void QueryLabelsArg_ObjectFree(void *arg) {
     QueryLabelsArg *a = arg;
     if (__atomic_sub_fetch(&a->refCount, 1, __ATOMIC_RELAXED) > 0) {
         return;
@@ -467,6 +467,8 @@ static void QueryLabelsArg_CleanupFailedDeserialization(QueryLabelsArg *a) {
     free(a);
 }
 
+#define QUERYLABELS_MAX_FILTER_ITEMS 4096
+
 static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
     QueryLabelsArg *a = calloc(1, sizeof(*a));
     a->refCount = 1;
@@ -487,8 +489,11 @@ static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **
     if (*error) {
         goto err;
     }
+    if (a->predicates->count == 0 || a->predicates->count > QUERYLABELS_MAX_FILTER_ITEMS) {
+        goto err;
+    }
     a->predicates->list = calloc(a->predicates->count, sizeof(*a->predicates->list));
-    if (a->predicates->count && !a->predicates->list) {
+    if (!a->predicates->list) {
         goto err;
     }
     for (size_t i = 0; i < a->predicates->count; i++) {
@@ -503,6 +508,9 @@ static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **
         }
         predicate->valueListCount = MR_SerializationCtxReadLongLong(sctx, error);
         if (*error) {
+            goto err;
+        }
+        if (predicate->valueListCount > QUERYLABELS_MAX_FILTER_ITEMS) {
             goto err;
         }
         predicate->valuesList = calloc(predicate->valueListCount, sizeof(*predicate->valuesList));

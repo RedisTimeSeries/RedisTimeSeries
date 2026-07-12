@@ -125,6 +125,9 @@ typedef struct QueryLabelsArg
     QueryPredicateList *predicates; // NULL when hasFilter is false
 } QueryLabelsArg;
 
+// Drops a reference; frees the arg (and its predicates/strings) once refCount hits 0.
+void QueryLabelsArg_ObjectFree(void *arg);
+
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();

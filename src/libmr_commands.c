@@ -812,8 +812,11 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
         // MR_CreateExecution always allocates and returns exec, even on error (it copies
         // and dups every step's args before checking the error) - free it or exec plus its
-        // duplicated QueryLabelsArg reference leak on every failed call.
+        // duplicated QueryLabelsArg reference leak on every failed call. That only drops
+        // the execution's dup'd reference though - also drop our own original reference
+        // (which in turn releases the extra QueryPredicateList ref taken above for FILTER).
         MR_FreeExecution(exec);
+        QueryLabelsArg_ObjectFree(queryArg);
         MR_FreeExecutionBuilder(builder);
         return REDISMODULE_OK;
     }
