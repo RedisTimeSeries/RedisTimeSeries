@@ -165,14 +165,16 @@ jobs:
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      test-config: QUICK=1
+      # Full topology suite (not QUICK=1) so replication/AOF/cluster/LibMR code
+      # paths are exercised and coverage is not understated.
+      test-config: GEN=1 SLAVES=1 AOF=1 AOF_SLAVES=1 OSS_CLUSTER=1
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   notify-results:
     name: Aggregate Results & Notify
     runs-on: ubuntu-latest
-    needs: [random-traffic, prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer]
+    needs: [random-traffic, prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer, coverage]
     if: always() && (github.event_name == 'schedule' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.send-slack-message == true))
     permissions:
       actions: read
@@ -192,7 +194,8 @@ jobs:
             "macos": "${{ needs.macos.result }}",
             "linux-valgrind": "${{ needs.linux-valgrind.result }}",
             "linux-sanitizer": "${{ needs.linux-sanitizer.result }}",
-            "random-traffic": "${{ needs.random-traffic.result }}"
+            "random-traffic": "${{ needs.random-traffic.result }}",
+            "coverage": "${{ needs.coverage.result }}"
           }
           EOF
           )
