@@ -2310,8 +2310,10 @@ void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
         const RedisModuleClusterTopologyChangeInfo *info = data;
         change_flags = (int)info->change_flags;
     }
-    RedisModule_Log(ctx, "verbose",
-                    "Got cluster topology change event (change_flags=0x%x), scheduling cluster topology refresh.",
+    RedisModule_Log(ctx,
+                    "verbose",
+                    "Got cluster topology change event (change_flags=0x%x), scheduling cluster "
+                    "topology refresh.",
                     change_flags);
     MR_ClusterRefreshTopology(change_flags);
 }
