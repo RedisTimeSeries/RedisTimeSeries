@@ -18,10 +18,13 @@
 #define stringify(x) stringify2(x)
 #define stringify2(x) #x
 
-#define QUERY_TOKEN_SIZE 9
+#define QUERY_TOKEN_SIZE 10
+
+// Offset of the GROUPBY label token relative to the GROUPBY keyword position.
+#define GROUPBY_LABEL_OFFSET 1
 static const char *QUERY_TOKENS[] = {
     "WITHLABELS", "AGGREGATION",     "LIMIT",        "GROUPBY", "REDUCE",
-    "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",
+    "FILTER",     "FILTER_BY_VALUE", "FILTER_BY_TS", "COUNT",   "EXCLUDEEMPTY",
 };
 
 static int parseTimestamp(RedisModuleString *string, timestamp_t *out) {
@@ -968,6 +971,8 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     const int groupby_location = RMUtil_ArgIndex("GROUPBY", argv, argc);
+    // The GROUPBY label is the token immediately following the GROUPBY keyword.
+    const int groupby_label_location = groupby_location + GROUPBY_LABEL_OFFSET;
 
     if (groupby_location > 0 && groupby_location < filter_location) {
         RTS_ReplyGeneralError(ctx, "TSDB: GROUPBY should always come after filter");
@@ -990,13 +995,24 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
     args.queryPredicates = queries;
 
+    const int excludeEmptyPos = RMUtil_ArgIndex("EXCLUDEEMPTY", argv, argc);
+    // ponytail: ignore a GROUPBY label literally named EXCLUDEEMPTY (the only
+    // unconstrained token slot); otherwise it falsely trips the guard below.
+    args.excludeEmpty =
+        excludeEmptyPos > 0 && !(groupby_location > 0 && excludeEmptyPos == groupby_label_location);
+
+    if (args.excludeEmpty && groupby_location > 0) {
+        RTS_ReplyGeneralError(ctx, "TSDB: EXCLUDEEMPTY is not allowed with GROUPBY");
+        goto error_free_all;
+    }
+
     if (groupby_location > 0) {
-        if (groupby_location + 1 >= argc) {
+        if (groupby_label_location >= argc) {
             // GROUP BY without any argument
             RedisModule_WrongArity(ctx);
             goto error_free_all;
         }
-        args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_location + 1], NULL);
+        args.groupByLabel = RedisModule_StringPtrLen(argv[groupby_label_location], NULL);
 
         const int reduce_location = RMUtil_ArgIndex("REDUCE", argv, argc);
         // If we've detected a groupby but not a reduce
@@ -1016,6 +1032,7 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
             goto error_free_all;
         }
     }
+
     *out = args;
     return REDISMODULE_OK;
 
