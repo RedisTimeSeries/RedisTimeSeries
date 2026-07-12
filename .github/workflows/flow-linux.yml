@@ -244,10 +244,12 @@ jobs:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
 
       - name: Upload test artifacts
-        if: ${{ failure() && !inputs.build_only }}
+        if: ${{ always() && !inputs.build_only }}
         uses: actions/upload-artifact@v6
         with:
           name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
+          if-no-files-found: warn
+          retention-days: 7
           path: |
             tests/**/*.log
 

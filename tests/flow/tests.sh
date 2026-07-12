@@ -569,14 +569,19 @@ E=0
 [[ $AOF_SLAVES == 1 ]]  && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof --use-slaves" run_tests "tests with AOF and slaves"); (( E |= $? )); } || true
 if [[ $OSS_CLUSTER == 1 ]]; then
 	RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000"
+	# MOD-14615: give each cluster shard a replica so slave-N server logs are
+	# captured alongside master-N (cluster tests are masters-only by default).
+	# Opt-out with OSS_CLUSTER_SLAVES=0. Applied to BOTH cluster invocations.
+	CLUSTER_SLAVES_ARG=""
+	[[ ${OSS_CLUSTER_SLAVES:-1} == 1 ]] && CLUSTER_SLAVES_ARG="--use-slaves"
 	if [[ -z $TEST || $TEST != test_ts_password ]]; then
-		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
+		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS $CLUSTER_SLAVES_ARG" \
 			run_tests "tests on OSS cluster"); (( E |= $? )); } || true
 	fi
 	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
 		RLTEST_ARGS_1="$RLTEST_ARGS"
 		RLTEST_TEST_ARGS_1=" --test test_ts_password"
-		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
+		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password $CLUSTER_SLAVES_ARG" \
 		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
 		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
 	fi
