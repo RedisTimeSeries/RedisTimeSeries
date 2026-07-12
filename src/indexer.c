@@ -629,8 +629,7 @@ void QueryLabelsFromIndex(const char *tsKey,
     }
 
     size_t kvLitLen = strlen(KV_PREFIX_LITERAL);
-    size_t candidateLabelLen =
-        subtype == QueryLabelsSubtype_Values ? prefixLen - kvLitLen - 1 : 0;
+    size_t candidateLabelLen = subtype == QueryLabelsSubtype_Values ? prefixLen - kvLitLen - 1 : 0;
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(leaf, "^", NULL, 0);
     char *entryBuf;
