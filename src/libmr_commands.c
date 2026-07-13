@@ -795,7 +795,8 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
         queryArg->label = RedisModule_CreateStringFromString(NULL, label);
     }
     if (queries != NULL) {
-        __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
+        __atomic_add_fetch(
+            &queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
         queryArg->predicates = queries;
         queryArg->hasFilter = true;
     }
