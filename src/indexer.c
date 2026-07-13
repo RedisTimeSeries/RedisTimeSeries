@@ -481,8 +481,11 @@ static inline bool OwnKeyDuringASM(RedisModuleString *key) { // ASM version
     return RedisModule_ClusterCanAccessKeysInSlot(slot);
 }
 
-// During resharding/ASM trimming/importing, modules might see keys whose slots are no
-// longer (or not yet) owned by the current shard, so we need to filter them out of the results.
+// Results here come from our in-memory label index, not the Redis keyspace, so core's
+// per-slot ownership filtering never applies to them. The index is cleaned lazily (via
+// unlink/keyspace notifications), so during a slot migration it still contains keys for
+// slots this shard no longer owns (reshard/ASM trim) or does not own yet (ASM import).
+// Drop those so we don't report series that aren't this shard's responsibility.
 static void TrimUnownedKeysDuringReshard(RedisModuleDict *res) {
     if (likely(!(isReshardTrimming || isAsmTrimming || isAsmImporting))) {
         return;
@@ -667,8 +670,11 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
 }
 
 void QueryPredicateList_Free(QueryPredicateList *list) {
-    // Atomic: this can race with LibMR's dispose thread freeing the same list
-    // (see QueryLabelsArg_ObjectFree and friends) once a cluster execution completes.
+    // Atomic: LibMR duplicates/frees the QueryPredicates_Arg/QueryLabelsArg holding this list
+    // from its own execution threads (QueryPredicates_Duplicate/ObjectFree, QueryLabelsArg_*),
+    // concurrently with whichever thread drops this module's own reference. Every touch of
+    // `ref` - increments in libmr_commands.c included - has to be atomic for the count spread
+    // across those threads to stay consistent.
     if (__atomic_sub_fetch(&list->ref, 1, __ATOMIC_RELAXED) > 0) {
         return;
     }

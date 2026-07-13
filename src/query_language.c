@@ -61,13 +61,11 @@ int parseLabelsFromArgs(RedisModuleString **argv,
             // Verify Label Key or Value are not empty strings (also not nulls, if those are not
             // allowed)
             size_t keyLen = 0, valueLen = 0;
-            const char *keyStr = RedisModule_StringPtrLen(key, &keyLen);
+            RedisModule_StringPtrLen(key, &keyLen);
             const char *valueStr = NULL;
             if (value != NULL)
                 valueStr = RedisModule_StringPtrLen(value, &valueLen);
-            // '=' is rejected here too: the filter language already can't address a label
-            // whose key contains it (it always splits on the first '=' as the operator).
-            bool legalKey = keyLen > 0 && strchr(keyStr, '=') == NULL;
+            bool legalKey = keyLen > 0;
             bool legalValue = (allow_null_values && value == NULL) ||
                               (valueLen > 0 && strpbrk(valueStr, "(),") == NULL);
             if (!(legalKey && legalValue)) {

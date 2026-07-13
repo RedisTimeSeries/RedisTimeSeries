@@ -628,6 +628,10 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
     queryArg->latest = args.rangeArgs.latest;
+    // Atomic even though this call site is main-thread-only: LibMR's own Duplicate/ObjectFree
+    // step-arg callbacks (QueryPredicates_Duplicate/QueryPredicates_ObjectFree) touch this same
+    // ref from their own execution threads over the object's life, so every mutation site has
+    // to stay atomic for the count to be consistent (see QueryPredicateList_Free in indexer.c).
     __atomic_add_fetch(&args.queryPredicates->ref, 1, __ATOMIC_RELAXED);
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
@@ -707,7 +711,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
-    __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED);
+    __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
     queryArg->predicates = queries;
     queryArg->withLabels = false;
     queryArg->limitLabelsSize = 0;
@@ -752,27 +756,21 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     return REDISMODULE_OK;
 }
 
-static void querylabels_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
-    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
-    if (!nodesResults) {
-        return;
-    }
-
-    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
-    array_foreach(nodesResults, stringList, {
-        array_foreach(stringList, s, { RedisModule_DictSet(agg, s, NULL); });
-    });
-    array_free(nodesResults);
-
-    ReplyWithKeySetFromDict(ctx, agg);
-    RedisModule_FreeDict(NULL, agg);
-}
-
 static void querylabels_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
 
-    querylabels_done_internal(eCtx, ctx);
+    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
+    if (nodesResults) {
+        RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+        array_foreach(nodesResults, stringList, {
+            array_foreach(stringList, s, { RedisModule_DictSet(agg, s, NULL); });
+        });
+        array_free(nodesResults);
+
+        ReplyWithKeySetFromDict(ctx, agg);
+        RedisModule_FreeDict(NULL, agg);
+    }
 
     RTS_UnblockClient(bc, ctx);
 }
@@ -797,7 +795,7 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
         queryArg->label = RedisModule_CreateStringFromString(NULL, label);
     }
     if (queries != NULL) {
-        __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED);
+        __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
         queryArg->predicates = queries;
         queryArg->hasFilter = true;
     }
