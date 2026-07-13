@@ -467,8 +467,6 @@ static void QueryLabelsArg_CleanupFailedDeserialization(QueryLabelsArg *a) {
     free(a);
 }
 
-#define QUERYLABELS_MAX_FILTER_ITEMS 4096
-
 static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
     QueryLabelsArg *a = calloc(1, sizeof(*a));
     a->refCount = 1;
@@ -489,10 +487,10 @@ static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **
     if (*error) {
         goto err;
     }
-    if (a->predicates->count == 0 || a->predicates->count > QUERYLABELS_MAX_FILTER_ITEMS) {
+    if (a->predicates->count == 0) {
         goto err;
     }
-    a->predicates->list = calloc(a->predicates->count, sizeof(*a->predicates->list));
+    a->predicates->list = rts_try_calloc(a->predicates->count, sizeof(*a->predicates->list));
     if (!a->predicates->list) {
         goto err;
     }
@@ -510,10 +508,8 @@ static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **
         if (*error) {
             goto err;
         }
-        if (predicate->valueListCount > QUERYLABELS_MAX_FILTER_ITEMS) {
-            goto err;
-        }
-        predicate->valuesList = calloc(predicate->valueListCount, sizeof(*predicate->valuesList));
+        predicate->valuesList =
+            rts_try_calloc(predicate->valueListCount, sizeof(*predicate->valuesList));
         if (predicate->valueListCount && !predicate->valuesList) {
             goto err;
         }
