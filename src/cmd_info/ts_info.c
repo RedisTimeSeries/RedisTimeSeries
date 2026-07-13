@@ -1213,6 +1213,53 @@ static const RedisModuleCommandInfo TS_QUERYINDEX_INFO = {
 };
 
 // ===============================
+// TS.QUERYLABELS <LABELS | VALUES label> [FILTER filterExpr...]
+// ===============================
+static const RedisModuleCommandArg TS_QUERYLABELS_VALUES_ARGS[] = {
+    { .name = "VALUES", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "VALUES" },
+    { .name = "label", .type = REDISMODULE_ARG_TYPE_STRING },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_QUERYLABELS_SUBTYPE_OPTIONS[] = {
+    { .name = "LABELS", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "LABELS" },
+    { .name = "VALUES",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .subargs = (RedisModuleCommandArg *)TS_QUERYLABELS_VALUES_ARGS },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_QUERYLABELS_ARGS[] = {
+    { .name = "subtype",
+      .type = REDISMODULE_ARG_TYPE_ONEOF,
+      .subargs = (RedisModuleCommandArg *)TS_QUERYLABELS_SUBTYPE_OPTIONS },
+    { .name = "FILTER",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "FILTER", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "FILTER" },
+              { .name = "filterExpr",
+                .type = REDISMODULE_ARG_TYPE_STRING,
+                .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+              { 0 } } },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_QUERYLABELS_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Get all label names, or all values of a given label, for time series matching a "
+               "filter list, or all series",
+    .complexity = "O(n) where n is the number of time-series that match the filters (all "
+                  "indexed series when FILTER is omitted)",
+    .since = "8.10.0",
+    .tips = "dont_cache",
+    .arity = -2,
+    .key_specs = NULL,
+    .args = (RedisModuleCommandArg *)TS_QUERYLABELS_ARGS,
+};
+
+// ===============================
 // TS.INFO key [DEBUG]
 // ===============================
 static const RedisModuleCommandKeySpec TS_INFO_KEYSPECS[] = {
@@ -1716,6 +1763,12 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     RedisModuleCommand *cmd_queryindex = RedisModule_GetCommand(ctx, "TS.QUERYINDEX");
     if (!cmd_queryindex ||
         RedisModule_SetCommandInfo(cmd_queryindex, &TS_QUERYINDEX_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.QUERYLABELS command info
+    RedisModuleCommand *cmd_querylabels = RedisModule_GetCommand(ctx, "TS.QUERYLABELS");
+    if (!cmd_querylabels ||
+        RedisModule_SetCommandInfo(cmd_querylabels, &TS_QUERYLABELS_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.INFO command info

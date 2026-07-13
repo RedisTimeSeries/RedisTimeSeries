@@ -111,6 +111,24 @@ typedef struct StringListRecord
     ARR(RedisModuleString *) stringList;
 } StringListRecord;
 
+// Arg for TS.INTERNAL_QUERYLABELS. Kept separate from QueryPredicates_Arg (used by
+// mget/mrange/queryindex) rather than adding a subtype field to it, since that type's
+// (de)serialization already carries a two-variant rolling-upgrade fallback that a third
+// unrelated variant would only make more fragile.
+typedef struct QueryLabelsArg
+{
+    bool shouldReturnNull; // GEARS reader one-shot guard; unused by the INTERNAL protocol path
+    size_t refCount;
+    QueryLabelsSubtype subtype;
+    RedisModuleString *userName;
+    RedisModuleString *label; // target label name for VALUES; NULL for LABELS
+    bool hasFilter;
+    QueryPredicateList *predicates; // NULL when hasFilter is false
+} QueryLabelsArg;
+
+// Drops a reference; frees the arg (and its predicates/strings) once refCount hits 0.
+void QueryLabelsArg_ObjectFree(void *arg);
+
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
 MRRecordType *GetSeriesRecordType();
