@@ -117,6 +117,7 @@ typedef struct StringListRecord
 // unrelated variant would only make more fragile.
 typedef struct QueryLabelsArg
 {
+    bool shouldReturnNull; // GEARS reader one-shot guard; unused by the INTERNAL protocol path
     size_t refCount;
     QueryLabelsSubtype subtype;
     RedisModuleString *userName;

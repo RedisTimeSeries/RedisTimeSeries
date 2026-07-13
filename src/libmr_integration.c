@@ -885,6 +885,45 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     return series_list;
 }
 
+Record *ShardQuerylabelsMapper(ExecutionCtx *rctx, void *arg) {
+    QueryLabelsArg *queryArg = arg;
+
+    if (queryArg->shouldReturnNull) {
+        return NULL;
+    }
+    queryArg->shouldReturnNull = true;
+
+    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    ApplyCtxUser(rts_staticCtx, queryArg->userName);
+
+    RedisModuleDict *candidates =
+        queryArg->hasFilter
+            ? QueryIndex(
+                  rts_staticCtx, queryArg->predicates->list, queryArg->predicates->count, NULL)
+            : GetAllIndexedSeriesKeys(rts_staticCtx);
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    QueryLabelsAggregateFromCandidates(
+        rts_staticCtx, queryArg->subtype, queryArg->label, candidates, agg);
+
+    Record *result_list = ListRecord_Create(0);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(agg, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        ListRecord_Add(result_list,
+                       StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    RedisModule_FreeDict(NULL, agg);
+    RedisModule_FreeDict(rts_staticCtx, candidates);
+    ReleaseCtxUser(rts_staticCtx);
+    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+
+    return result_list;
+}
+
 static MRObjectType *MR_CreateType(char *type,
                                    ObjectFree free,
                                    ObjectDuplicate dup,
@@ -1482,6 +1521,8 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 
     MR_RegisterReader("ShardQueryindexMapper", ShardQueryindexMapper, QueryPredicatesType);
+
+    MR_RegisterReader("ShardQuerylabelsMapper", ShardQuerylabelsMapper, QueryLabelsArgType);
     mr_initialized = true;
 
     return REDISMODULE_OK;

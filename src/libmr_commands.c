@@ -756,20 +756,63 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     return REDISMODULE_OK;
 }
 
+static void querylabels_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    for (size_t i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            StringRecord *sr =
+                (StringRecord *)ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            RedisModule_DictSetC(agg, sr->str, sr->len, NULL);
+        }
+    }
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
+static void querylabels_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
+    if (!nodesResults) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    array_foreach(nodesResults, stringList, {
+        array_foreach(stringList, s, { RedisModule_DictSet(agg, s, NULL); });
+    });
+    array_free(nodesResults);
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
 static void querylabels_done(ExecutionCtx *eCtx, void *privateData) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
 
-    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
-    if (nodesResults) {
-        RedisModuleDict *agg = RedisModule_CreateDict(NULL);
-        array_foreach(nodesResults, stringList, {
-            array_foreach(stringList, s, { RedisModule_DictSet(agg, s, NULL); });
-        });
-        array_free(nodesResults);
-
-        ReplyWithKeySetFromDict(ctx, agg);
-        RedisModule_FreeDict(NULL, agg);
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            querylabels_done_gears(eCtx, ctx);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            querylabels_done_internal(eCtx, ctx);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
     }
 
     RTS_UnblockClient(bc, ctx);
@@ -779,15 +822,8 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
                         QueryLabelsSubtype subtype,
                         RedisModuleString *label,
                         QueryPredicateList *queries) {
-    // Since this command will be supported only in newer versions.
-    if (TSGlobalConfig.libmrProtocol != LIBMR_PROTOCOL_INTERNAL) {
-        RedisModule_ReplyWithError(ctx,
-                                   "TS.QUERYLABELS multi-shard fan-out requires "
-                                   "'ts-libmr-protocol INTERNAL' (GEARS protocol unsupported)");
-        return REDISMODULE_OK;
-    }
-
     QueryLabelsArg *queryArg = calloc(1, sizeof(QueryLabelsArg));
+    queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->subtype = subtype;
     queryArg->userName = CopyCurrentUserName(ctx);
@@ -801,9 +837,24 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
         queryArg->hasFilter = true;
     }
 
-    ExecutionBuilder *builder = MR_CreateEmptyExecutionBuilder();
-    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
-    MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYLABELS", queryArg);
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardQuerylabelsMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYLABELS", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
 
     MRError *err = NULL;
     Execution *exec = MR_CreateExecution(builder, &err);
