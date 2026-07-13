@@ -40,7 +40,6 @@ jobs:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
-      use_prebuilt_images: true
       shard_topologies: true
     secrets: inherit
   build-linux-arm64-full:
@@ -51,7 +50,6 @@ jobs:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
-      use_prebuilt_images: true
       shard_topologies: true
     secrets: inherit
   # Remaining OSes are a small, toolchain-diverse compile-only smoke set
@@ -63,7 +61,6 @@ jobs:
       arch: x64
       os: alpine amazonlinux2 azurelinux3 rocky9
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      use_prebuilt_images: true
       build_only: true
     secrets: inherit
   build-linux-arm64-smoke:
@@ -73,7 +70,6 @@ jobs:
       arch: arm64
       os: alpine amazonlinux2023 azurelinux3 rocky9
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      use_prebuilt_images: true
       build_only: true
     secrets: inherit
   macos:
@@ -103,6 +99,5 @@ jobs:
       # this adds replication/AOF/cluster/LibMR ASAN coverage without raising
       # the overall PR wall-clock.
       quick: false
-      use_prebuilt_images: true
       run_sanitizer: true
     secrets: inherit
