@@ -177,6 +177,14 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
 
 int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const MRangeArgs *args);
 
+// ACL: skips candidates the caller can't read. Shared by the local and cluster-fanout
+// TS.QUERYLABELS paths (see libmr_integration.c).
+void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
+                                        QueryLabelsSubtype subtype,
+                                        RedisModuleString *labelFilter,
+                                        RedisModuleDict *candidates,
+                                        RedisModuleDict *agg);
+
 extern int persistence_in_progress;
 
 #endif // MODULE_H

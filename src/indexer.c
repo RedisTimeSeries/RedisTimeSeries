@@ -13,7 +13,6 @@
 #include "consts.h"
 #include "utils/overflow.h"
 
-#include <assert.h>
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
@@ -23,8 +22,10 @@ RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
 RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
 extern bool isReshardTrimming, isAsmTrimming, isAsmImporting;
 
-#define KV_PREFIX "__index_%s=%s"
-#define K_PREFIX "__key_index_%s"
+#define KV_PREFIX_LITERAL "__index_"
+#define K_PREFIX_LITERAL "__key_index_"
+#define KV_PREFIX KV_PREFIX_LITERAL "%s=%s"
+#define K_PREFIX K_PREFIX_LITERAL "%s"
 
 typedef enum
 {
@@ -480,13 +481,40 @@ static inline bool OwnKeyDuringASM(RedisModuleString *key) { // ASM version
     return RedisModule_ClusterCanAccessKeysInSlot(slot);
 }
 
+// Results here come from our in-memory label index, not the Redis keyspace, so core's
+// per-slot ownership filtering never applies to them. The index is cleaned lazily (via
+// unlink/keyspace notifications), so during a slot migration it still contains keys for
+// slots this shard no longer owns (reshard/ASM trim) or does not own yet (ASM import).
+// Drop those so we don't report series that aren't this shard's responsibility.
+static void TrimUnownedKeysDuringReshard(RedisModuleDict *res) {
+    if (likely(!(isReshardTrimming || isAsmTrimming || isAsmImporting))) {
+        return;
+    }
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
+    RedisModuleString *currentKey;
+    while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
+        bool ownCurrentKey =
+            (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(currentKey);
+        if (!ownCurrentKey) {
+            RedisModule_DictDel(res, currentKey, NULL);
+            RedisModule_DictIteratorReseek(iter, ">", currentKey);
+        }
+        RedisModule_FreeString(NULL, currentKey);
+    }
+    RedisModule_DictIteratorStop(iter);
+}
+
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             QueryPredicate *index_predicate,
                             size_t predicate_count,
                             bool *hasPermissionError) {
+    RedisModuleDict *res = RedisModule_CreateDict(ctx);
+    if (predicate_count == 0) {
+        return res;
+    }
+
     PromoteSmallestPredicateToFront(ctx, index_predicate, predicate_count);
 
-    RedisModuleDict *res = RedisModule_CreateDict(ctx);
     QueryPredicate *predicate = &index_predicate[0];
 
     if (!IS_INCLUSION(predicate->type)) {
@@ -531,24 +559,99 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     FreeUser(&userCtx);
     free(dicts);
 
-    if (unlikely(isReshardTrimming || isAsmTrimming || isAsmImporting)) {
-        // During those periods modules might see keys whose slots are no longer
-        // (or not yet) owned by the current shard, so we need to filter them out of the results
-        RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(res, "^", NULL, 0);
-        RedisModuleString *currentKey;
-        while ((currentKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
-            bool ownCurrentKey =
-                (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(currentKey);
-            if (!ownCurrentKey) {
-                RedisModule_DictDel(res, currentKey, NULL);
-                RedisModule_DictIteratorReseek(iter, ">", currentKey);
-            }
-            RedisModule_FreeString(NULL, currentKey);
-        }
-        RedisModule_DictIteratorStop(iter);
-    }
+    TrimUnownedKeysDuringReshard(res);
 
     return res;
+}
+
+RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx) {
+    RedisModuleDict *res = RedisModule_CreateDict(ctx);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(tsLabelIndex, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    TrimUnownedKeysDuringReshard(res);
+
+    return res;
+}
+
+RedisModuleString *QueryLabelsBuildPrefix(QueryLabelsSubtype subtype,
+                                          RedisModuleString *labelFilter) {
+    return subtype == QueryLabelsSubtype_Labels
+               ? RedisModule_CreateStringPrintf(NULL, K_PREFIX, "")
+               : RedisModule_CreateStringPrintf(
+                     NULL, KV_PREFIX, RedisModule_StringPtrLen(labelFilter, NULL), "");
+}
+
+// Label keys can no longer contain '=' (parseLabelsFromArgs rejects it at creation), but
+// series indexed before that existed. For such a series, a KV entry's "key=value" content
+// is ambiguous: e.g. key "a=b" value "c" and key "a" value "b=c" both flatten differently,
+// but a VALUES(a) lookup can't tell "a=b=c" (real key "a=b") from a genuine key "a" without
+// cross-checking. A real key always has an exact "__key_index_"-prefixed leaf entry, so if
+// some OTHER real key strictly longer than candidateLabel is itself a "key=" prefix of this
+// entry's content, the content truly belongs to that longer key, not to candidateLabel.
+static bool ValuesMatchShadowedByLongerKey(RedisModuleDict *leaf,
+                                           const char *content,
+                                           size_t contentLen,
+                                           size_t candidateLabelLen) {
+    size_t kLitLen = strlen(K_PREFIX_LITERAL);
+    bool shadowed = false;
+    RedisModuleDictIter *kiter = RedisModule_DictIteratorStartC(leaf, "^", NULL, 0);
+    char *kEntryBuf;
+    size_t kEntryLen;
+    while (!shadowed && (kEntryBuf = RedisModule_DictNextC(kiter, &kEntryLen, NULL)) != NULL) {
+        if (kEntryLen <= kLitLen || memcmp(kEntryBuf, K_PREFIX_LITERAL, kLitLen) != 0) {
+            continue;
+        }
+        const char *otherKey = kEntryBuf + kLitLen;
+        size_t otherKeyLen = kEntryLen - kLitLen;
+        if (otherKeyLen > candidateLabelLen && otherKeyLen < contentLen &&
+            memcmp(content, otherKey, otherKeyLen) == 0 && content[otherKeyLen] == '=') {
+            shadowed = true;
+        }
+    }
+    RedisModule_DictIteratorStop(kiter);
+    return shadowed;
+}
+
+void QueryLabelsFromIndex(const char *tsKey,
+                          size_t tsKeyLen,
+                          QueryLabelsSubtype subtype,
+                          const char *prefixBuf,
+                          size_t prefixLen,
+                          void (*emit)(void *userData, const char *buf, size_t len),
+                          void *userData) {
+    int nokey = 0;
+    RedisModuleDict *leaf = RedisModule_DictGetC(tsLabelIndex, (void *)tsKey, tsKeyLen, &nokey);
+    if (nokey) {
+        return;
+    }
+
+    size_t kvLitLen = strlen(KV_PREFIX_LITERAL);
+    size_t candidateLabelLen = subtype == QueryLabelsSubtype_Values ? prefixLen - kvLitLen - 1 : 0;
+
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(leaf, "^", NULL, 0);
+    char *entryBuf;
+    size_t entryLen;
+    while ((entryBuf = RedisModule_DictNextC(iter, &entryLen, NULL)) != NULL) {
+        if (entryLen < prefixLen || memcmp(entryBuf, prefixBuf, prefixLen) != 0) {
+            continue;
+        }
+        if (subtype == QueryLabelsSubtype_Values &&
+            ValuesMatchShadowedByLongerKey(
+                leaf, entryBuf + kvLitLen, entryLen - kvLitLen, candidateLabelLen)) {
+            continue;
+        }
+        emit(userData, entryBuf + prefixLen, entryLen - prefixLen);
+        if (subtype == QueryLabelsSubtype_Values) {
+            break; // a series has at most one value for a given label name
+        }
+    }
+    RedisModule_DictIteratorStop(iter);
 }
 
 void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
@@ -567,12 +670,14 @@ void QueryPredicate_Free(QueryPredicate *predicate_list, size_t count) {
 }
 
 void QueryPredicateList_Free(QueryPredicateList *list) {
-    if (list->ref > 1) {
-        --list->ref;
+    // Atomic: LibMR duplicates/frees the QueryPredicates_Arg/QueryLabelsArg holding this list
+    // from its own execution threads (QueryPredicates_Duplicate/ObjectFree, QueryLabelsArg_*),
+    // concurrently with whichever thread drops this module's own reference. Every touch of
+    // `ref` - increments in libmr_commands.c included - has to be atomic for the count spread
+    // across those threads to stay consistent.
+    if (__atomic_sub_fetch(&list->ref, 1, __ATOMIC_RELAXED) > 0) {
         return;
     }
-
-    assert(list->ref == 1);
 
     for (size_t i = 0; i < list->count; i++) {
         QueryPredicate_Free(&list->list[i], 1);

@@ -377,6 +377,157 @@ static void *QueryPredicates_ArgDeserialize(ReaderSerializationCtx *sctx, MRErro
                ?: QueryPredicates_ArgDeserialize_impl(sctx, error, false);
 }
 
+void QueryLabelsArg_ObjectFree(void *arg) {
+    QueryLabelsArg *a = arg;
+    if (__atomic_sub_fetch(&a->refCount, 1, __ATOMIC_RELAXED) > 0) {
+        return;
+    }
+    if (a->predicates) {
+        QueryPredicateList_Free(a->predicates);
+    }
+    if (a->userName) {
+        RedisModule_FreeString(NULL, a->userName);
+    }
+    if (a->label) {
+        RedisModule_FreeString(NULL, a->label);
+    }
+    free(a);
+}
+
+static void *QueryLabelsArg_Duplicate(void *arg) {
+    QueryLabelsArg *a = (QueryLabelsArg *)arg;
+    __atomic_add_fetch(&a->refCount, 1, __ATOMIC_RELAXED);
+    return arg;
+}
+
+static char *QueryLabelsArg_ToString(void *arg) {
+    QueryLabelsArg *a = arg;
+    char out[64];
+    snprintf(out, sizeof(out), "QueryLabelsArg: subtype=%d", (int)a->subtype);
+    return strdup(out);
+}
+
+static void QueryLabelsArg_Serialize(WriteSerializationCtx *sctx, void *arg, MRError **error) {
+    QueryLabelsArg *a = arg;
+    if (a->userName) {
+        SerializationCtxWriteRedisString(sctx, a->userName, error);
+    } else {
+        /* For empty string, we write a single byte of 0. */
+        MR_SerializationCtxWriteBuffer(sctx, "", 1, error);
+    }
+    MR_SerializationCtxWriteLongLong(sctx, a->subtype, error);
+    if (a->label) {
+        SerializationCtxWriteRedisString(sctx, a->label, error);
+    } else {
+        MR_SerializationCtxWriteBuffer(sctx, "", 1, error);
+    }
+    MR_SerializationCtxWriteLongLong(sctx, a->hasFilter, error);
+    if (!a->hasFilter) {
+        return;
+    }
+    MR_SerializationCtxWriteLongLong(sctx, a->predicates->count, error);
+    for (size_t i = 0; i < a->predicates->count; i++) {
+        QueryPredicate *predicate = a->predicates->list + i;
+        MR_SerializationCtxWriteLongLong(sctx, predicate->type, error);
+        SerializationCtxWriteRedisString(sctx, predicate->key, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate->valueListCount, error);
+        for (size_t value_index = 0; value_index < predicate->valueListCount; value_index++) {
+            SerializationCtxWriteRedisString(sctx, predicate->valuesList[value_index], error);
+        }
+    }
+}
+
+static void QueryLabelsArg_CleanupFailedDeserialization(QueryLabelsArg *a) {
+    if (a->userName) {
+        RedisModule_FreeString(NULL, a->userName);
+    }
+    if (a->label) {
+        RedisModule_FreeString(NULL, a->label);
+    }
+    if (a->predicates) {
+        if (a->predicates->list) {
+            for (size_t i = 0; i < a->predicates->count; i++) {
+                QueryPredicate *predicate = &a->predicates->list[i];
+                if (!predicate->key) {
+                    break;
+                }
+                if (predicate->valuesList) {
+                    for (size_t j = 0; j < predicate->valueListCount && predicate->valuesList[j];
+                         j++) {
+                        RedisModule_FreeString(NULL, predicate->valuesList[j]);
+                    }
+                    free(predicate->valuesList);
+                }
+                RedisModule_FreeString(NULL, predicate->key);
+            }
+            free(a->predicates->list);
+        }
+        free(a->predicates);
+    }
+    free(a);
+}
+
+static void *QueryLabelsArg_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
+    QueryLabelsArg *a = calloc(1, sizeof(*a));
+    a->refCount = 1;
+    a->userName = SerializationCtxReadRedisString(sctx, error);
+    a->subtype = MR_SerializationCtxReadLongLong(sctx, error);
+    a->label = SerializationCtxReadRedisString(sctx, error);
+    a->hasFilter = MR_SerializationCtxReadLongLong(sctx, error);
+    if (*error) {
+        goto err;
+    }
+    if (!a->hasFilter) {
+        return a;
+    }
+
+    a->predicates = calloc(1, sizeof(*a->predicates));
+    a->predicates->ref = 1;
+    a->predicates->count = MR_SerializationCtxReadLongLong(sctx, error);
+    if (*error) {
+        goto err;
+    }
+    if (a->predicates->count == 0) {
+        goto err;
+    }
+    a->predicates->list = rts_try_calloc(a->predicates->count, sizeof(*a->predicates->list));
+    if (!a->predicates->list) {
+        goto err;
+    }
+    for (size_t i = 0; i < a->predicates->count; i++) {
+        QueryPredicate *predicate = &a->predicates->list[i];
+        predicate->type = MR_SerializationCtxReadLongLong(sctx, error);
+        if (*error) {
+            goto err;
+        }
+        predicate->key = SerializationCtxReadRedisString(sctx, error);
+        if (*error) {
+            goto err;
+        }
+        predicate->valueListCount = MR_SerializationCtxReadLongLong(sctx, error);
+        if (*error) {
+            goto err;
+        }
+        predicate->valuesList =
+            rts_try_calloc(predicate->valueListCount, sizeof(*predicate->valuesList));
+        if (predicate->valueListCount && !predicate->valuesList) {
+            goto err;
+        }
+        for (size_t value_index = 0; value_index < predicate->valueListCount; value_index++) {
+            predicate->valuesList[value_index] = SerializationCtxReadRedisString(sctx, error);
+            if (*error) {
+                goto err;
+            }
+        }
+    }
+    return a;
+
+err:
+    *error = NULL;
+    QueryLabelsArg_CleanupFailedDeserialization(a);
+    return NULL;
+}
+
 static Record *StringRecord_Create(char *val, size_t len);
 static Record *ListRecord_Create(size_t initSize);
 static Record *MapRecord_Create(size_t initSize);
@@ -732,6 +883,45 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
     return series_list;
+}
+
+Record *ShardQuerylabelsMapper(ExecutionCtx *rctx, void *arg) {
+    QueryLabelsArg *queryArg = arg;
+
+    if (queryArg->shouldReturnNull) {
+        return NULL;
+    }
+    queryArg->shouldReturnNull = true;
+
+    RedisModule_ThreadSafeContextLock(rts_staticCtx);
+    ApplyCtxUser(rts_staticCtx, queryArg->userName);
+
+    RedisModuleDict *candidates =
+        queryArg->hasFilter
+            ? QueryIndex(
+                  rts_staticCtx, queryArg->predicates->list, queryArg->predicates->count, NULL)
+            : GetAllIndexedSeriesKeys(rts_staticCtx);
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    QueryLabelsAggregateFromCandidates(
+        rts_staticCtx, queryArg->subtype, queryArg->label, candidates, agg);
+
+    Record *result_list = ListRecord_Create(0);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(agg, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        ListRecord_Add(result_list,
+                       StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
+    }
+    RedisModule_DictIteratorStop(iter);
+
+    RedisModule_FreeDict(NULL, agg);
+    RedisModule_FreeDict(rts_staticCtx, candidates);
+    ReleaseCtxUser(rts_staticCtx);
+    RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+
+    return result_list;
 }
 
 static MRObjectType *MR_CreateType(char *type,
@@ -1134,6 +1324,40 @@ static Record *StringListReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks QueryIndexCallbacks = { .command = TS_INTERNAL_QUERYINDEX,
                                                         .replyParser = StringListReplyParser };
 
+static void TS_INTERNAL_QUERYLABELS(RedisModuleCtx *ctx, void *args) {
+    QueryLabelsArg *queryArg = args;
+    ApplyCtxUser(ctx, queryArg->userName);
+
+    RedisModuleDict *candidates =
+        queryArg->hasFilter
+            ? QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL)
+            : GetAllIndexedSeriesKeys(ctx);
+
+    // Aggregate into a dict (shared with the non-cluster path) so per-shard duplicates
+    // (e.g. a label shared by many series) are collapsed before crossing the wire.
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    QueryLabelsAggregateFromCandidates(ctx, queryArg->subtype, queryArg->label, candidates, agg);
+
+    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(agg, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    long long replylen = 0;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
+        replylen++;
+    }
+    RedisModule_DictIteratorStop(iter);
+    RedisModule_ReplySetArrayLength(ctx, replylen);
+
+    RedisModule_FreeDict(NULL, agg);
+    RedisModule_FreeDict(ctx, candidates);
+    ReleaseCtxUser(ctx);
+}
+
+static InternalCommandCallbacks QueryLabelsCallbacks = { .command = TS_INTERNAL_QUERYLABELS,
+                                                         .replyParser = StringListReplyParser };
+
 static bool mr_initialized = false;
 
 bool LibMR_IsInitialized() {
@@ -1160,6 +1384,17 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
                                                       QueryPredicates_ToString);
 
     if (MR_RegisterObject(QueryPredicatesType) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    MRObjectType *QueryLabelsArgType = MR_CreateType("QueryLabelsArgType",
+                                                     QueryLabelsArg_ObjectFree,
+                                                     QueryLabelsArg_Duplicate,
+                                                     QueryLabelsArg_Serialize,
+                                                     QueryLabelsArg_Deserialize,
+                                                     QueryLabelsArg_ToString);
+
+    if (MR_RegisterObject(QueryLabelsArgType) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
@@ -1280,10 +1515,14 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MGET", &MgetCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_QUERYINDEX", &QueryIndexCallbacks, QueryPredicatesType);
+    MR_RegisterInternalCommand(
+        "TS.INTERNAL_QUERYLABELS", &QueryLabelsCallbacks, QueryLabelsArgType);
 
     MR_RegisterReader("ShardMgetMapper", ShardMgetMapper, QueryPredicatesType);
 
     MR_RegisterReader("ShardQueryindexMapper", ShardQueryindexMapper, QueryPredicatesType);
+
+    MR_RegisterReader("ShardQuerylabelsMapper", ShardQuerylabelsMapper, QueryLabelsArgType);
     mr_initialized = true;
 
     return REDISMODULE_OK;
