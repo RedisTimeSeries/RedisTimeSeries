@@ -41,6 +41,11 @@ on:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
         default: false
+      runner:
+        description: 'Runner label override (empty = ubuntu-latest / ubuntu-24.04-arm; e.g. ubuntu-latest-16-cores for slow valgrind runs)'
+        type: string
+        required: false
+        default: ''
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -81,6 +86,11 @@ on:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
         default: false
+      runner:
+        description: 'Runner label override (empty = ubuntu-latest / ubuntu-24.04-arm; e.g. ubuntu-latest-16-cores for slow valgrind runs)'
+        type: string
+        required: false
+        default: ''
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -111,8 +121,14 @@ jobs:
         id: set-runner
         env:
           ARCH: ${{ inputs.arch }}
+          RUNNER_OVERRIDE: ${{ inputs.runner }}
         run: |
-          if [ "$ARCH" == "arm64" ]; then
+          # tests.sh runs RLTest with --parallelism $(nproc), so test throughput
+          # scales with runner cores: callers may override the runner with a
+          # larger-runner label (e.g. ubuntu-latest-16-cores) for slow suites.
+          if [ -n "$RUNNER_OVERRIDE" ]; then
+            echo "runner=$RUNNER_OVERRIDE" >> $GITHUB_OUTPUT
+          elif [ "$ARCH" == "arm64" ]; then
             echo "runner=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
           else
             echo "runner=ubuntu-latest" >> $GITHUB_OUTPUT
