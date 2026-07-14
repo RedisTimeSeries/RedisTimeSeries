@@ -278,23 +278,6 @@ static bool Config_SetIgnoreMaxValDiffFromRedisString(RedisModuleString *value,
     return true;
 }
 
-static bool Config_SetGlobalPasswordFromRedisString(RedisModuleString *value) {
-    if (TSGlobalConfig.password) {
-        free(TSGlobalConfig.password);
-        TSGlobalConfig.password = NULL;
-    }
-
-    size_t len = 0;
-    const char *str = RedisModule_StringPtrLen(value, &len);
-
-    if (!str || len == 0) {
-        return true;
-    }
-
-    TSGlobalConfig.password = strndup(str, len);
-    return true;
-}
-
 static bool Config_SetEncodingFromRedisString(RedisModuleString *value, RedisModuleString **err) {
     size_t len = 0;
     const char *encoding = RedisModule_StringPtrLen(value, &len);
