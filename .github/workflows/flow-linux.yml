@@ -252,7 +252,8 @@ jobs:
             tests/**/*.log
 
       - name: Pack module
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
+        # ponytail: temp — also pack jammy-aof so we can verify S3 upload for that shard; drop the jammy-aof clause when done
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen' || (matrix.platform.os == 'jammy' && matrix.platform.topo == 'aof')) }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
@@ -264,7 +265,8 @@ jobs:
             make pack SHOW=1
 
       - name: Upload artifacts to S3
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
+        # ponytail: temp — also upload jammy-aof to verify S3 for that shard; drop the jammy-aof clause when done
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen' || (matrix.platform.os == 'jammy' && matrix.platform.topo == 'aof')) }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
