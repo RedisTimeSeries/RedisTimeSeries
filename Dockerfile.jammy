@@ -20,12 +20,9 @@ ARG SANITIZER=
 # VALGRIND=1 builds Redis without _FORTIFY_SOURCE to avoid Valgrind false
 # positives on fortify-lowered memmove() (see install_redis.sh / RED-195208).
 ARG VALGRIND=
-# Empty default: install_redis.sh falls back to redis/redis. Set to a fork URL
-# to build an in-review core (e.g. the RedisModuleEvent_ClusterTopologyChange PR).
-ARG REDIS_REPO=
 
 COPY pack/ramp.yml /workspace/pack/ramp.yml
-RUN chmod +x /workspace/.install/install_redis.sh && REDIS_REF=${REDIS_REF} REDIS_REPO=${REDIS_REPO} SANITIZER=${SANITIZER} VALGRIND=${VALGRIND} /workspace/.install/install_redis.sh
+RUN chmod +x /workspace/.install/install_redis.sh && REDIS_REF=${REDIS_REF} SANITIZER=${SANITIZER} VALGRIND=${VALGRIND} /workspace/.install/install_redis.sh
 
 # Install uv and Python environment
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh

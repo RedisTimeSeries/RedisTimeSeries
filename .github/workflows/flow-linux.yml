@@ -11,11 +11,6 @@ on:
         description: 'Redis ref to checkout'
         type: string
         required: true
-      redis-repo:
-        description: 'Redis git repo URL to build from (empty = redis/redis; set to a fork to test an in-review core)'
-        type: string
-        required: false
-        default: ''
       arch:
         description: 'Architecture (x64 or arm64)'
         type: string
@@ -57,11 +52,6 @@ on:
         description: 'Redis ref to checkout'
         type: string
         required: true
-      redis-repo:
-        description: 'Redis git repo URL to build from (empty = redis/redis; set to a fork to test an in-review core)'
-        type: string
-        required: false
-        default: ''
       arch:
         description: 'Architecture (x64 or arm64)'
         type: string
@@ -190,15 +180,10 @@ jobs:
           submodules: 'recursive'
 
       - name: Build Docker Image
-        # Pass user-controllable inputs via env vars (not inline ${{ }} in run:) so
-        # they can't be expanded into the shell command -- avoids script injection.
-        env:
-          REDIS_REPO: ${{ inputs.redis-repo }}
         run: |
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
-            --build-arg REDIS_REF="$REDIS_REF" \
-            --build-arg REDIS_REPO="$REDIS_REPO" \
+            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
             --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
             -t ${{ env.DOCKER_IMAGE }} \
