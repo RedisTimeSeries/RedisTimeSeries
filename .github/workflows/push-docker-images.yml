@@ -160,7 +160,7 @@ jobs:
 
       - name: Set Redis ref
         run: |
-          echo "REDIS_REF=$(.install/get-redis-ref.sh)" >> "$GITHUB_ENV"
+          echo "REDIS_REF=unstable" >> "$GITHUB_ENV"
 
       - name: Set Docker Image
         run: |

@@ -25,7 +25,7 @@ jobs:
       - name: set env
         id: set-env
         run: |
-          echo "redis-ref=$(.install/get-redis-ref.sh)" >> "$GITHUB_OUTPUT"
+          echo "redis-ref=unstable" >> "$GITHUB_OUTPUT"
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
