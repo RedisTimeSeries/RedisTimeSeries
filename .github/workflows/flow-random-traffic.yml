@@ -48,13 +48,13 @@ jobs:
           INPUT_OS: ${{ inputs.os }}
         run: |
           if [ -n "$INPUT_OS" ]; then
-            echo "os=${INPUT_OS}" >> $GITHUB_OUTPUT
+            echo "os=${INPUT_OS}" >> "$GITHUB_OUTPUT"
             echo "Using specified OS: ${INPUT_OS}"
           else
             OS_LIST=(focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie)
             RANDOM_INDEX=$((RANDOM % ${#OS_LIST[@]}))
             SELECTED=${OS_LIST[$RANDOM_INDEX]}
-            echo "os=${SELECTED}" >> $GITHUB_OUTPUT
+            echo "os=${SELECTED}" >> "$GITHUB_OUTPUT"
             echo "Randomly selected OS: ${SELECTED}"
           fi
 
@@ -78,7 +78,7 @@ jobs:
           SELECTED_OS: ${{ needs.pick-os.outputs.os }}
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          image_tag="$(.install/get-image-tag.sh)"
+          image_tag="$(.install/get-redis-ref.sh)"
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-x86-${SELECTED_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
