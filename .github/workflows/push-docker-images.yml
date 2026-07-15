@@ -1,9 +1,9 @@
 name: Push Docker Images
 
 # Rollout notes:
-# - Seed the registry before non-labeled PRs rely on prebuilt images. Either run
-#   this workflow manually or merge a PR labeled `docker-image-changes`.
-# - `docker-image-changes` means a merged PR refreshes the registry.
+# - `pack/ramp.yml:docker_image_version` is the single source of truth for CI image tags.
+# - Bump it when Docker image inputs change. Leave it unchanged for module-only
+#   version bumps.
 # - Linux CI pulls prebuilt images first and falls back to building locally when
 #   an image is missing.
 
@@ -15,13 +15,14 @@ on:
   pull_request:
     types:
       - closed
+    branches:
+      - main
+      - master
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+'
+      - 'release/**'
   workflow_dispatch:
     inputs:
-      redis-ref:
-        description: 'Redis ref to bake into the images'
-        type: string
-        required: true
-        default: 'unstable'
       architecture:
         description: 'Architecture images to build'
         type: choice
@@ -34,7 +35,7 @@ on:
 
 jobs:
   setup-matrix:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'docker-image-changes')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -71,7 +72,7 @@ jobs:
 
   push-images:
     name: ${{ matrix.image.os }}-${{ matrix.image.image_arch }}${{ matrix.image.variant && format('-{0}', matrix.image.variant) || '' }}
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'docker-image-changes')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
     needs: setup-matrix
     runs-on: ${{ matrix.image.runner }}
     strategy:
@@ -79,7 +80,6 @@ jobs:
       matrix:
         image: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     env:
-      REDIS_REF: ${{ inputs.redis-ref }}
       OS: ${{ matrix.image.os }}
       IMAGE_ARCH: ${{ matrix.image.image_arch }}
       DOCKER_PLATFORM: ${{ matrix.image.platform }}
@@ -95,11 +95,7 @@ jobs:
 
       - name: Set Redis ref
         run: |
-          redis_ref="${REDIS_REF}"
-          if [ -z "$redis_ref" ]; then
-            redis_ref="$(.install/get-redis-ref.sh)"
-          fi
-          echo "REDIS_REF=${redis_ref}" >> "$GITHUB_ENV"
+          echo "REDIS_REF=$(.install/get-redis-ref.sh)" >> "$GITHUB_ENV"
 
       - name: Set Docker Image
         run: |
@@ -111,7 +107,19 @@ jobs:
           fi
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${image_os}:${image_tag}" >> "$GITHUB_ENV"
 
+      - name: Check Docker Image
+        id: check-image
+        run: |
+          if docker buildx imagetools inspect "${DOCKER_IMAGE}" >/dev/null 2>&1; then
+            echo "::notice title=Docker image::Image already exists, skipping build: ${DOCKER_IMAGE}"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Docker image::Image is missing, building: ${DOCKER_IMAGE}"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build Docker Image
+        if: ${{ steps.check-image.outputs.exists != 'true' }}
         run: |
           echo "Building ${DOCKER_IMAGE}"
           docker buildx build \
@@ -125,6 +133,7 @@ jobs:
             .
 
       - name: Push Docker Image
+        if: ${{ steps.check-image.outputs.exists != 'true' }}
         run: |
           echo "Pushing ${DOCKER_IMAGE}"
           docker push "${DOCKER_IMAGE}"
