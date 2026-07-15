@@ -9,7 +9,7 @@
 	url = https://github.com/lemire/fast_double_parser.git
 [submodule "deps/LibMR"]
 	path = deps/LibMR
-	url = https://github.com/RedisGears/LibMR.git
+	url = https://github.com/gabsow/LibMR.git
 [submodule "deps/cpu_features"]
 	path = deps/cpu_features
 	url = https://github.com/google/cpu_features.git
