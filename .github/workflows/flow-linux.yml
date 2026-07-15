@@ -191,7 +191,7 @@ jobs:
       - name: Pull Docker Image
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker pull "${{ env.DOCKER_IMAGE }}"
+          docker pull "${DOCKER_IMAGE}"
 
       # Local image build kept for the next migration step:
       # - name: Build Docker Image
@@ -201,7 +201,7 @@ jobs:
       #       --build-arg REDIS_REF=${{ env.REDIS_REF }} \
       #       --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
       #       --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
-      #       -t ${{ env.DOCKER_IMAGE }} \
+      #       -t "${DOCKER_IMAGE}" \
       #       .
 
       - name: Build module
@@ -210,7 +210,7 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e SAN=${{ inputs.run_sanitizer && 'address' || '' }} \
-            ${{ env.DOCKER_IMAGE }} \
+            "${DOCKER_IMAGE}" \
             make build
 
       - name: Run tests
@@ -238,7 +238,7 @@ jobs:
             --cap-add=SYS_PTRACE \
             --security-opt seccomp=unconfined \
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-            ${{ env.DOCKER_IMAGE }} \
+            "${DOCKER_IMAGE}" \
             bash -c "make test \
               VG=${{ inputs.run_valgrind && '1' || '0' }} \
               SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
@@ -275,7 +275,7 @@ jobs:
             -e BRANCH=${{ env.BRANCH }} \
             -e VERSION=${{ env.VERSION }} \
             -e BETA_VERSION=${{ inputs.beta-version }} \
-            ${{ env.DOCKER_IMAGE }} \
+            "${DOCKER_IMAGE}" \
             make pack SHOW=1
 
       - name: Upload artifacts to S3
