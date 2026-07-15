@@ -1,9 +1,5 @@
 name: Flow Random Traffic
 
-permissions:
-  contents: read
-  packages: read
-
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +9,10 @@ on:
       os:
         description: 'OS to run on (leave empty for random)'
         default: ''
+      use_prebuilt_images:
+        description: 'Pull prebuilt Docker images instead of building locally'
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       redis-ref:
@@ -31,6 +31,10 @@ on:
         description: 'OS to run on (leave empty for random)'
         type: string
         default: ''
+      use_prebuilt_images:
+        description: 'Pull prebuilt Docker images instead of building locally'
+        type: boolean
+        default: true
 
 jobs:
   pick-os:
@@ -58,6 +62,9 @@ jobs:
     name: random-traffic (${{ needs.pick-os.outputs.os }})
     needs: pick-os
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     env:
       REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
     steps:
@@ -76,23 +83,30 @@ jobs:
 
       - name: Pull Docker Image
         id: pull-image
+        if: ${{ inputs.use_prebuilt_images }}
         continue-on-error: true
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           echo "::notice title=Docker image::Trying to pull prebuilt image ${DOCKER_IMAGE}"
           docker pull "${DOCKER_IMAGE}"
 
       - name: Use Pulled Docker Image
-        if: ${{ steps.pull-image.outcome == 'success' }}
+        if: ${{ inputs.use_prebuilt_images && steps.pull-image.outcome == 'success' }}
         run: |
           echo "::notice title=Docker image::Using pulled prebuilt image ${DOCKER_IMAGE}"
 
       - name: Build Docker Image
-        if: ${{ steps.pull-image.outcome == 'failure' }}
+        if: ${{ !inputs.use_prebuilt_images || steps.pull-image.outcome == 'failure' }}
         env:
           SELECTED_OS: ${{ needs.pick-os.outputs.os }}
         run: |
-          echo "::notice title=Docker image::Prebuilt image pull failed; building locally: ${DOCKER_IMAGE}"
+          if [ "${{ inputs.use_prebuilt_images }}" = "true" ]; then
+            echo "::notice title=Docker image::Prebuilt image pull failed; building locally: ${DOCKER_IMAGE}"
+          else
+            echo "::notice title=Docker image::Building image locally because prebuilt images are disabled: ${DOCKER_IMAGE}"
+          fi
           docker build \
             -f "Dockerfile.${SELECTED_OS}" \
             --build-arg REDIS_REF="${REDIS_REF}" \

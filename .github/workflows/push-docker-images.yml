@@ -7,22 +7,16 @@ name: Push Docker Images
 # - Linux CI pulls prebuilt images first and falls back to building locally when
 #   an image is missing.
 
-permissions:
-  contents: read
-  packages: write
-  pull-requests: read
-
 on:
-  pull_request:
-    types:
-      - closed
+  push:
     branches:
       - main
       - master
       - '[0-9]+.[0-9]+.[0-9]+'
       - '[0-9]+.[0-9]+'
       - 'release/**'
-      - 'tal.ba/test/baseline'
+    paths:
+      - 'pack/ramp.yml'
   workflow_dispatch:
     inputs:
       architecture:
@@ -34,34 +28,34 @@ on:
           - all
           - x86
           - arm
+      force:
+        description: 'Rebuild and push images even if the tag already exists'
+        type: boolean
+        default: false
 
 jobs:
   should-run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:
+      - name: Checkout
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
       - name: Check Docker image version change
         id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [ "${{ github.event.pull_request.merged }}" != "true" ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          files="$(gh api --paginate \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files")"
-          ramp_patch="$(echo "$files" | jq -r '.[] | select(.filename == "pack/ramp.yml") | .patch // empty')"
-          if echo "$ramp_patch" | grep -Eq '^[+-]docker_image_version:'; then
+          if git diff --unified=0 HEAD^ HEAD -- pack/ramp.yml | grep -Eq '^[+-]docker_image_version:'; then
             echo "::notice title=Docker image::docker_image_version changed; checking/pushing images"
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
@@ -73,6 +67,7 @@ jobs:
     if: ${{ needs.should-run.outputs.run == 'true' }}
     needs: should-run
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -110,6 +105,9 @@ jobs:
     name: ${{ matrix.image.os }}-${{ matrix.image.image_arch }}${{ matrix.image.variant && format('-{0}', matrix.image.variant) || '' }}
     needs: setup-matrix
     runs-on: ${{ matrix.image.runner }}
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -126,7 +124,9 @@ jobs:
           submodules: 'recursive'
 
       - name: Login to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Set Redis ref
         run: |
@@ -145,6 +145,12 @@ jobs:
       - name: Check Docker Image
         id: check-image
         run: |
+          if [ "${{ inputs.force || false }}" = "true" ]; then
+            echo "::notice title=Docker image::Force rebuild requested; rebuilding existing tag if present: ${DOCKER_IMAGE}"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           if docker buildx imagetools inspect "${DOCKER_IMAGE}" >/dev/null 2>&1; then
             echo "::notice title=Docker image::Image already exists, skipping build: ${DOCKER_IMAGE}"
             echo "exists=true" >> "$GITHUB_OUTPUT"
