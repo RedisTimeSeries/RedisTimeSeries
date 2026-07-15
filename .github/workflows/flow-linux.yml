@@ -186,7 +186,7 @@ jobs:
       TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH }}
       REDIS_REF: ${{ needs.setup-environment.outputs.redis-ref }}
       IMAGE_ARCH: ${{ inputs.arch == 'x64' && 'x86' || 'arm' }}
-      IMAGE_TAG: ${{ inputs.run_sanitizer && format('{0}-sanitizer', matrix.platform.os) || inputs.run_valgrind && format('{0}-valgrind', matrix.platform.os) || matrix.platform.os }}
+      IMAGE_OS: ${{ inputs.run_sanitizer && format('{0}-sanitizer', matrix.platform.os) || inputs.run_valgrind && format('{0}-valgrind', matrix.platform.os) || matrix.platform.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -197,7 +197,7 @@ jobs:
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
           image_tag="$(.install/get-image-tag.sh)"
-          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_TAG}:${image_tag}" >> "$GITHUB_ENV"
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
         if: ${{ inputs.use_prebuilt_images && !inputs.build_images }}

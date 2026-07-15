@@ -3,6 +3,7 @@ name: Event Nightly
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 on:
   schedule:
@@ -108,6 +109,7 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
+      use_prebuilt_images: true
     secrets: inherit
   build-linux-arm64:
     uses: ./.github/workflows/flow-linux.yml
@@ -118,6 +120,7 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
+      use_prebuilt_images: true
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
@@ -136,6 +139,7 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       run_valgrind: true
+      use_prebuilt_images: true
     secrets: inherit
   linux-sanitizer:
     uses: ./.github/workflows/flow-linux.yml
@@ -146,6 +150,7 @@ jobs:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       run_sanitizer: true
+      use_prebuilt_images: true
     secrets: inherit
   random-traffic:
     uses: ./.github/workflows/flow-random-traffic.yml
