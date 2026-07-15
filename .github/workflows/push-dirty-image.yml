@@ -55,7 +55,7 @@ jobs:
       DIRTY_IMAGE_TAG: ${{ inputs.dirty_image_tag || 'dirty-tal-ci-pull-test-x64' }}
       OS: ${{ inputs.os || 'jammy' }}
       REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
-      DOCKER_IMAGE: ghcr.io/redis/redis/redistimeseries-builder:${{ inputs.dirty_image_tag || 'dirty-tal-ci-pull-test-x64' }}
+      DOCKER_IMAGE: ghcr.io/${{ github.repository }}/redistimeseries-builder:${{ inputs.dirty_image_tag || 'dirty-tal-ci-pull-test-x64' }}
       DOCKER_PLATFORM: ${{ (inputs.arch || 'x64') == 'arm64' && 'linux/arm64' || 'linux/amd64' }}
     steps:
       - name: Checkout
