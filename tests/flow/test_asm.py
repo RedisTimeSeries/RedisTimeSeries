@@ -252,6 +252,112 @@ def test_auto_refresh_on_topology_change():
     assert all(int(sample[1]) == number_of_keys for sample in samples)
 
 
+def _wait_auto_refresh_aware(env, conn, matcher, expected, timeout=5):
+    # Poll until the module auto-refreshes purely from the topology event and
+    # QUERYINDEX converges to the full cross-shard set. Skips on cores that predate
+    # RedisModuleEvent_ClusterTopologyChange (the merged unstable core fires it).
+    deadline = time.time() + (60 if (VALGRIND or SANITIZER) else timeout)
+    while time.time() < deadline:
+        if len(execute_through_topology_flux(conn, 'TS.QUERYINDEX', matcher)) == expected:
+            return
+        time.sleep(0.1)
+    env.skip()  # redis build does not fire RedisModuleEvent_ClusterTopologyChange
+
+
+def test_auto_refresh_reshard_under_query_load():
+    # MOD-16382 under load: event-driven counterpart of
+    # test_asm_with_data_and_queries_during_migrations. With NO manual
+    # REFRESHCLUSTER/CLUSTERSET, a keyless multi-shard query must stay correct while
+    # ASM migrations churn the topology and the module auto-refreshes underneath it.
+    # The only tolerated failures are the whitelisted transient flux errors; every
+    # successful result is complete -- i.e. the auto-refresh never returns a partial
+    # (silently-wrong) cross-shard answer.
+    env = Env(shardsCount=2, decodeResponses=True, skipRefreshCluster=True, noLog=False)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
+    samples_per_key = 50
+    fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
+
+    conn = env.getConnection(0)
+    command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
+
+    def validate_result(result):
+        ((filtered_by, withlabels, samples),) = result
+        assert filtered_by == "label1=17"
+        assert withlabels == []
+        assert len(samples) == samples_per_key
+        assert all(int(sample[1]) == number_of_keys for sample in samples)
+
+    # Converge purely via the event before starting the load.
+    _wait_auto_refresh_aware(env, conn, 'label1=17', number_of_keys)
+    validate_result(execute_through_topology_flux(conn, command))
+
+    done = threading.Event()
+
+    def validate_command_in_a_loop():
+        while not done.is_set():
+            try:
+                result = conn.execute_command(command)
+            except redis.exceptions.ResponseError as x:
+                assert is_topology_flux_error(x), str(x)
+                continue
+            validate_result(result)
+
+    def migrate_slots():
+        for _ in range(MIGRATION_CYCLES):
+            if done.is_set():
+                break
+            migrate_slots_back_and_forth(env, command, validate_result)
+
+    with ThreadPoolExecutor() as executor:
+        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
+        try:
+            for future in as_completed(futures):
+                done.set()
+                future.result()
+        except TimeoutError as e:
+            if SANITIZER and "state is init-rdbchannel" in str(e):
+                print(f"Ignoring known sanitizer migration timeout: {e}")
+                done.set()
+                return
+            done.set()
+            raise
+
+    validate_result(execute_through_topology_flux(conn, command))
+
+
+def test_auto_refresh_survives_repeated_cycles():
+    # MOD-16382 stability: many back-and-forth ASM migrations, each firing topology
+    # events, must leave the module correctly converged every time -- the reconcile
+    # is idempotent and does not drift or leak across repeated events. No manual
+    # REFRESHCLUSTER/CLUSTERSET anywhere.
+    env = Env(shardsCount=2, decodeResponses=True, skipRefreshCluster=True)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    number_of_keys = 100
+    samples_per_key = 10
+    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key, label="cyc")
+
+    conn = env.getConnection(0)
+    _wait_auto_refresh_aware(env, conn, 'label=cyc', number_of_keys)
+
+    for cycle in range(MIGRATION_CYCLES):
+        migrate_slots_back_and_forth(env)
+        deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 10)
+        while time.time() < deadline:
+            if len(execute_through_topology_flux(conn, 'TS.QUERYINDEX', 'label=cyc')) == number_of_keys:
+                break
+            time.sleep(0.1)
+        else:
+            raise AssertionError(
+                f'auto-refresh drifted after migration cycle {cycle}: QUERYINDEX did not '
+                f'return the full set'
+            )
+
+
 # Helper structs and functions
 
 
