@@ -185,8 +185,12 @@ jobs:
       - name: Set Docker Image
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          version="$(echo "$REDIS_REF" | tr '[:upper:]' '[:lower:]' | sed 's|[^a-z0-9_.-]|-|g')"
-          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${version}-${IMAGE_ARCH}:${IMAGE_TAG}" >> "$GITHUB_ENV"
+          ref="$(echo "$REDIS_REF" | tr '[:upper:]' '[:lower:]')"
+          image_tag="unstable"
+          if [[ "$ref" =~ ^v?[0-9]+(\.[0-9]+){1,2}([.-][a-z0-9]+)*$ ]]; then
+            image_tag="${ref#v}"
+          fi
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-unstable-${IMAGE_ARCH}-${IMAGE_TAG}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
         run: |
