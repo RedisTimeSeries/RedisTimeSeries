@@ -3,10 +3,9 @@ name: Push Docker Images
 # Rollout notes:
 # - Seed the registry before non-labeled PRs rely on prebuilt images. Either run
 #   this workflow manually or merge a PR labeled `docker-image-changes`.
-# - `docker-image-changes` means PR CI builds images locally and a merged PR
-#   refreshes the registry. Without the label, Linux CI pulls prebuilt images.
-# - Prebuilt mode intentionally fails hard when an image is missing; there is no
-#   local-build fallback in that path.
+# - `docker-image-changes` means a merged PR refreshes the registry.
+# - Linux CI pulls prebuilt images first and falls back to building locally when
+#   an image is missing.
 
 permissions:
   contents: read
