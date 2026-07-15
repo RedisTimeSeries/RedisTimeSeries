@@ -94,6 +94,8 @@ on:
 jobs:
   setup-environment:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       redis-ref: ${{ steps.set-env.outputs.redis-ref }}
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -167,6 +169,9 @@ jobs:
     name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}, ${{ needs.setup-environment.outputs.redis-ref }}
     runs-on: ${{ needs.setup-environment.outputs.runner }}
     needs: setup-environment
+    permissions:
+      contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -188,7 +193,7 @@ jobs:
       - name: Set Docker Image
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          image_tag="$(.install/get-redis-ref.sh)"
+          image_tag="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image

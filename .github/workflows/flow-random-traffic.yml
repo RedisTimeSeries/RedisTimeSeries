@@ -78,7 +78,7 @@ jobs:
           SELECTED_OS: ${{ needs.pick-os.outputs.os }}
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          image_tag="$(.install/get-redis-ref.sh)"
+          image_tag="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-x86-${SELECTED_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
