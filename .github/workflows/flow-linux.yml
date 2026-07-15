@@ -46,15 +46,6 @@ on:
         type: string
         required: false
         default: ''
-      push_dirty_image:
-        description: 'Build and push a temporary CI image, then skip module build/tests'
-        type: boolean
-        default: false
-      dirty_image_tag:
-        description: 'Temporary GHCR tag used when push_dirty_image is true'
-        type: string
-        required: false
-        default: 'dirty-tal-ci-pull-test'
   workflow_call:
     inputs:
       redis-ref:
@@ -95,15 +86,6 @@ on:
         type: string
         required: false
         default: ''
-      push_dirty_image:
-        description: 'Build and push a temporary CI image, then skip module build/tests'
-        type: boolean
-        default: false
-      dirty_image_tag:
-        description: 'Temporary GHCR tag used when push_dirty_image is true'
-        type: string
-        required: false
-        default: 'dirty-tal-ci-pull-test'
 
 jobs:
   setup-environment:
@@ -144,15 +126,8 @@ jobs:
           RUN_VALGRIND: ${{ inputs.run_valgrind }}
           RUN_SANITIZER: ${{ inputs.run_sanitizer }}
           SHARD_TOPOLOGIES: ${{ inputs.shard_topologies }}
-          PUSH_DIRTY_IMAGE: ${{ inputs.push_dirty_image }}
         run: |
           OS="$OS_INPUT"
-          if [ "$PUSH_DIRTY_IMAGE" == "true" ] && [ -z "${OS}" ]; then
-            OS="jammy"
-          fi
-          if [ "$PUSH_DIRTY_IMAGE" == "true" ]; then
-            OS="${OS%% *}"
-          fi
           if [ -z "${OS}" ]; then
             if [ "$ARCH" == "arm64" ]; then
               OS="focal jammy rocky9 azurelinux3 amazonlinux2023 alpine noble resolute rocky8 rocky10 alma8 alma9 alma10 bullseye bookworm trixie mariner2"
@@ -186,7 +161,6 @@ jobs:
 
   build-linux:
     name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}, ${{ needs.setup-environment.outputs.redis-ref }}
-    if: ${{ !inputs.push_dirty_image }}
     runs-on: ${{ needs.setup-environment.outputs.runner }}
     needs: setup-environment
     strategy:
@@ -299,40 +273,3 @@ jobs:
           github-ref: ${{ github.ref }}
           osnick: ${{ matrix.platform.os }}
           beta-version: ${{ inputs.beta-version }}
-
-  push-dirty-image:
-    name: push-dirty-${{ inputs.arch }}-${{ matrix.platform.os }}
-    if: ${{ inputs.push_dirty_image }}
-    runs-on: ${{ needs.setup-environment.outputs.runner }}
-    needs: setup-environment
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: ${{ fromJson(needs.setup-environment.outputs.matrix) }}
-    env:
-      REDIS_REF: ${{ needs.setup-environment.outputs.redis-ref }}
-      DOCKER_IMAGE: ghcr.io/redis/redis/redistimeseries-builder:${{ inputs.dirty_image_tag }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: 'recursive'
-
-      - name: Login to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Build Docker Image
-        run: |
-          docker build \
-            -f Dockerfile.${{ matrix.platform.os }} \
-            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
-            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
-            --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
-            -t ${{ env.DOCKER_IMAGE }} \
-            .
-
-      - name: Push Docker Image
-        run: docker push ${{ env.DOCKER_IMAGE }}
