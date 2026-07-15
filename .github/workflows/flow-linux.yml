@@ -33,14 +33,10 @@ on:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
-      build_images:
-        description: 'Build Docker images locally instead of pulling prebuilt images'
-        type: boolean
-        default: false
       use_prebuilt_images:
         description: 'Pull prebuilt Docker images instead of building locally'
         type: boolean
-        default: false
+        default: true
       shard_topologies:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
@@ -81,14 +77,10 @@ on:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
-      build_images:
-        description: 'Build Docker images locally instead of pulling prebuilt images'
-        type: boolean
-        default: false
       use_prebuilt_images:
         description: 'Pull prebuilt Docker images instead of building locally'
         type: boolean
-        default: false
+        default: true
       shard_topologies:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
@@ -201,7 +193,7 @@ jobs:
 
       - name: Pull Docker Image
         id: pull-image
-        if: ${{ inputs.use_prebuilt_images && !inputs.build_images }}
+        if: ${{ inputs.use_prebuilt_images }}
         continue-on-error: true
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -211,27 +203,14 @@ jobs:
           docker pull "${DOCKER_IMAGE}"
 
       - name: Use Pulled Docker Image
-        if: ${{ inputs.use_prebuilt_images && !inputs.build_images && steps.pull-image.outcome == 'success' }}
+        if: ${{ inputs.use_prebuilt_images && steps.pull-image.outcome == 'success' }}
         run: |
           echo "::notice title=Docker image::Using pulled prebuilt image ${DOCKER_IMAGE}"
 
-      # Local image build kept for the next migration step:
-      # - name: Build Docker Image
-      #   run: |
-      #     docker build \
-      #       -f Dockerfile.${{ matrix.platform.os }} \
-      #       --build-arg REDIS_REF=${{ env.REDIS_REF }} \
-      #       --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
-      #       --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
-      #       -t "${DOCKER_IMAGE}" \
-      #       .
-
       - name: Build Docker Image
-        if: ${{ inputs.build_images || !inputs.use_prebuilt_images || steps.pull-image.outcome == 'failure' }}
+        if: ${{ !inputs.use_prebuilt_images || steps.pull-image.outcome == 'failure' }}
         run: |
-          if [ "${{ inputs.build_images }}" = "true" ]; then
-            echo "::notice title=Docker image::Building image locally because build_images=true: ${DOCKER_IMAGE}"
-          elif [ "${{ steps.pull-image.outcome }}" = "failure" ]; then
+          if [ "${{ steps.pull-image.outcome }}" = "failure" ]; then
             echo "::notice title=Docker image::Prebuilt image pull failed; building locally: ${DOCKER_IMAGE}"
           else
             echo "::notice title=Docker image::Building image locally because prebuilt images are disabled: ${DOCKER_IMAGE}"
