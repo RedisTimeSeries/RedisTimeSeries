@@ -2533,7 +2533,8 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
 
 static void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
                                           RedisModuleEvent eid,
-                                          uint64_t subevent, void *data) {
+                                          uint64_t subevent,
+                                          void *data) {
     REDISMODULE_NOT_USED(subevent);
     if (eid.id != REDISMODULE_EVENT_CLUSTER_TOPOLOGY_CHANGE) {
         RedisModule_Log(
@@ -2552,8 +2553,8 @@ static void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
                     (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_STATE) ? " STATE" : "",
                     (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_NODE) ? " NODE" : "");
 
+    MR_UpdateClusterTopology();
 }
-
 
 void ReplicaBackupCallback(RedisModuleCtx *ctx,
                            RedisModuleEvent eid,
@@ -2872,7 +2873,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         }
 
         RedisModule_Log(ctx, "notice", "%s", "Subscribe to topology changes events");
-        RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
+        RedisModule_SubscribeToServerEvent(
+            ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
 
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
