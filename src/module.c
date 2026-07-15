@@ -1489,7 +1489,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
-    if (timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
+    const bool useLocalTimestamp =
+        timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*");
+    if (useLocalTimestamp) {
         currentUpdatedTime = RedisModule_Milliseconds();
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
@@ -1527,7 +1529,27 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST, true);
-    RedisModule_ReplicateVerbatim(ctx);
+
+    if (useLocalTimestamp) {
+        const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
+        if (timestampLoc == -1) {
+            RedisModule_Replicate(
+                ctx, replCmd, "vcl", argv + 1, argc - 1, "TIMESTAMP", currentUpdatedTime);
+        } else {
+            RedisModule_Replicate(
+                ctx,
+                replCmd,
+                "vlv",
+                argv + 1,           // start after the command name
+                timestampLoc,       // number of args, until the TIMESTAMP argument(included)
+                currentUpdatedTime, // the timestamp value
+                argv + timestampLoc +
+                    2, // start after the TIMESTAMP argument, rest of the arguments
+                argc - timestampLoc - 2); // number of args, after the TIMESTAMP argument
+        }
+    } else {
+        RedisModule_ReplicateVerbatim(ctx);
+    }
     RedisModule_CloseKey(key);
 
     RedisModule_NotifyKeyspaceEvent(
