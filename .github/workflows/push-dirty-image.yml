@@ -101,7 +101,7 @@ jobs:
           if [ -n "$VARIANT" ]; then
             image_os="${image_os}-${VARIANT}"
           fi
-          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-unstable-${IMAGE_ARCH}-${image_os}:${image_tag}" >> "$GITHUB_ENV"
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${image_os}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Build Docker Image
         run: |
