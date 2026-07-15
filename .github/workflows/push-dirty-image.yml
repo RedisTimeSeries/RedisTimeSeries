@@ -38,7 +38,7 @@ jobs:
       - name: Set matrix
         id: set-matrix
         env:
-          ARCHITECTURE: ${{ inputs.architecture }}
+          ARCHITECTURE: ${{ inputs.architecture || 'all' }}
         run: |
           X86_OS="focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie"
           ARM_OS="focal jammy rocky9 azurelinux3 amazonlinux2023 alpine noble resolute rocky8 rocky10 alma8 alma9 alma10 bullseye bookworm trixie mariner2"
@@ -75,7 +75,7 @@ jobs:
       matrix:
         image: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     env:
-      REDIS_REF: ${{ inputs.redis-ref }}
+      REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
       OS: ${{ matrix.image.os }}
       IMAGE_ARCH: ${{ matrix.image.image_arch }}
       DOCKER_PLATFORM: ${{ matrix.image.platform }}
