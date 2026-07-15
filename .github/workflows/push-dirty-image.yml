@@ -1,4 +1,4 @@
-name: Push Dirty CI Image
+name: Push CI Images
 
 permissions:
   contents: read
@@ -8,46 +8,70 @@ on:
   workflow_dispatch:
     inputs:
       redis-ref:
-        description: 'Redis ref to checkout'
+        description: 'Redis ref to bake into the images'
         type: string
         required: true
         default: 'unstable'
-      arch:
-        description: 'Architecture (x64 or arm64)'
+      architecture:
+        description: 'Architecture images to build'
         type: choice
         required: true
-        default: 'x64'
+        default: 'all'
         options:
-          - x64
-          - arm64
-      os:
-        description: 'OS Dockerfile suffix'
-        type: string
-        required: true
-        default: 'jammy'
-      dirty_image_tag:
-        description: 'Temporary GHCR tag'
-        type: string
-        required: true
-        default: 'dirty-tal-ci-pull-test-x64'
-      run_valgrind:
-        description: 'Build Redis for valgrind'
-        type: boolean
-        default: false
-      run_sanitizer:
-        description: 'Build Redis with address sanitizer'
-        type: boolean
-        default: false
+          - all
+          - x86
+          - arm
 
 jobs:
-  push-dirty-image:
-    name: push-dirty-${{ inputs.arch || 'x64' }}-${{ inputs.os || 'jammy' }}
-    runs-on: ${{ (inputs.arch || 'x64') == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-22.04' }}
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set matrix
+        id: set-matrix
+        env:
+          ARCHITECTURE: ${{ inputs.architecture }}
+        run: |
+          X86_OS="focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie"
+          ARM_OS="focal jammy rocky9 azurelinux3 amazonlinux2023 alpine noble resolute rocky8 rocky10 alma8 alma9 alma10 bullseye bookworm trixie mariner2"
+          MATRIX="["
+          add_platform() {
+            local arch="$1"
+            local image_arch="$2"
+            local runner="$3"
+            local platform="$4"
+            local os_list="$5"
+            for os in $os_list; do
+              MATRIX="${MATRIX}{\"arch\":\"${arch}\",\"image_arch\":\"${image_arch}\",\"runner\":\"${runner}\",\"platform\":\"${platform}\",\"os\":\"${os}\",\"variant\":\"\"},"
+            done
+          }
+          if [ "$ARCHITECTURE" = "all" ] || [ "$ARCHITECTURE" = "x86" ]; then
+            add_platform "x64" "x86" "ubuntu-22.04" "linux/amd64" "$X86_OS"
+            MATRIX="${MATRIX}{\"arch\":\"x64\",\"image_arch\":\"x86\",\"runner\":\"ubuntu-22.04\",\"platform\":\"linux/amd64\",\"os\":\"jammy\",\"variant\":\"sanitizer\"},"
+            MATRIX="${MATRIX}{\"arch\":\"x64\",\"image_arch\":\"x86\",\"runner\":\"ubuntu-22.04\",\"platform\":\"linux/amd64\",\"os\":\"jammy\",\"variant\":\"valgrind\"},"
+          fi
+          if [ "$ARCHITECTURE" = "all" ] || [ "$ARCHITECTURE" = "arm" ]; then
+            add_platform "arm64" "arm" "ubuntu-24.04-arm" "linux/arm64" "$ARM_OS"
+          fi
+          MATRIX="${MATRIX%,}]"
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          echo "Generated matrix: ${MATRIX}"
+
+  push-images:
+    name: ${{ matrix.image.os }}-${{ matrix.image.image_arch }}${{ matrix.image.variant && format('-{0}', matrix.image.variant) || '' }}
+    needs: setup-matrix
+    runs-on: ${{ matrix.image.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     env:
-      DIRTY_IMAGE_TAG: ${{ inputs.dirty_image_tag || 'dirty-tal-ci-pull-test-x64' }}
-      OS: ${{ inputs.os || 'jammy' }}
-      REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
-      DOCKER_PLATFORM: ${{ (inputs.arch || 'x64') == 'arm64' && 'linux/arm64' || 'linux/amd64' }}
+      REDIS_REF: ${{ inputs.redis-ref }}
+      OS: ${{ matrix.image.os }}
+      IMAGE_ARCH: ${{ matrix.image.image_arch }}
+      DOCKER_PLATFORM: ${{ matrix.image.platform }}
+      VARIANT: ${{ matrix.image.variant }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -60,7 +84,12 @@ jobs:
       - name: Set Docker Image
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-builder:${DIRTY_IMAGE_TAG}" >> "$GITHUB_ENV"
+          version="$(echo "$REDIS_REF" | tr '[:upper:]' '[:lower:]' | sed 's|[^a-z0-9_.-]|-|g')"
+          tag="$OS"
+          if [ -n "$VARIANT" ]; then
+            tag="${tag}-${VARIANT}"
+          fi
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${version}-${IMAGE_ARCH}:${tag}" >> "$GITHUB_ENV"
 
       - name: Build Docker Image
         run: |
@@ -68,8 +97,8 @@ jobs:
             --platform "${DOCKER_PLATFORM}" \
             -f "Dockerfile.${OS}" \
             --build-arg REDIS_REF="${REDIS_REF}" \
-            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
-            --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
+            --build-arg SANITIZER=${{ matrix.image.variant == 'sanitizer' && 'address' || '' }} \
+            --build-arg VALGRIND=${{ matrix.image.variant == 'valgrind' && '1' || '' }} \
             -t "${DOCKER_IMAGE}" \
             --load \
             .
