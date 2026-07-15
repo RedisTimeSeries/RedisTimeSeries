@@ -1,4 +1,5 @@
 import math
+import threading
 import time
 
 # import pytest
@@ -121,3 +122,49 @@ def test_ts_incrby_arg_validation_before_creation():
         # Key should exist
         result = r.execute_command('TS.GET', 'test_valid')
         assert result is not None
+
+
+def test_incrby_no_timestamp_replicates_diverging_timestamp():
+    # TS.INCRBY/TS.DECRBY without an explicit TIMESTAMP resolve the timestamp
+    # via RedisModule_Milliseconds() on the primary, but TSDB_incrby then
+    # calls RedisModule_ReplicateVerbatim(), propagating the original argv
+    # (still lacking a concrete timestamp) instead of a rewritten one like
+    # TS.ADD/TS.MADD do. A replica that applies the propagated command later
+    # re-evaluates RedisModule_Milliseconds() at its own, later, wall-clock
+    # instant, so it stores the sample under a different timestamp than the
+    # primary did for the same logical write.
+    if not Env().useSlaves:
+        Env().skip()
+    Env().skipOnCluster()
+    env = Env()
+    key = 'incrby_repl_divergence'
+    with env.getConnection() as master:
+        master.execute_command('ts.create', key)
+    # Make sure the initial replica sync has caught up with the key creation
+    # before we start controlling timing below, so the only delay measured
+    # is the one we inject, not leftover initial-sync latency.
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', key):
+                break
+        time.sleep(0.1)
+    else:
+        raise Exception('replica never caught up with initial ts.create')
+    slave_sleep_secs = 2
+    def block_slave_main_thread():
+        # DEBUG SLEEP blocks the replica's single event loop entirely, so it
+        # cannot apply the replicated TS.INCRBY until the sleep elapses -
+        # forcing a deterministic, multi-second gap between when the primary
+        # resolves "now" and when the replica would resolve it.
+        with env.getSlaveConnection() as slave:
+            slave.execute_command('DEBUG', 'SLEEP', slave_sleep_secs)
+    blocker = threading.Thread(target=block_slave_main_thread)
+    blocker.start()
+    time.sleep(0.3)  # let DEBUG SLEEP actually start running on the slave
+    with env.getConnection() as master:
+        master_ts = master.execute_command('ts.incrby', key, 1)
+    blocker.join()
+    time.sleep(1)  # give the replica time to apply the now-unblocked command
+    with env.getSlaveConnection() as slave:
+        slave_sample = slave.execute_command('ts.get', key)
+    env.assertEqual(master_ts, slave_sample[0])
