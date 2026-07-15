@@ -10,6 +10,7 @@ name: Push Docker Images
 permissions:
   contents: read
   packages: write
+  pull-requests: read
 
 on:
   pull_request:
@@ -35,8 +36,42 @@ on:
           - arm
 
 jobs:
+  should-run:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Check Docker image version change
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event.pull_request.merged }}" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files="$(gh api --paginate \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/pulls/${PR_NUMBER}/files")"
+          ramp_patch="$(echo "$files" | jq -r '.[] | select(.filename == "pack/ramp.yml") | .patch // empty')"
+          if echo "$ramp_patch" | grep -Eq '^[+-]docker_image_version:'; then
+            echo "::notice title=Docker image::docker_image_version changed; checking/pushing images"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Docker image::docker_image_version did not change; skipping image push"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   setup-matrix:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
+    if: ${{ needs.should-run.outputs.run == 'true' }}
+    needs: should-run
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -73,7 +108,6 @@ jobs:
 
   push-images:
     name: ${{ matrix.image.os }}-${{ matrix.image.image_arch }}${{ matrix.image.variant && format('-{0}', matrix.image.variant) || '' }}
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
     needs: setup-matrix
     runs-on: ${{ matrix.image.runner }}
     strategy:
