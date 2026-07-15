@@ -1533,19 +1533,24 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (useLocalTimestamp) {
         const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
         if (timestampLoc == -1) {
+            const size_t replArgc = argc - 1;
             RedisModule_Replicate(
-                ctx, replCmd, "vcl", argv + 1, argc - 1, "TIMESTAMP", currentUpdatedTime);
+                ctx, replCmd, "vcl", argv + 1, replArgc, "TIMESTAMP", currentUpdatedTime);
         } else {
+            // number of args, until the TIMESTAMP argument (included)
+            const size_t preArgc = timestampLoc;
+            // number of args, after the TIMESTAMP argument
+            const size_t postArgc = argc - timestampLoc - 2;
             RedisModule_Replicate(
                 ctx,
                 replCmd,
                 "vlv",
-                argv + 1,           // start after the command name
-                timestampLoc,       // number of args, until the TIMESTAMP argument(included)
+                argv + 1, // start after the command name
+                preArgc,
                 currentUpdatedTime, // the timestamp value
                 argv + timestampLoc +
                     2, // start after the TIMESTAMP argument, rest of the arguments
-                argc - timestampLoc - 2); // number of args, after the TIMESTAMP argument
+                postArgc);
         }
     } else {
         RedisModule_ReplicateVerbatim(ctx);
