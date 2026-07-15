@@ -1,13 +1,25 @@
 name: Push Docker Images
 
 # Rollout notes:
-# - `pack/ramp.yml:docker_image_version` is the single source of truth for CI image tags.
-# - Bump it when Docker image inputs change. Leave it unchanged for module-only
-#   version bumps.
+# - `pack/ramp.yml:redis_ref` is the source of truth for CI image tags.
+# - `docker-image-changes` forces PR CI to build locally and merged PR image
+#   publishing to rebuild/push the tag.
 # - Linux CI pulls prebuilt images first and falls back to building locally when
 #   an image is missing.
 
 on:
+  schedule:
+    - cron: '20 19 * * *' # 19:20 UTC, one hour before Event Nightly
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+      - master
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+'
+      - 'release/**'
+      - 'tal.ba/test/baseline'
   push:
     branches:
       - main
@@ -55,11 +67,28 @@ jobs:
             exit 0
           fi
 
-          if git diff --unified=0 HEAD^ HEAD -- pack/ramp.yml | grep -Eq '^[+-]docker_image_version:'; then
-            echo "::notice title=Docker image::docker_image_version changed; checking/pushing images"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "::notice title=Docker image::Scheduled image publish before nightly"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+              echo "::notice title=Docker image::Merged PR; checking/pushing missing or forced images"
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice title=Docker image::PR was closed without merge; skipping image push"
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          if git diff --unified=0 HEAD^ HEAD -- pack/ramp.yml | grep -Eq '^[+-]redis_ref:'; then
+            echo "::notice title=Docker image::redis_ref changed; checking/pushing images"
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice title=Docker image::docker_image_version did not change; skipping image push"
+            echo "::notice title=Docker image::redis_ref did not change; skipping image push"
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -135,7 +164,7 @@ jobs:
       - name: Set Docker Image
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          image_tag="$(.install/get-image-tag.sh)"
+          image_tag="$(.install/get-redis-ref.sh)"
           image_os="$OS"
           if [ -n "$VARIANT" ]; then
             image_os="${image_os}-${VARIANT}"
@@ -145,7 +174,19 @@ jobs:
       - name: Check Docker Image
         id: check-image
         run: |
+          image_tag="$(.install/get-redis-ref.sh)"
+          force_rebuild=false
           if [ "${{ inputs.force || false }}" = "true" ]; then
+            force_rebuild=true
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ contains(github.event.pull_request.labels.*.name, 'docker-image-changes') }}" = "true" ]; then
+            force_rebuild=true
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$image_tag" = "unstable" ]; then
+            force_rebuild=true
+          fi
+
+          if [ "$force_rebuild" = "true" ]; then
             echo "::notice title=Docker image::Force rebuild requested; rebuilding existing tag if present: ${DOCKER_IMAGE}"
             echo "exists=false" >> "$GITHUB_OUTPUT"
             exit 0

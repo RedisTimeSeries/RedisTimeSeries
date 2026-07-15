@@ -188,7 +188,7 @@ jobs:
       - name: Set Docker Image
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          image_tag="$(.install/get-image-tag.sh)"
+          image_tag="$(.install/get-redis-ref.sh)"
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
