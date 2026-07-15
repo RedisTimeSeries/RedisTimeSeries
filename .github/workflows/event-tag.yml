@@ -33,9 +33,10 @@ jobs:
             REDIS_REF="$(.install/get-redis-ref.sh)"
           fi
           echo "redis-ref=${REDIS_REF}" >> $GITHUB_OUTPUT
-  linter:
-    uses: ./.github/workflows/flow-linter.yml
-    secrets: inherit
+  # NOTE: tests (linter, valgrind, sanitizer, full suite) intentionally run in
+  # event-nightly, which the release pipeline executes before tagging. The tag
+  # build only produces and uploads release artifacts (skip_tests: true), so it
+  # does not re-run the duplicate test suite. See RED-191674.
   build-linux-x64:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
@@ -43,6 +44,7 @@ jobs:
       arch: x64
       os: focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      skip_tests: true
     secrets: inherit
   build-linux-arm64:
     uses: ./.github/workflows/flow-linux.yml
@@ -51,10 +53,12 @@ jobs:
       arch: arm64
       os: focal jammy rocky9 azurelinux3 amazonlinux2023 alpine noble resolute rocky8 rocky10 alma8 alma9 alma10 bullseye bookworm trixie mariner2
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      skip_tests: true
     secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
     with:
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      skip_tests: true
     secrets: inherit

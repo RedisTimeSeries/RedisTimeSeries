@@ -45,6 +45,10 @@ on:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
+      skip_tests:
+        description: 'Skip tests but still pack and upload artifacts to S3 (e.g. release tags whose tests already ran in the nightly)'
+        type: boolean
+        default: false
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -75,6 +79,10 @@ on:
         default: false
       build_only:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
+        type: boolean
+        default: false
+      skip_tests:
+        description: 'Skip tests but still pack and upload artifacts to S3 (e.g. release tags whose tests already ran in the nightly)'
         type: boolean
         default: false
       beta-version:
@@ -175,18 +183,18 @@ jobs:
         with:
           use-venv: '1'
       - name: Run tests
-        if: ${{ !inputs.build_only }}
+        if: ${{ !inputs.build_only && !inputs.skip_tests }}
         uses: ./.github/actions/run-tests
         with:
           use-venv: '1'
           quick: ${{inputs.quick && '1' || '0'}}
       - name: Capture test results
-        if: ${{ always() && !inputs.build_only }}
+        if: ${{ always() && !inputs.build_only && !inputs.skip_tests }}
         uses: ./.github/actions/capture-test-results
         with:
           os-name: ${{ matrix.os }}
       - name: Upload test artifacts
-        if: ${{ failure() && !inputs.build_only }}
+        if: ${{ failure() && !inputs.build_only && !inputs.skip_tests }}
         uses: ./.github/actions/upload-artifacts
         with:
           image: ${{ matrix.os }}

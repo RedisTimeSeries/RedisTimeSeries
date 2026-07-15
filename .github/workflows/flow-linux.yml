@@ -37,6 +37,10 @@ on:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
+      skip_tests:
+        description: 'Skip tests but still pack and upload artifacts to S3 (e.g. release tags whose tests already ran in the nightly)'
+        type: boolean
+        default: false
       shard_topologies:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
@@ -75,6 +79,10 @@ on:
         default: false
       build_only:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
+        type: boolean
+        default: false
+      skip_tests:
+        description: 'Skip tests but still pack and upload artifacts to S3 (e.g. release tags whose tests already ran in the nightly)'
         type: boolean
         default: false
       shard_topologies:
@@ -199,7 +207,7 @@ jobs:
             make build
 
       - name: Run tests
-        if: ${{ !inputs.build_only }}
+        if: ${{ !inputs.build_only && !inputs.skip_tests }}
         env:
           TOPO: ${{ matrix.platform.topo }}
         run: |
@@ -231,20 +239,20 @@ jobs:
               ${TOPO_ARGS} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
 
       - name: Fix test log permissions
-        if: ${{ always() && !inputs.build_only }}
+        if: ${{ always() && !inputs.build_only && !inputs.skip_tests }}
         run: |
           sudo chown -R "$(id -u)":"$(id -g)" tests || true
           sudo chmod -R a+rX tests || true
           sudo chown "$(id -u)":"$(id -g)" test_output.log || true
 
       - name: Capture test results
-        if: ${{ always() && !inputs.build_only }}
+        if: ${{ always() && !inputs.build_only && !inputs.skip_tests }}
         uses: ./.github/actions/capture-test-results
         with:
           os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
 
       - name: Upload test artifacts
-        if: ${{ failure() && !inputs.build_only }}
+        if: ${{ failure() && !inputs.build_only && !inputs.skip_tests }}
         uses: actions/upload-artifact@v6
         with:
           name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
