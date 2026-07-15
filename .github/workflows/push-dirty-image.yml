@@ -6,12 +6,8 @@ permissions:
 
 on:
   pull_request:
-    paths:
-      - '.github/workflows/push-dirty-image.yml'
-      - 'Dockerfile.*'
-      - '.install/**'
-      - 'pack/ramp.yml'
-      - 'requirements_docker.txt'
+    types:
+      - closed
   workflow_dispatch:
     inputs:
       redis-ref:
@@ -31,6 +27,7 @@ on:
 
 jobs:
   setup-matrix:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'docker-image-changes')) }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -67,7 +64,7 @@ jobs:
 
   push-images:
     name: ${{ matrix.image.os }}-${{ matrix.image.image_arch }}${{ matrix.image.variant && format('-{0}', matrix.image.variant) || '' }}
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'docker-image-changes')) }}
     needs: setup-matrix
     runs-on: ${{ matrix.image.runner }}
     strategy:
@@ -75,7 +72,7 @@ jobs:
       matrix:
         image: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     env:
-      REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
+      REDIS_REF: ${{ inputs.redis-ref }}
       OS: ${{ matrix.image.os }}
       IMAGE_ARCH: ${{ matrix.image.image_arch }}
       DOCKER_PLATFORM: ${{ matrix.image.platform }}
@@ -88,6 +85,14 @@ jobs:
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Set Redis ref
+        run: |
+          redis_ref="${REDIS_REF}"
+          if [ -z "$redis_ref" ]; then
+            redis_ref="$(.install/get-redis-ref.sh)"
+          fi
+          echo "REDIS_REF=${redis_ref}" >> "$GITHUB_ENV"
 
       - name: Set Docker Image
         run: |
@@ -105,6 +110,7 @@ jobs:
 
       - name: Build Docker Image
         run: |
+          echo "Building ${DOCKER_IMAGE}"
           docker buildx build \
             --platform "${DOCKER_PLATFORM}" \
             -f "Dockerfile.${OS}" \
@@ -116,4 +122,6 @@ jobs:
             .
 
       - name: Push Docker Image
-        run: docker push "${DOCKER_IMAGE}"
+        run: |
+          echo "Pushing ${DOCKER_IMAGE}"
+          docker push "${DOCKER_IMAGE}"
