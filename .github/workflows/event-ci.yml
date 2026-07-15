@@ -3,6 +3,7 @@ name: Event CI
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 on:
   pull_request:
