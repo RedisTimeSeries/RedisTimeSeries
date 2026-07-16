@@ -666,6 +666,13 @@
     "TS.NRANGE": {
         "summary": "Query a range across multiple time series in forward direction, returning the results pivoted by timestamp (one value column per key)",
         "complexity": "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples per chunk), k = Number of samples that are in the requested range",
+        "key_specs": [
+            {
+                "flags": ["RO", "ACCESS"],
+                "begin_search": { "index": { "pos": 1 } },
+                "find_keys": { "keynum": { "keynumidx": 0, "firstkey": 1, "step": 1 } }
+            }
+        ],
         "arguments": [
             {
                 "name": "numkeys",
@@ -764,6 +771,13 @@
     "TS.NREVRANGE": {
         "summary": "Query a range across multiple time series in reverse direction, returning the results pivoted by timestamp (one value column per key)",
         "complexity": "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples per chunk), k = Number of samples that are in the requested range",
+        "key_specs": [
+            {
+                "flags": ["RO", "ACCESS"],
+                "begin_search": { "index": { "pos": 1 } },
+                "find_keys": { "keynum": { "keynumidx": 0, "firstkey": 1, "step": 1 } }
+            }
+        ],
         "arguments": [
             {
                 "name": "numkeys",
