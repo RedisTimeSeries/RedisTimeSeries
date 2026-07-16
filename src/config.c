@@ -601,10 +601,13 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
             ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-ignore-max-val-diff", 12, oldValue);
     }
 
+    // Immutable: the topology-change subscription is decided once at module load, so a
+    // runtime CONFIG SET would be a no-op -- reject it rather than mislead.
     if (RedisModule_RegisterBoolConfig(ctx,
                                        "ts-topology-auto-refresh",
                                        TSGlobalConfig.topologyAutoRefresh,
-                                       REDISMODULE_CONFIG_UNPREFIXED,
+                                       REDISMODULE_CONFIG_IMMUTABLE |
+                                           REDISMODULE_CONFIG_UNPREFIXED,
                                        getModernBoolConfigValue,
                                        setModernBoolConfigValue,
                                        NULL,
@@ -944,34 +947,6 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         LOG_DEPRECATED_OPTION(
             "IGNORE_MAX_VAL_DIFF", "ts-ignore-max-val-diff", showDeprecationWarning);
         isDeprecated = true;
-    }
-
-    // MOD-16382: modern module argument controlling cluster topology auto-refresh.
-    // Parsed here (like ts-num-threads) because module configs set on the loadmodule
-    // line are not auto-applied by RedisModule_LoadConfigs(); the registered
-    // ts-topology-auto-refresh config still exposes CONFIG GET/SET at runtime.
-    // Default (InitConfig) is enabled; this is not a deprecated option.
-    if (argc > 1 && RMUtil_ArgIndex("ts-topology-auto-refresh", argv, argc) >= 0) {
-        RedisModuleString *value;
-        if (RMUtil_ParseArgsAfter("ts-topology-auto-refresh", argv, argc, "s", &value) !=
-            REDISMODULE_OK) {
-            RedisModule_Log(
-                ctx, "warning", "Unable to parse argument after ts-topology-auto-refresh");
-            return TSDB_ERROR;
-        }
-        size_t value_len;
-        const char *value_cstr = RedisModule_StringPtrLen(value, &value_len);
-        if (!strcasecmp(value_cstr, "yes") || !strcasecmp(value_cstr, "true") ||
-            !strcasecmp(value_cstr, "1") || !strcasecmp(value_cstr, "enable")) {
-            TSGlobalConfig.topologyAutoRefresh = true;
-        } else if (!strcasecmp(value_cstr, "no") || !strcasecmp(value_cstr, "false") ||
-                   !strcasecmp(value_cstr, "0") || !strcasecmp(value_cstr, "disable")) {
-            TSGlobalConfig.topologyAutoRefresh = false;
-        } else {
-            RedisModule_Log(
-                ctx, "warning", "Invalid value for ts-topology-auto-refresh: %s", value_cstr);
-            return TSDB_ERROR;
-        }
     }
 
     if (isDeprecated && showDeprecationWarning) {
