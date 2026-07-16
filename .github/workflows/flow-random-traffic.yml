@@ -9,6 +9,10 @@ on:
       os:
         description: 'OS to run on (leave empty for random)'
         default: ''
+      use_prebuilt_images:
+        description: 'Pull prebuilt Docker images instead of building locally'
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       redis-ref:
@@ -27,6 +31,10 @@ on:
         description: 'OS to run on (leave empty for random)'
         type: string
         default: ''
+      use_prebuilt_images:
+        description: 'Pull prebuilt Docker images instead of building locally'
+        type: boolean
+        default: true
 
 jobs:
   pick-os:
@@ -40,13 +48,13 @@ jobs:
           INPUT_OS: ${{ inputs.os }}
         run: |
           if [ -n "$INPUT_OS" ]; then
-            echo "os=${INPUT_OS}" >> $GITHUB_OUTPUT
+            echo "os=${INPUT_OS}" >> "$GITHUB_OUTPUT"
             echo "Using specified OS: ${INPUT_OS}"
           else
             OS_LIST=(focal jammy rocky8 rocky9 bullseye amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie)
             RANDOM_INDEX=$((RANDOM % ${#OS_LIST[@]}))
             SELECTED=${OS_LIST[$RANDOM_INDEX]}
-            echo "os=${SELECTED}" >> $GITHUB_OUTPUT
+            echo "os=${SELECTED}" >> "$GITHUB_OUTPUT"
             echo "Randomly selected OS: ${SELECTED}"
           fi
 
@@ -54,8 +62,10 @@ jobs:
     name: random-traffic (${{ needs.pick-os.outputs.os }})
     needs: pick-os
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     env:
-      DOCKER_IMAGE: redistimeseries-${{ needs.pick-os.outputs.os }}:latest
       REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
     steps:
       - name: Checkout
@@ -63,10 +73,40 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Build Docker Image
+      - name: Set Docker Image
         env:
           SELECTED_OS: ${{ needs.pick-os.outputs.os }}
         run: |
+          repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          image_tag="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-x86-${SELECTED_OS}:${image_tag}" >> "$GITHUB_ENV"
+
+      - name: Pull Docker Image
+        id: pull-image
+        if: ${{ inputs.use_prebuilt_images }}
+        continue-on-error: true
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "::notice title=Docker image::Trying to pull prebuilt image ${DOCKER_IMAGE}"
+          docker pull "${DOCKER_IMAGE}"
+
+      - name: Use Pulled Docker Image
+        if: ${{ inputs.use_prebuilt_images && steps.pull-image.outcome == 'success' }}
+        run: |
+          echo "::notice title=Docker image::Using pulled prebuilt image ${DOCKER_IMAGE}"
+
+      - name: Build Docker Image
+        if: ${{ !inputs.use_prebuilt_images || steps.pull-image.outcome == 'failure' }}
+        env:
+          SELECTED_OS: ${{ needs.pick-os.outputs.os }}
+        run: |
+          if [ "${{ inputs.use_prebuilt_images }}" = "true" ]; then
+            echo "::notice title=Docker image::Prebuilt image pull failed; building locally: ${DOCKER_IMAGE}"
+          else
+            echo "::notice title=Docker image::Building image locally because prebuilt images are disabled: ${DOCKER_IMAGE}"
+          fi
           docker build \
             -f "Dockerfile.${SELECTED_OS}" \
             --build-arg REDIS_REF="${REDIS_REF}" \

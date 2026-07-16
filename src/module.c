@@ -1489,7 +1489,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
-    if (timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
+    const bool useLocalTimestamp =
+        timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*");
+    if (useLocalTimestamp) {
         currentUpdatedTime = RedisModule_Milliseconds();
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
@@ -1527,7 +1529,32 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST, true);
-    RedisModule_ReplicateVerbatim(ctx);
+
+    if (useLocalTimestamp) {
+        const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
+        if (timestampLoc == -1) {
+            const size_t replArgc = argc - 1;
+            RedisModule_Replicate(
+                ctx, replCmd, "vcl", argv + 1, replArgc, "TIMESTAMP", currentUpdatedTime);
+        } else {
+            // number of args, until the TIMESTAMP argument (included)
+            const size_t preArgc = timestampLoc;
+            // number of args, after the TIMESTAMP argument
+            const size_t postArgc = argc - timestampLoc - 2;
+            RedisModule_Replicate(
+                ctx,
+                replCmd,
+                "vlv",
+                argv + 1, // start after the command name
+                preArgc,
+                currentUpdatedTime, // the timestamp value
+                argv + timestampLoc +
+                    2, // start after the TIMESTAMP argument, rest of the arguments
+                postArgc);
+        }
+    } else {
+        RedisModule_ReplicateVerbatim(ctx);
+    }
     RedisModule_CloseKey(key);
 
     RedisModule_NotifyKeyspaceEvent(
@@ -2504,6 +2531,31 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
     }
 }
 
+static void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
+                                          RedisModuleEvent eid,
+                                          uint64_t subevent,
+                                          void *data) {
+    REDISMODULE_NOT_USED(subevent);
+    if (eid.id != REDISMODULE_EVENT_CLUSTER_TOPOLOGY_CHANGE) {
+        RedisModule_Log(
+            ctx, "warning", "Bad topology event given (id=%" PRIu64 "), ignored.", eid.id);
+        return;
+    }
+
+    RedisModuleClusterTopologyChangeInfo *info = data;
+    uint64_t flags = info->change_flags;
+    RedisModule_Log(ctx,
+                    "notice",
+                    "Cluster topology change: flags=0x%" PRIx64 "%s%s%s%s",
+                    flags,
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_SLOT) ? " SLOT" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_ROLE) ? " ROLE" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_STATE) ? " STATE" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_NODE) ? " NODE" : "");
+
+    MR_UpdateClusterTopology();
+}
+
 void ReplicaBackupCallback(RedisModuleCtx *ctx,
                            RedisModuleEvent eid,
                            uint64_t subevent,
@@ -2818,6 +2870,12 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                 ctx, RedisModuleEvent_ClusterSlotMigration, ClusterAsmCallback);
             RedisModule_SubscribeToServerEvent(
                 ctx, RedisModuleEvent_ClusterSlotMigrationTrim, ClusterAsmTrimCallback);
+        }
+
+        if (TSGlobalConfig.topologyEvents) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to topology changes events");
+            RedisModule_SubscribeToServerEvent(
+                ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
         }
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);

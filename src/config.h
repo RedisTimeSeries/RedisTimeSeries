@@ -42,6 +42,7 @@ typedef struct
     bool dontAssertOnFailure;    // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample
     double ignoreMaxValDiff;     // Insert filter max value diff with the last sample
+    bool topologyEvents;         // Subscribe to cluster topology change events
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;
