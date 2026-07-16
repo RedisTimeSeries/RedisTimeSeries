@@ -11,6 +11,7 @@
 
 #include <stdbool.h>
 #include <math.h>
+#include <strings.h>
 
 #include "tsdb.h"
 
