@@ -22,4 +22,19 @@ set -euo pipefail
 PROGNAME="${BASH_SOURCE[0]}"
 HERE="$(cd "$(dirname "$PROGNAME")" &>/dev/null && pwd)"
 
-"$HERE/get-ramp-field.sh" redis_ref
+if [[ ! -f "$RAMP_FILE" ]]; then
+	echo "Error: RAMP manifest not found at $RAMP_FILE" >&2
+	exit 1
+fi
+
+# Value of the top-level `redis_ref:` key, with inline comment,
+# surrounding whitespace and quotes stripped.
+REDIS_REF="$(sed -nE 's/^redis_ref:[[:space:]]*(.*)$/\1/p' "$RAMP_FILE" | head -n1 \
+	| sed -E 's/[[:space:]]*#.*$//; s/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'\''(.*)'\''$/\1/')"
+
+if [[ -z "$REDIS_REF" ]]; then
+	echo "Error: 'redis_ref' is not defined in $RAMP_FILE" >&2
+	exit 1
+fi
+
+echo "$REDIS_REF"

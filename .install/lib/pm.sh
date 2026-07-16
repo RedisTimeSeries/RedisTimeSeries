@@ -56,7 +56,7 @@ apt_install() {
     # plain export upstream never reaches dpkg — debconf (e.g. tzdata on focal,
     # which the base image doesn't preinstall) then blocks on an interactive
     # prompt and the bootstrap hangs.
-    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -yqq --no-install-recommends $apt_retry "$@"
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -yqq --no-install-recommends "$@"
 }
 
 # `--allowerasing` lets dnf pick our `curl` over the slimmer `curl-minimal`

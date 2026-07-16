@@ -33,10 +33,6 @@ on:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
-      use_prebuilt_images:
-        description: 'Pull prebuilt Docker images instead of building locally'
-        type: boolean
-        default: true
       shard_topologies:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
@@ -77,10 +73,6 @@ on:
         description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
         type: boolean
         default: false
-      use_prebuilt_images:
-        description: 'Pull prebuilt Docker images instead of building locally'
-        type: boolean
-        default: true
       shard_topologies:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
@@ -119,7 +111,7 @@ jobs:
           ARCH: ${{ inputs.arch }}
         run: |
           if [ "$ARCH" == "arm64" ]; then
-            echo "runner=ubuntu-24.04-arm" >> "$GITHUB_OUTPUT"
+            echo "runner=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
           else
             echo "runner=ubuntu-latest" >> "$GITHUB_OUTPUT"
           fi
@@ -149,20 +141,19 @@ jobs:
           # would just duplicate the GEN topology. Non-sharded runs keep a single
           # entry per OS.
           MATRIX="["
-          read -r -a OS_LIST <<< "$OS"
           if [ "$QUICK" != "true" ] && { [ "$RUN_VALGRIND" == "true" ] || [ "$RUN_SANITIZER" == "true" ] || [ "$SHARD_TOPOLOGIES" == "true" ]; }; then
-            for os in "${OS_LIST[@]}"; do
+            for os in $OS; do
               for topo in gen slaves aof aof_slaves oss_cluster; do
                 MATRIX="${MATRIX}{\"os\": \"${os}\", \"topo\": \"${topo}\"},"
               done
             done
           else
-            for os in "${OS_LIST[@]}"; do
+            for os in $OS; do
               MATRIX="${MATRIX}{\"os\": \"${os}\"},"
             done
           fi
           MATRIX="${MATRIX%,}]"
-          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "Generated matrix for ${ARCH}: ${MATRIX}"
 
   build-linux:
@@ -225,7 +216,7 @@ jobs:
             --build-arg REDIS_REF=${{ env.REDIS_REF }} \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
             --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
-            -t "${DOCKER_IMAGE}" \
+            -t ${{ env.DOCKER_IMAGE }} \
             .
 
       - name: Build module
