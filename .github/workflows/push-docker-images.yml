@@ -138,6 +138,11 @@ jobs:
       packages: write
     strategy:
       fail-fast: false
+      # Throttle the fan-out: ~37 images build at once otherwise, and the arm64
+      # subset all pull from ports.ubuntu.com (no CDN) in one synchronized burst,
+      # causing "connection timed out" during apt-get update. Cap concurrency so
+      # we trickle rather than slam the mirror. See MOD-16306.
+      max-parallel: 4
       matrix:
         image: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     env:
