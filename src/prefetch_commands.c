@@ -198,7 +198,9 @@ static void mrange_emit_ungrouped_one(RedisModuleCtx *ctx, MRangeAsyncCtx *m, si
                         m->args.numLimitLabels,
                         &m->args.rangeArgs,
                         m->args.reverse,
-                        false);
+                        false,
+                        NULL,
+                        NULL);
     m->replylen++;
     RedisModule_CloseKey(key);
 }
@@ -228,7 +230,7 @@ static void mrange_all_done_ungrouped(RedisModuleCtx *cb_ctx, void *user_data) {
     // blocked client's privdata on timeout, so this is the only driver of
     // free_privdata; skipping it would leak m + the blocked client.
     if (RTS_AsyncGuard_Settle(&m->guard)) {
-        RedisModule_ReplySetMapOrArrayLength(m->reply_ctx, m->replylen, false);
+        ReplySetMapOrArrayLength(m->reply_ctx, m->replylen, false);
     }
     // Always unblock — this drives free_privdata, the sole destroyer of m.
     RTS_UnblockClient(m->bc, m);
@@ -320,7 +322,7 @@ int MRange_ReplyAsync(RedisModuleCtx *ctx, RedisModuleDict *resultSeries, MRange
                             m);
     } else {
         // Ungrouped: per-slice emit bounds the prefetch fan-in.
-        RedisModule_ReplyWithMapOrArray(m->reply_ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+        ReplyWithMapOrArray(m->reply_ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
         PrefetchKeysBatched(ctx,
                             m->keys,
                             m->nkeys,
@@ -406,7 +408,7 @@ static void mget_all_done(RedisModuleCtx *cb_ctx, void *user_data) {
     // on timeout, so this RTS_UnblockClient is the only driver of
     // free_privdata; skipping it would leak m + the blocked client.
     if (RTS_AsyncGuard_Settle(&m->guard)) {
-        RedisModule_ReplySetMapOrArrayLength(m->reply_ctx, m->replylen, false);
+        ReplySetMapOrArrayLength(m->reply_ctx, m->replylen, false);
     }
     // Always unblock — this drives free_privdata, the sole destroyer of m.
     RTS_UnblockClient(m->bc, m);
@@ -465,7 +467,7 @@ int MGet_ReplyAsync(RedisModuleCtx *ctx, RedisModuleDict *result, MGetArgs *args
     // inlines RedisModule_CreateString(ctx, ...) without explicit FreeString
     // would leak on this ctx without AutoMemory.
     RedisModule_AutoMemory(m->reply_ctx);
-    RedisModule_ReplyWithMapOrArray(m->reply_ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    ReplyWithMapOrArray(m->reply_ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     PrefetchKeysBatched(ctx,
                         m->keys,
                         m->nkeys,

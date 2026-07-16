@@ -7,6 +7,8 @@
  * GNU Affero General Public License v3 (AGPLv3).
  */
 
+#pragma once
+
 #include "RedisModulesSDK/redismodule.h"
 
 #include <stdatomic.h>

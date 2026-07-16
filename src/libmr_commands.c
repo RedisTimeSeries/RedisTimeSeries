@@ -385,7 +385,7 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
     } else {
         // ponytail: postponed length — EXCLUDEEMPTY may skip series, so the real
         // count is only known after emission (see ReplySetMapOrArrayLength below).
-        RedisModule_ReplyWithMapOrArray(rctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+        ReplyWithMapOrArray(rctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     }
 
     long long replylen = 0;

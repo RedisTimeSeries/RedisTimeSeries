@@ -1692,7 +1692,7 @@ void mget_emit_for_key(RedisModuleCtx *ctx,
         ReplyWithSeriesLabelsWithLimit(
             ctx, series, (RedisModuleString **)args->limitLabels, args->numLimitLabels);
     } else {
-        RedisModule_ReplyWithMapOrArray(ctx, 0, false);
+        ReplyWithMapOrArray(ctx, 0, false);
     }
     // LATEST is ignored for a series that is not a compaction.
     bool should_finalize_last_bucket = should_finalize_last_bucket_get(args->latest, series);
@@ -1716,7 +1716,7 @@ void mget_emit_for_key(RedisModuleCtx *ctx,
 // (AutoMemory frees on return). Takes ownership of `result` and `args` (frees
 // both before returning).
 static int mget_reply_sync(RedisModuleCtx *ctx, RedisModuleDict *result, MGetArgs *args) {
-    RedisModule_ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     long long replylen = 0;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -1727,7 +1727,7 @@ static int mget_reply_sync(RedisModuleCtx *ctx, RedisModuleDict *result, MGetArg
         // keyName freed by AutoMemory teardown when the command returns.
     }
     RedisModule_DictIteratorStop(iter);
-    RedisModule_ReplySetMapOrArrayLength(ctx, replylen, false);
+    ReplySetMapOrArrayLength(ctx, replylen, false);
 
     RedisModule_FreeDict(ctx, result);
     MGetArgs_Free(args);

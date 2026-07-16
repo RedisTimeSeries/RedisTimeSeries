@@ -197,15 +197,15 @@ static inline bool IsUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx,
 }
 
 static inline bool IsCurrentUserAllowedToReadAllTheKeys(struct RedisModuleCtx *ctx) {
-    struct RedisModuleUser *user = GetCurrentUser(ctx);
+    User_Ctx_t userCtx = GetUserFromContext(ctx);
 
-    if (!user) {
+    if (!userCtx.user) {
         return false;
     }
 
-    const bool ret = IsUserAllowedToReadAllTheKeys(ctx, user);
+    const bool ret = IsUserAllowedToReadAllTheKeys(ctx, userCtx.user);
 
-    RedisModule_FreeModuleUser(user);
+    FreeUser(&userCtx);
 
     return ret;
 }

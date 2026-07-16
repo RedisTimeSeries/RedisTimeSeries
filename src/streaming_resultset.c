@@ -274,7 +274,8 @@ static void emit_group_reply(RedisModuleCtx *ctx,
     RangeArgs minimizedArgs = r->rangeArgs;
     minimizedArgs.startTimestamp = 0;
     minimizedArgs.endTimestamp = UINT64_MAX;
-    minimizedArgs.aggregationArgs.aggregationClass = NULL;
+    minimizedArgs.aggregationArgs.numClasses = 0;
+    minimizedArgs.aggregationArgs.classes = NULL;
     minimizedArgs.aggregationArgs.timeDelta = 0;
     minimizedArgs.filterByTSArgs.hasValue = false;
     minimizedArgs.filterByValueArgs.hasValue = false;
@@ -287,7 +288,9 @@ static void emit_group_reply(RedisModuleCtx *ctx,
                         limitLabelsSize,
                         &minimizedArgs,
                         reverse,
-                        /*print_reduced=*/true);
+                        /*print_reduced=*/true,
+                        NULL,
+                        NULL);
 
     FreeTempSeries(reduced);
     free(serieName);
@@ -300,11 +303,11 @@ void StreamingResultSet_FinalizeAndReply(RedisModuleCtx *ctx,
                                          ushort limitLabelsSize,
                                          bool reverse) {
     if (!r) {
-        RedisModule_ReplyWithMapOrArray(ctx, 0, false);
+        ReplyWithMapOrArray(ctx, 0, false);
         return;
     }
 
-    RedisModule_ReplyWithMapOrArray(ctx, RedisModule_DictSize(r->groups), false);
+    ReplyWithMapOrArray(ctx, RedisModule_DictSize(r->groups), false);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(r->groups, "^", NULL, 0);
     StreamingGroup *group;
