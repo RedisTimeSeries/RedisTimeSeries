@@ -32,7 +32,8 @@ typedef struct AggregationArgs
     bool empty; // Should return empty buckets
     api_timestamp_t timeDelta;
     BucketTimestamp bucketTS;
-    AggregationClass *aggregationClass;
+    size_t numClasses;          // 0 = no aggregation
+    AggregationClass **classes; // heap-allocated array of pointers, NULL when numClasses == 0
 } AggregationArgs;
 
 // GroupBy reducer args
@@ -77,6 +78,7 @@ typedef struct RangeArgs
     FilterByTSArgs filterByTSArgs;
     RangeAlignment alignment;
     timestamp_t timestampAlignment;
+    bool skipAggregation; // data is already aggregated; keep agg info for RESP3 but skip re-agg
 } RangeArgs;
 
 #define LIMIT_LABELS_SIZE 50
@@ -88,8 +90,9 @@ typedef struct MRangeArgs
     RedisModuleString *limitLabels[LIMIT_LABELS_SIZE];
     QueryPredicateList *queryPredicates;
     const char *groupByLabel;
-    ReducerArgs gropuByReducerArgs;
+    ReducerArgs groupByReducerArgs;
     bool reverse;
+    bool excludeEmpty;
 } MRangeArgs;
 
 typedef struct MGetArgs
@@ -114,7 +117,11 @@ typedef struct CreateCtx
     double ignoreMaxValDiff;
 } CreateCtx;
 
-int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels);
+int parseLabelsFromArgs(RedisModuleString **argv,
+                        int argc,
+                        size_t *label_count,
+                        Label **labels,
+                        bool allow_null_values);
 
 int ParseChunkSize(RedisModuleCtx *ctx,
                    RedisModuleString **argv,
@@ -134,14 +141,17 @@ int parseEncodingArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, i
 
 int parseCreateArgs(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, CreateCtx *cCtx);
 
+int ParseAggSpec(RedisModuleCtx *ctx, const char *spec, size_t specLen, int *agg_types);
+
 int _parseAggregationArgs(RedisModuleCtx *ctx,
                           RedisModuleString **argv,
                           int argc,
                           api_timestamp_t *time_delta,
-                          int *agg_type,
+                          int *agg_types,
+                          size_t *num_agg_types,
                           bool *empty,
                           BucketTimestamp *bucketTS,
-                          timestamp_t *alignmetTS);
+                          timestamp_t *alignmentTS);
 
 int parseLabelQuery(RedisModuleCtx *ctx,
                     RedisModuleString **argv,
@@ -149,6 +159,13 @@ int parseLabelQuery(RedisModuleCtx *ctx,
                     bool *withLabels,
                     RedisModuleString **limitLabels,
                     unsigned short *limitLabelsSize);
+
+int parseFilter(RedisModuleCtx *ctx,
+                RedisModuleString **argv,
+                int argc,
+                int filter_location,
+                int query_count,
+                QueryPredicateList **out);
 
 int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
@@ -175,5 +192,20 @@ void MGetArgs_Free(MGetArgs *args);
 bool ValidateChunkSize(RedisModuleCtx *ctx, long long chunkSizeBytes, RedisModuleString **err);
 bool ValidateChunkSizeSimple(long long chunkSizeBytes);
 int parseLatestArg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool *latest);
+
+// Build a pass-through RangeArgs for replyResultSet after group-by reduce: no re-aggregation,
+// no filters, full timestamp range. Preserves count and alignment from src.
+static inline RangeArgs RangeArgs_ZeroProcessing(const RangeArgs *src) {
+    RangeArgs r = *src;
+    r.startTimestamp = 0;
+    r.endTimestamp = UINT64_MAX;
+    r.aggregationArgs.numClasses = 0;
+    r.aggregationArgs.classes = NULL;
+    r.aggregationArgs.timeDelta = 0;
+    r.filterByTSArgs.hasValue = false;
+    r.filterByValueArgs.hasValue = false;
+    r.latest = false;
+    return r;
+}
 
 #endif // REDISTIMESERIES_QUERY_LANGUAGE_H

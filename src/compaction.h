@@ -44,6 +44,7 @@ typedef struct AggregationClass
     int (*finalize)(void *context, double *value);
     void (*finalizeEmpty)(void *contextPtr, double *value); // assigns empty value to value
     void *(*cloneContext)(void *contextPtr);                // return cloned context
+    bool (*isValueValid)(double value); // check if value is valid for this aggregation
 } AggregationClass;
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);
@@ -53,5 +54,13 @@ int StringLenAggTypeToEnum(const char *agg_type, size_t len);
 const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType);
 const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType);
 void initGlobalCompactionFunctions();
+
+/* LOCF seed for empty-bucket emission of TS_AGG_LAST. The caller must verify the
+ * aggregation is TS_AGG_LAST before calling. */
+void LastValueSeedLocf(void *contextPtr, double value, timestamp_t ts);
+
+/* True when a TS_AGG_LAST context has not yet observed a sample. The caller must verify the
+ * aggregation is TS_AGG_LAST before calling. */
+bool LastValueIsUnseeded(void *contextPtr);
 
 #endif

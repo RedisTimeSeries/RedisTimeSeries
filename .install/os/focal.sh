@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Ubuntu 20.04 (focal). Apt's gcc-9 on 20.04 misses C++20 features used
+# downstream; pull gcc-10/g++-10 and switch /usr/bin/{gcc,g++} to them.
+
+# shellcheck source=../lib/packages.sh
+. "$LIB/packages.sh"
+
+debian_default_install
+apt_install gcc-10 g++-10
+# Only move the active compiler up, never down — another module's bootstrap
+# may have already pinned something newer in this shared build container.
+_cur=$(gcc -dumpversion | cut -d. -f1)
+if [ "$_cur" -lt 10 ]; then
+    $SUDO update-alternatives --install /usr/bin/cc  cc  /usr/bin/gcc-10 60
+    $SUDO update-alternatives --set     cc  /usr/bin/gcc-10
+    $SUDO update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 60
+    $SUDO update-alternatives --set     gcc /usr/bin/gcc-10
+    $SUDO update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 60
+    $SUDO update-alternatives --set     g++ /usr/bin/g++-10
+fi

@@ -9,6 +9,7 @@
 #include "config.h"
 
 #include "consts.h"
+#include "libmr_integration.h"
 #include "module.h"
 #include "parse_policies.h"
 #include "query_language.h"
@@ -45,6 +46,7 @@ static RedisModuleString *getConfigStringCache = NULL;
 
 void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
+    TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_DEFAULT;
     TSGlobalConfig.password = NULL;
 
     if (getConfigStringCache) {
@@ -84,6 +86,7 @@ RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx) {
         "ENCODING %s\n"
         "DUPLICATE_POLICY %s\n"
         "NUM_THREADS %lld\n"
+        "LIBMR_PROTOCOL %s\n"
         "IGNORE_MAX_VAL_DIFF %lf\n"
         "IGNORE_MAX_TIME_DIFF %lld\n",
         CompactionRulesToString(TSGlobalConfig.compactionRules,
@@ -93,6 +96,7 @@ RedisModuleString *GlobalConfigToString(RedisModuleCtx *ctx) {
         ChunkTypeToString(TSGlobalConfig.options),
         DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy),
         TSGlobalConfig.numThreads,
+        LibmrProtocolToString(TSGlobalConfig.libmrProtocol),
         TSGlobalConfig.ignoreMaxValDiff,
         TSGlobalConfig.ignoreMaxTimeDiff);
 }
@@ -153,6 +157,16 @@ static RedisModuleString *getModernStringConfigValue(const char *name, void *pri
         if (!value) {
             return NULL;
         }
+
+        if (getConfigStringCache) {
+            RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
+        }
+
+        getConfigStringCache = RedisModule_CreateString(rts_staticCtx, value, strlen(value));
+
+        return getConfigStringCache;
+    } else if (!strcasecmp("ts-libmr-protocol", name)) {
+        const char *value = LibmrProtocolToString(TSGlobalConfig.libmrProtocol);
 
         if (getConfigStringCache) {
             RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
@@ -299,6 +313,23 @@ static bool Config_SetEncodingFromRedisString(RedisModuleString *value, RedisMod
     return true;
 }
 
+static bool Config_SetLibmrProtocolFromRedisString(RedisModuleString *value,
+                                                   RedisModuleString **err) {
+    size_t len = 0;
+    const char *protocol = RedisModule_StringPtrLen(value, &len);
+
+    if (!strcasecmp(protocol, LIBMR_PROTOCOL_GEARS_STR)) {
+        TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_GEARS;
+    } else if (!strcasecmp(protocol, LIBMR_PROTOCOL_INTERNAL_STR)) {
+        TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_INTERNAL;
+    } else {
+        *err = RedisModule_CreateStringPrintf(NULL, "Invalid libmr protocol: %s", protocol);
+        return false;
+    }
+
+    return true;
+}
+
 static int setModernStringConfigValue(const char *name,
                                       RedisModuleString *value,
                                       void *data,
@@ -317,6 +348,9 @@ static int setModernStringConfigValue(const char *name,
                                                                      : REDISMODULE_ERR;
     } else if (!strcasecmp("ts-encoding", name)) {
         return Config_SetEncodingFromRedisString(value, err) ? REDISMODULE_OK : REDISMODULE_ERR;
+    } else if (!strcasecmp("ts-libmr-protocol", name)) {
+        return Config_SetLibmrProtocolFromRedisString(value, err) ? REDISMODULE_OK
+                                                                  : REDISMODULE_ERR;
     }
 
     return REDISMODULE_ERR;
@@ -343,6 +377,14 @@ static int setModernIntegerConfigValue(const char *name,
                                        void *data,
                                        RedisModuleString **err) {
     if (!strcasecmp("ts-num-threads", name)) {
+        if (LibMR_IsInitialized()) {
+            if (LibMR_ResizeExecutionThreadPoolIfUnstarted(value) != REDISMODULE_OK) {
+                *err = RedisModule_CreateStringPrintf(
+                    NULL, "Cannot set ts-num-threads after the LibMR worker pool has started");
+                return REDISMODULE_ERR;
+            }
+        }
+
         TSGlobalConfig.numThreads = value;
 
         return REDISMODULE_OK;
@@ -407,8 +449,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-num-threads",
                                           TSGlobalConfig.numThreads,
-                                          REDISMODULE_CONFIG_IMMUTABLE |
-                                              REDISMODULE_CONFIG_UNPREFIXED,
+                                          REDISMODULE_CONFIG_UNPREFIXED,
                                           NUM_THREADS_MIN,
                                           NUM_THREADS_MAX,
                                           getModernIntegerConfigValue,
@@ -420,6 +461,26 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
 
     RedisModule_Log(
         ctx, "notice", "\t{ %-*s: %*lld }", 23, "ts-num-threads", 12, TSGlobalConfig.numThreads);
+
+    if (RedisModule_RegisterStringConfig(ctx,
+                                         "ts-libmr-protocol",
+                                         LibmrProtocolToString(TSGlobalConfig.libmrProtocol),
+                                         REDISMODULE_CONFIG_IMMUTABLE |
+                                             REDISMODULE_CONFIG_UNPREFIXED,
+                                         getModernStringConfigValue,
+                                         setModernStringConfigValue,
+                                         NULL,
+                                         NULL)) {
+        return false;
+    }
+
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*s }",
+                    23,
+                    "ts-libmr-protocol",
+                    12,
+                    LibmrProtocolToString(TSGlobalConfig.libmrProtocol));
 
     if (RedisModule_RegisterNumericConfig(ctx,
                                           "ts-prefetch-batch-size",
@@ -569,6 +630,29 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
 
 bool RegisterConfigurationOptions(RedisModuleCtx *ctx) {
     return RegisterModernConfigurationOptions(ctx);
+}
+
+static int ParseNumThreadsArg(RedisModuleCtx *ctx,
+                              const char *argName,
+                              RedisModuleString **argv,
+                              int argc,
+                              long long *out) {
+    long long parsed = 0;
+    if (RMUtil_ParseArgsAfter(argName, argv, argc, "l", &parsed) != REDISMODULE_OK) {
+        RedisModule_Log(ctx, "error", "Unable to parse argument after %s", argName);
+        return TSDB_ERROR;
+    }
+    if (parsed < NUM_THREADS_MIN || parsed > NUM_THREADS_MAX) {
+        RedisModule_Log(ctx,
+                        "error",
+                        "Invalid value for %s. Must be between %d and %d",
+                        argName,
+                        NUM_THREADS_MIN,
+                        NUM_THREADS_MAX);
+        return TSDB_ERROR;
+    }
+    *out = parsed;
+    return TSDB_OK;
 }
 
 int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
@@ -729,18 +813,62 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
             return TSDB_ERROR;
         }
     }
-    if (argc > 1 && RMUtil_ArgIndex("NUM_THREADS", argv, argc) >= 0) {
-        if (RMUtil_ParseArgsAfter("NUM_THREADS", argv, argc, "l", &TSGlobalConfig.numThreads) !=
-            REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after NUM_THREADS");
+    // Default, can be overridden either by legacy module arguments (deprecated) or by modern ones.
+    // Note: Modern module configs are loaded later via RedisModule_LoadConfigs(), but supporting
+    // the modern name here as a module argument helps users migrate from the legacy NUM_THREADS
+    // arg.
+    TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
+    bool modernNumThreadsFound = false;
+
+    if (argc > 1 && RMUtil_ArgIndex("ts-num-threads", argv, argc) >= 0) {
+        long long parsed;
+        if (ParseNumThreadsArg(ctx, "ts-num-threads", argv, argc, &parsed) != TSDB_OK) {
             return TSDB_ERROR;
         }
+        TSGlobalConfig.numThreads = parsed;
+        modernNumThreadsFound = true;
+    }
+
+    if (argc > 1 && RMUtil_ArgIndex("NUM_THREADS", argv, argc) >= 0) {
+        long long parsed;
+        if (ParseNumThreadsArg(ctx, "NUM_THREADS", argv, argc, &parsed) != TSDB_OK) {
+            return TSDB_ERROR;
+        }
+
+        if (modernNumThreadsFound) {
+            RedisModule_Log(
+                ctx,
+                "warning",
+                "Both ts-num-threads and NUM_THREADS were provided. Using ts-num-threads.");
+        } else {
+            TSGlobalConfig.numThreads = parsed;
+        }
+
         LOG_DEPRECATED_OPTION("NUM_THREADS", "ts-num-threads", showDeprecationWarning);
         isDeprecated = true;
-    } else {
-        TSGlobalConfig.numThreads = DEFAULT_NUM_THREADS;
     }
     TSGlobalConfig.prefetchBatchSize = DEFAULT_PREFETCH_BATCH_SIZE;
+
+    if (argc > 1 && RMUtil_ArgIndex("LIBMR_PROTOCOL", argv, argc) >= 0) {
+        LOG_DEPRECATED_OPTION("LIBMR_PROTOCOL", "ts-libmr-protocol", showDeprecationWarning);
+        RedisModuleString *protocol;
+        if (RMUtil_ParseArgsAfter("LIBMR_PROTOCOL", argv, argc, "s", &protocol) != REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after LIBMR_PROTOCOL");
+            return TSDB_ERROR;
+        }
+        size_t len;
+        const char *protocol_cstr = RedisModule_StringPtrLen(protocol, &len);
+        if (!strcasecmp(protocol_cstr, LIBMR_PROTOCOL_INTERNAL_STR)) {
+            TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_INTERNAL;
+        } else if (!strcasecmp(protocol_cstr, LIBMR_PROTOCOL_GEARS_STR)) {
+            TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_GEARS;
+        } else {
+            RedisModule_Log(ctx, "warning", "unknown LIBMR_PROTOCOL: %s", protocol_cstr);
+            return TSDB_ERROR;
+        }
+        isDeprecated = true;
+    }
+
     TSGlobalConfig.forceSaveCrossRef = false;
     if (argc > 1 && RMUtil_ArgIndex("DEUBG_FORCE_RULE_DUMP", argv, argc) >= 0) {
         RedisModuleString *forceSaveCrossRef;

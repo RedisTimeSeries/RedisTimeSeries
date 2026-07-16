@@ -31,11 +31,15 @@ typedef struct FirstValueContext
 {
     double value;
     char isResetted;
+    timestamp_t ts; /* in-memory only; tracks oldest sample seen */
 } FirstValueContext;
 
 typedef struct SingleValueContext
 {
     double value;
+    timestamp_t ts;    /* in-memory only; tracks newest sample seen */
+    bool fresh_bucket; /* in-memory only; lets reverse-mode reset across buckets without losing LOCF
+                        */
 } SingleValueContext;
 
 typedef struct AvgContext
@@ -82,6 +86,8 @@ void finalize_empty_last_value(void *contextPtr, double *value) {
 void *SingleValueCreateContext(__unused bool reverse) {
     SingleValueContext *context = (SingleValueContext *)malloc(sizeof(SingleValueContext));
     context->value = 0;
+    context->ts = 0;
+    context->fresh_bucket = true;
     return context;
 }
 
@@ -94,11 +100,43 @@ void *SingleValueCloneContext(void *contextPtr) {
 void SingleValueReset(void *contextPtr) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
     context->value = 0;
+    context->ts = 0;
+    context->fresh_bucket = true;
+}
+
+void *LastValueCreateContext(__unused bool reverse) {
+    SingleValueContext *context = malloc(sizeof *context);
+    context->value = NAN;
+    context->ts = 0;
+    context->fresh_bucket = true;
+    return context;
 }
 
 void LastValueReset(void *contextPtr) {
-    // Don't do anything cause with EMPTY flag we would like to use the last value
-    return;
+    /* Don't touch value — EMPTY+LAST wants LOCF carry-over. Mark bucket boundary so the next
+     * appendValue accepts a fresh sample regardless of stored ts (which may linger from a newer
+     * bucket processed earlier when iterating in reverse). */
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    context->fresh_bucket = true;
+}
+
+/* LOCF seed for reverse-mode empty-bucket emission: the empty gap inherits the value of the
+ * older (chronologically previous) sample. In reverse iteration that sample hasn't been seen
+ * yet by the aggregator, so we plant it directly. Sets both value and ts so the context stays
+ * internally consistent — otherwise the stale ts from a newer bucket would linger. */
+void LastValueSeedLocf(void *contextPtr, double value, timestamp_t ts) {
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    context->value = value;
+    context->ts = ts;
+}
+
+/* True when a TS_AGG_LAST context holds no carry-over value yet (created but no sample appended).
+ * Used to decide whether a forward empty gap needs LOCF seeding from the older neighbor.
+ * NaN is a reliable "unseeded" sentinel here: aggLast.isValueValid == nonNaNValueValid, so a NaN
+ * sample is never appended, hence context->value is NaN iff no sample has ever been observed. */
+bool LastValueIsUnseeded(void *contextPtr) {
+    SingleValueContext *context = (SingleValueContext *)contextPtr;
+    return isnan(context->value);
 }
 
 int SingleValueFinalize(void *contextPtr, double *val) {
@@ -127,6 +165,7 @@ void *FirstValueCreateContext(__unused bool reverse) {
     FirstValueContext *context = (FirstValueContext *)malloc(sizeof(FirstValueContext));
     context->value = 0;
     context->isResetted = true;
+    context->ts = 0;
     return context;
 }
 
@@ -140,6 +179,7 @@ void FirstValueReset(void *contextPtr) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
     context->value = 0;
     context->isResetted = true;
+    context->ts = 0;
 }
 
 int FirstValueFinalize(void *contextPtr, double *val) {
@@ -516,6 +556,18 @@ void rm_free(void *ptr) {
     free(ptr);
 }
 
+bool nonNaNValueValid(double value) {
+    return !isnan(value);
+}
+
+bool nanValueValid(double value) {
+    return isnan(value);
+}
+
+bool allValueValid(double value) {
+    return true;
+}
+
 // time weighted avg
 static AggregationClass aggWAvg = {
     .type = TS_AGG_TWA,
@@ -532,6 +584,7 @@ static AggregationClass aggWAvg = {
     .getLastSample = TwaGetLastSample,
     .resetContext = TwaReset,
     .cloneContext = TwaCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggAvg = {
@@ -550,6 +603,7 @@ static AggregationClass aggAvg = {
     .getLastSample = NULL,
     .resetContext = AvgReset,
     .cloneContext = AvgCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggStdP = {
@@ -568,6 +622,7 @@ static AggregationClass aggStdP = {
     .getLastSample = NULL,
     .resetContext = StdReset,
     .cloneContext = StdCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggStdS = {
@@ -586,6 +641,7 @@ static AggregationClass aggStdS = {
     .getLastSample = NULL,
     .resetContext = StdReset,
     .cloneContext = StdCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggVarP = {
@@ -604,6 +660,7 @@ static AggregationClass aggVarP = {
     .getLastSample = NULL,
     .resetContext = StdReset,
     .cloneContext = StdCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggVarS = {
@@ -622,6 +679,7 @@ static AggregationClass aggVarS = {
     .getLastSample = NULL,
     .resetContext = StdReset,
     .cloneContext = StdCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 void *MaxMinCreateContext(__unused bool reverse) {
@@ -726,17 +784,26 @@ int CountFinalize(void *contextPtr, double *val) {
     return TSDB_OK;
 }
 
-void FirstAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
+void FirstAppendValue(void *contextPtr, double value, timestamp_t ts) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
-    if (context->isResetted) {
+    /* Direction-independent: keep the OLDEST sample by timestamp. */
+    if (context->isResetted || ts < context->ts) {
         context->isResetted = false;
         context->value = value;
+        context->ts = ts;
     }
 }
 
-void LastAppendValue(void *contextPtr, double value, __attribute__((unused)) timestamp_t ts) {
+void LastAppendValue(void *contextPtr, double value, timestamp_t ts) {
     SingleValueContext *context = (SingleValueContext *)contextPtr;
-    context->value = value;
+    /* Direction-independent: keep the NEWEST sample by timestamp. `fresh_bucket` lets the first
+     * sample of a new bucket always land — important for reverse mode where a newer-bucket value
+     * still sits in `ts` from the previous iteration. */
+    if (context->fresh_bucket || ts >= context->ts) {
+        context->value = value;
+        context->ts = ts;
+        context->fresh_bucket = false;
+    }
 }
 
 static AggregationClass aggMax = {
@@ -755,6 +822,7 @@ static AggregationClass aggMax = {
     .getLastSample = NULL,
     .resetContext = MaxMinReset,
     .cloneContext = MaxMinCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggMin = {
@@ -773,6 +841,7 @@ static AggregationClass aggMin = {
     .getLastSample = NULL,
     .resetContext = MaxMinReset,
     .cloneContext = MaxMinCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggSum = {
@@ -791,6 +860,7 @@ static AggregationClass aggSum = {
     .getLastSample = NULL,
     .resetContext = SingleValueReset,
     .cloneContext = SingleValueCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggCount = {
@@ -809,6 +879,7 @@ static AggregationClass aggCount = {
     .getLastSample = NULL,
     .resetContext = SingleValueReset,
     .cloneContext = SingleValueCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggFirst = {
@@ -827,11 +898,12 @@ static AggregationClass aggFirst = {
     .getLastSample = NULL,
     .resetContext = FirstValueReset,
     .cloneContext = FirstValueCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggLast = {
     .type = TS_AGG_LAST,
-    .createContext = SingleValueCreateContext,
+    .createContext = LastValueCreateContext,
     .appendValue = LastAppendValue,
     .appendValueVec = NULL, /* determined on run time */
     .freeContext = rm_free,
@@ -845,6 +917,7 @@ static AggregationClass aggLast = {
     .getLastSample = NULL,
     .resetContext = LastValueReset,
     .cloneContext = SingleValueCloneContext,
+    .isValueValid = nonNaNValueValid,
 };
 
 static AggregationClass aggRange = {
@@ -863,6 +936,45 @@ static AggregationClass aggRange = {
     .getLastSample = NULL,
     .resetContext = MaxMinReset,
     .cloneContext = MaxMinCloneContext,
+    .isValueValid = nonNaNValueValid,
+};
+
+static AggregationClass aggCountNaN = {
+    .type = TS_AGG_COUNT_NAN,
+    .createContext = SingleValueCreateContext,
+    .appendValue = CountAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = CountFinalize,
+    .finalizeEmpty = finalize_empty_with_ZERO,
+    .writeContext = SingleValueWriteContext,
+    .readContext = SingleValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = SingleValueReset,
+    .cloneContext = SingleValueCloneContext,
+    .isValueValid = nanValueValid,
+};
+
+static AggregationClass aggCountAll = {
+    .type = TS_AGG_COUNT_ALL,
+    .createContext = SingleValueCreateContext,
+    .appendValue = CountAppendValue,
+    .appendValueVec = NULL, /* determined on run time */
+    .freeContext = rm_free,
+    .finalize = CountFinalize,
+    .finalizeEmpty = finalize_empty_with_ZERO,
+    .writeContext = SingleValueWriteContext,
+    .readContext = SingleValueReadContext,
+    .addBucketParams = NULL,
+    .addPrevBucketLastSample = NULL,
+    .addNextBucketFirstSample = NULL,
+    .getLastSample = NULL,
+    .resetContext = SingleValueReset,
+    .cloneContext = SingleValueCloneContext,
+    .isValueValid = allValueValid,
 };
 
 void initGlobalCompactionFunctions() {
@@ -896,45 +1008,53 @@ int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
 }
 
 int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
-    int result = TS_AGG_INVALID;
     char agg_type_lower[len];
     for (int i = 0; i < len; i++) {
         agg_type_lower[i] = tolower(agg_type[i]);
     }
-    if (len == 3) {
-        if (strncmp(agg_type_lower, "min", len) == 0 && len == 3) {
-            result = TS_AGG_MIN;
-        } else if (strncmp(agg_type_lower, "max", len) == 0) {
-            result = TS_AGG_MAX;
-        } else if (strncmp(agg_type_lower, "sum", len) == 0) {
-            result = TS_AGG_SUM;
-        } else if (strncmp(agg_type_lower, "avg", len) == 0) {
-            result = TS_AGG_AVG;
-        } else if (strncmp(agg_type_lower, "twa", len) == 0) {
-            result = TS_AGG_TWA;
-        }
-    } else if (len == 4) {
-        if (strncmp(agg_type_lower, "last", len) == 0) {
-            result = TS_AGG_LAST;
-        }
-    } else if (len == 5) {
-        if (strncmp(agg_type_lower, "count", len) == 0) {
-            result = TS_AGG_COUNT;
-        } else if (strncmp(agg_type_lower, "range", len) == 0) {
-            result = TS_AGG_RANGE;
-        } else if (strncmp(agg_type_lower, "first", len) == 0) {
-            result = TS_AGG_FIRST;
-        } else if (strncmp(agg_type_lower, "std.p", len) == 0) {
-            result = TS_AGG_STD_P;
-        } else if (strncmp(agg_type_lower, "std.s", len) == 0) {
-            result = TS_AGG_STD_S;
-        } else if (strncmp(agg_type_lower, "var.p", len) == 0) {
-            result = TS_AGG_VAR_P;
-        } else if (strncmp(agg_type_lower, "var.s", len) == 0) {
-            result = TS_AGG_VAR_S;
-        }
+
+    switch (len) {
+        case 3:
+            if (strncmp(agg_type_lower, "min", len) == 0)
+                return TS_AGG_MIN;
+            if (strncmp(agg_type_lower, "max", len) == 0)
+                return TS_AGG_MAX;
+            if (strncmp(agg_type_lower, "sum", len) == 0)
+                return TS_AGG_SUM;
+            if (strncmp(agg_type_lower, "avg", len) == 0)
+                return TS_AGG_AVG;
+            if (strncmp(agg_type_lower, "twa", len) == 0)
+                return TS_AGG_TWA;
+            break;
+        case 4:
+            if (strncmp(agg_type_lower, "last", len) == 0)
+                return TS_AGG_LAST;
+            break;
+        case 5:
+            if (strncmp(agg_type_lower, "count", len) == 0)
+                return TS_AGG_COUNT;
+            if (strncmp(agg_type_lower, "range", len) == 0)
+                return TS_AGG_RANGE;
+            if (strncmp(agg_type_lower, "first", len) == 0)
+                return TS_AGG_FIRST;
+            if (strncmp(agg_type_lower, "std.p", len) == 0)
+                return TS_AGG_STD_P;
+            if (strncmp(agg_type_lower, "std.s", len) == 0)
+                return TS_AGG_STD_S;
+            if (strncmp(agg_type_lower, "var.p", len) == 0)
+                return TS_AGG_VAR_P;
+            if (strncmp(agg_type_lower, "var.s", len) == 0)
+                return TS_AGG_VAR_S;
+            break;
+        case 8:
+            if (strncmp(agg_type_lower, "countnan", len) == 0)
+                return TS_AGG_COUNT_NAN;
+            if (strncmp(agg_type_lower, "countall", len) == 0)
+                return TS_AGG_COUNT_ALL;
+            break;
     }
-    return result;
+
+    return TS_AGG_INVALID;
 }
 
 const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
@@ -965,6 +1085,10 @@ const char *AggTypeEnumToString(TS_AGG_TYPES_T aggType) {
             return "LAST";
         case TS_AGG_RANGE:
             return "RANGE";
+        case TS_AGG_COUNT_NAN:
+            return "COUNTNAN";
+        case TS_AGG_COUNT_ALL:
+            return "COUNTALL";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -1001,6 +1125,10 @@ const char *AggTypeEnumToStringLowerCase(TS_AGG_TYPES_T aggType) {
             return "last";
         case TS_AGG_RANGE:
             return "range";
+        case TS_AGG_COUNT_NAN:
+            return "countnan";
+        case TS_AGG_COUNT_ALL:
+            return "countall";
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:
@@ -1037,6 +1165,10 @@ AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType) {
             return &aggLast;
         case TS_AGG_RANGE:
             return &aggRange;
+        case TS_AGG_COUNT_NAN:
+            return &aggCountNaN;
+        case TS_AGG_COUNT_ALL:
+            return &aggCountAll;
         case TS_AGG_NONE:
         case TS_AGG_INVALID:
         case TS_AGG_TYPES_MAX:

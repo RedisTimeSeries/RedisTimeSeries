@@ -3,7 +3,7 @@ Test that verifies RDB load failure handling for corrupted/broken RDB files.
 This test creates various types of broken RDB files and ensures they fail to load properly.
 """
 
-from RLTest import Env
+from includes import Env
 from includes import *
 import pytest
 
@@ -299,7 +299,7 @@ def test_broken_rdb_truncated(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
 
 
 def test_broken_rdb_corrupted_data(env):
@@ -325,7 +325,7 @@ def test_broken_rdb_corrupted_data(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
 
 
 def test_broken_rdb_invalid_chunk_count(env):
@@ -349,7 +349,7 @@ def test_broken_rdb_invalid_chunk_count(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
 
 
 def test_broken_rdb_empty_dump(env):
@@ -358,7 +358,7 @@ def test_broken_rdb_empty_dump(env):
     """
     env.skipOnCluster()
 
-    env.expect('RESTORE', 'test_key', 0, b'').error()
+    env.expect('RESTORE', 'test_key', 0, b'').error().contains("DUMP payload version or checksum are wrong")
 
 
 def test_broken_rdb_with_rules(env):
@@ -384,7 +384,7 @@ def test_broken_rdb_with_rules(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
 
 
 def test_broken_rdb_invalid_encoding_version(env):
@@ -406,7 +406,7 @@ def test_broken_rdb_invalid_encoding_version(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
 
 
 def test_broken_rdb_invalid_uncompressed_chunk_metadata(env):

@@ -1,10 +1,11 @@
-
 #include "libmr_commands.h"
 
-#include "LibMR/src/mr.h"
 #include "LibMR/src/utils/arr.h"
+#include "LibMR/src/mr.h"
+#include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "libmr_integration.h"
+#include "module.h"
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
@@ -94,237 +95,255 @@ static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, SlotRangeAccum
     return true;
 }
 
+// RedisModule_GetCurrentUserName allocates a copy but registers it on the context's auto-memory,
+// so it gets freed when the context ends. We re-copy with NULL ctx to detach from auto-memory,
+// since the string must survive serialization to other shards via LibMR.
+static RedisModuleString *CopyCurrentUserName(RedisModuleCtx *ctx) {
+    const RedisModuleString *userName = RedisModule_GetCurrentUserName(ctx);
+    if (!userName)
+        return NULL;
+
+    return RedisModule_CreateStringFromString(NULL, userName);
+}
+
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
-    if (unlikely(len > 0)) {
-        RedisModule_Log(rctx, "warning", "got libmr error:");
-        bool max_idle_reached = false;
-        for (size_t i = 0; i < len; ++i) {
-            RedisModule_Log(rctx, "warning", "%s", MR_ExecutionCtxGetError(eCtx, i));
-            if (!strcmp("execution max idle reached", MR_ExecutionCtxGetError(eCtx, i))) {
-                max_idle_reached = true;
-            }
-        }
+    if (likely(len == 0))
+        return false;
 
-        if (max_idle_reached) {
-            RedisModule_ReplyWithError(rctx,
-                                       "A multi-shard command failed because at least one shard "
-                                       "did not reply within the given timeframe.");
-        } else {
-            char buf[512] = { 0 };
-            snprintf(buf,
-                     sizeof(buf),
-                     "Multi-shard command failed. %s",
-                     MR_ExecutionCtxGetError(eCtx, 0));
-
-            RedisModule_ReplyWithError(rctx, buf);
-        }
-        return true;
+    RedisModule_Log(rctx, "warning", "got libmr error:");
+    bool max_idle_reached = false, cluster_topology_changed = false;
+    for (size_t i = 0; i < len; ++i) {
+        const char *execution_error = MR_ExecutionCtxGetError(eCtx, i);
+        RedisModule_Log(rctx, "warning", "%s", execution_error);
+        if (strcmp("execution max idle reached", execution_error) == 0)
+            max_idle_reached = true;
+        if (strcmp("cluster topology changed", execution_error) == 0)
+            cluster_topology_changed = true;
     }
 
-    return false;
+    if (max_idle_reached) {
+        RedisModule_ReplyWithError(rctx,
+                                   "A multi-keys command failed because at least one shard "
+                                   "did not reply within the given timeframe.");
+    } else if (cluster_topology_changed) {
+        RedisModule_ReplyWithError(
+            rctx, "A multi-shard command failed because the cluster topology has changed");
+    } else {
+        char buf[512] = { 0 };
+        const char *err_msg = MR_ExecutionCtxGetError(eCtx, 0);
+        if (strncmp(err_msg, "NOPERM ", 7) == 0) {
+            snprintf(buf, sizeof(buf), "NOPERM Multi-keys command failed. %s", err_msg + 7);
+        } else {
+            snprintf(buf, sizeof(buf), "Multi-keys command failed. %s", err_msg);
+        }
+        RedisModule_ReplyWithError(rctx, buf);
+    }
+    return true;
 }
 
 // This function used for calling freeing the blocked client context
 // in the main thread. It's needed cause there is a bug in RoF when calling
 // RedisModule_FreeThreadSafeContext from thread which is not the main one, see:
 // https://redislabs.atlassian.net/browse/RED-68772 . It should be fixed in redis 7
-void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
+static void rts_free_rctx(RedisModuleCtx *rctx, void *privateData) {
     RedisModuleCtx *_rctx = privateData;
     RedisModule_FreeThreadSafeContext(_rctx);
 }
 
-static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
-
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
-
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
-            continue;
-        }
-        ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
-            SlotRangeAccum_Free(&acc);
-            goto __done;
-        }
-        Record *payload = ShardEnvelopeRecord_GetPayload(env);
-        if (payload->recordType != GetMapRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected payload record type: %s",
-                            payload->recordType->type.type);
-            continue;
-        }
-        total_len += MapRecord_GetLen((MapRecord *)payload);
-    }
-
-    if (!validate_slot_coverage_or_reply(rctx, &acc)) {
-        SlotRangeAccum_Free(&acc);
-        goto __done;
-    }
-
-    RedisModule_ReplyWithMap(rctx, total_len / 2);
-
-    for (int i = 0; i < len; i++) {
-        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            continue;
-        }
-        Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
-        if (payload->recordType != GetMapRecordType()) {
-            continue;
-        }
-        size_t map_len = MapRecord_GetLen((MapRecord *)payload);
-        for (size_t j = 0; j < map_len; j++) {
-            Record *r = MapRecord_GetRecord((MapRecord *)payload, j);
-            r->recordType->sendReply(rctx, r);
-        }
-    }
-
-__done:
-    SlotRangeAccum_Free(&acc);
-    RTS_UnblockClient(bc, rctx);
+static int compare_slot_ranges(const void *a, const void *b) {
+    const RedisModuleSlotRange *ra = *(const RedisModuleSlotRange **)a;
+    const RedisModuleSlotRange *rb = *(const RedisModuleSlotRange **)b;
+    return (int)ra->start - (int)rb->start;
 }
 
-static void mget_done(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
+#define SLOT_RANGES_ERROR "Query requires unavailable slots"
 
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
+static bool valid_slot_ranges(ARR(RedisModuleSlotRange *) slotRanges) {
+    size_t len = array_len(slotRanges);
+    if (len == 0)
+        return false;
+    qsort(slotRanges, len, sizeof(*slotRanges), compare_slot_ranges);
+    uint16_t slot = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (slot != slotRanges[i]->start)
+            return false;
+        slot = 1 + slotRanges[i]->end;
     }
-
-    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
-            continue;
-        }
-        ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
-            SlotRangeAccum_Free(&acc);
-            goto __done;
-        }
-        Record *payload = ShardEnvelopeRecord_GetPayload(env);
-        if (payload->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected payload record type: %s",
-                            payload->recordType->type.type);
-            continue;
-        }
-        total_len += ListRecord_GetLen((ListRecord *)payload);
-    }
-    if (!validate_slot_coverage_or_reply(rctx, &acc)) {
-        SlotRangeAccum_Free(&acc);
-        goto __done;
-    }
-    RedisModule_ReplyWithArray(rctx, total_len);
-
-    for (int i = 0; i < len; i++) {
-        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
-            continue;
-        }
-
-        Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
-        if (payload->recordType != GetListRecordType()) {
-            continue;
-        }
-        size_t list_len = ListRecord_GetLen((ListRecord *)payload);
-        for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)payload, j);
-            r->recordType->sendReply(rctx, r);
-        }
-    }
-
-__done:
-    SlotRangeAccum_Free(&acc);
-    RTS_UnblockClient(bc, rctx);
+    return slot == (1 << 14);
 }
 
-static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
-    RedisModuleBlockedClient *bc = privateData;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
-
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
-        goto __done;
-    }
+static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx)))
+        return NULL;
 
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
-    size_t total_len = 0;
-    for (int i = 0; i < len; i++) {
-        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
-            continue;
-        }
-        ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
-        if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
-            SlotRangeAccum_Free(&acc);
-            goto __done;
-        }
-        Record *payload = ShardEnvelopeRecord_GetPayload(env);
-        if (payload->recordType != GetListRecordType()) {
-            continue;
-        }
-        total_len += ListRecord_GetLen((ListRecord *)payload);
+    if (len == 0 || len % MR_ClusterGetSize() != 0) {
+        // Each node should return the same number of results because they were all ran the same
+        // internal commands
+        RedisModule_Log(ctx, "warning", "Unexpected results from nodes");
+        RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
+        return NULL;
     }
-    if (!validate_slot_coverage_or_reply(rctx, &acc)) {
-        SlotRangeAccum_Free(&acc);
-        goto __done;
-    }
-    RedisModule_ReplyWithSet(rctx, total_len);
 
-    for (int i = 0; i < len; i++) {
-        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+    // Note that there could be more than one slot range per node, in which case the
+    // array_len(slotRanges) will expand and become larger than the cluster size, but this is a good
+    // initial capacity.
+    ARR(RedisModuleSlotRange *) slotRanges = array_new(RedisModuleSlotRange *, MR_ClusterGetSize());
+    // The actual type of the nodesResult will be determined dynamically (below).
+    // Each entry will hold the full collection of results from a node's reply to an internal
+    // command.
+    ARR(void *) nodesResults = array_new(void *, MR_ClusterGetSize());
+    // We keep track of the type to ensure different nodes don't reply with different types.
+    MRRecordType *nodesResultsType = NULL;
+
+    for (size_t i = 0; i < len; i++) {
+        Record *r = MR_ExecutionCtxGetResult(eCtx, i);
+        if (r->recordType == GetSlotRangesRecordType()) {
+            RedisModuleSlotRangeArray *sra = ((SlotRangesRecord *)r)->slotRanges;
+            for (size_t j = 0; j < sra->num_ranges; j++)
+                slotRanges = array_append(slotRanges, sra->ranges + j);
             continue;
         }
 
-        Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
-        if (payload->recordType != GetListRecordType()) {
+        if (nodesResultsType && nodesResultsType != r->recordType) {
+            RedisModule_Log(ctx, "warning", "Mixed node result types");
+            RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
+            goto __error;
+        }
+        nodesResultsType = r->recordType;
+
+        if (r->recordType == GetSeriesListRecordType()) {
+            nodesResults = array_append(nodesResults, r); // keep full record for numAggClasses
             continue;
         }
-        size_t list_len = ListRecord_GetLen((ListRecord *)payload);
-        for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)payload, j);
-            r->recordType->sendReply(rctx, r);
+        if (r->recordType == GetStringListRecordType()) {
+            StringListRecord *record = (StringListRecord *)r;
+            nodesResults = array_append(nodesResults, record->stringList);
+            continue;
         }
+
+        RedisModule_Log(ctx, "warning", "Unexpected record type: %s", r->recordType->type.type);
+        RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
+        goto __error;
     }
 
-__done:
-    SlotRangeAccum_Free(&acc);
-    RTS_UnblockClient(bc, rctx);
+    bool redisClusterEnabled =
+        (RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER) != 0;
+    if (redisClusterEnabled && !valid_slot_ranges(slotRanges)) {
+        RedisModule_Log(ctx, "warning", "Invalid slot ranges");
+        RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
+        goto __error;
+    }
+
+    array_free(slotRanges);
+    return nodesResults;
+
+__error:
+    array_free(slotRanges);
+    array_free(nodesResults);
+    return NULL;
 }
 
-static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
-    MRangeData *data = privateData;
+// Build coordinator RangeArgs from the original args: open the time window so the coordinator
+// accepts all pre-aggregated buckets from shards, skip re-aggregation, and clear FILTERBY
+// (shards already applied it per-series before reducing).
+static RangeArgs RangeArgsSkipReAggregation(const RangeArgs *src) {
+    RangeArgs a = *src;
+    a.skipAggregation = true;
+    a.filterByValueArgs.hasValue = false;
+    a.filterByTSArgs.hasValue = false;
+    a.startTimestamp = 0;
+    a.endTimestamp = UINT64_MAX;
+    return a;
+}
+
+static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
+    MRangeArgs *args = &data->args;
     RedisModuleBlockedClient *bc = data->bc;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
+
+    ARR(SeriesListRecord *) nodesResults = collect_node_results(eCtx, ctx);
+    if (!nodesResults)
+        goto __done;
+
+    // Shards always apply FILTERBY (aggregation or not); the coordinator must not re-apply it.
+    RangeArgs coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
+    const RangeArgs *replyArgs = &coordArgs;
+
+    // MERGE (public->private, MOD-15896 Flex): public/master fed the buffered TS_ResultSet here
+    // (ResultSet_Create/ResultSet_AddSeries/ResultSet_ApplyReducer/replyResultSet). That buffered
+    // grouped reducer was deleted from this fork (see resultset.c breadcrumb) in favor of the
+    // streaming reducer, which also fixes a wide-GROUPBY OOM. Use it here too, same as
+    // mrange_done_gears above.
+    TS_StreamingResultSet *streaming_rs = NULL;
+    if (args->groupByLabel) {
+        RangeArgs rargs = coordArgs;
+        rargs.latest = false; // we already handled the latest flag in the client side
+        streaming_rs = StreamingResultSet_Create(args->groupByLabel, &args->groupByReducerArgs, &rargs);
+    } else {
+        size_t totalLen = 0;
+        array_foreach(nodesResults, record, {
+            size_t N = (record->numAggClasses > 1) ? record->numAggClasses : 1;
+            totalLen += array_len(record->seriesList) / N;
+        });
+        ReplyWithMapOrArray(ctx, totalLen, false);
+    }
+
+    array_foreach(nodesResults, record, {
+        ARR(Series *) sl = record->seriesList;
+        size_t numAggTypes = (record->numAggClasses > 1) ? record->numAggClasses : 1;
+        size_t numKeys = array_len(sl) / numAggTypes;
+        for (size_t k = 0; k < numKeys; k++) {
+            Series **group = &sl[k * numAggTypes];
+            if (args->groupByLabel) {
+                StreamingResultSet_FeedSeries(streaming_rs, group[0]);
+            } else if (numAggTypes > 1) {
+                ReplyMultiAggSeriesGroup(ctx,
+                                         group,
+                                         numAggTypes,
+                                         args->withLabels,
+                                         args->limitLabels,
+                                         args->numLimitLabels,
+                                         replyArgs,
+                                         args->reverse);
+            } else {
+                ReplySeriesArrayPos(ctx,
+                                    group[0],
+                                    args->withLabels,
+                                    args->limitLabels,
+                                    args->numLimitLabels,
+                                    replyArgs,
+                                    args->reverse,
+                                    false,
+                                    NULL,
+                                    NULL);
+            }
+        }
+    });
+
+    if (args->groupByLabel) {
+        StreamingResultSet_FinalizeAndReply(ctx,
+                                            streaming_rs,
+                                            args->withLabels,
+                                            args->limitLabels,
+                                            args->numLimitLabels,
+                                            args->reverse);
+        // FinalizeAndReply freed streaming_rs.
+    }
+
+__done:
+    if (nodesResults)
+        array_free(nodesResults);
+    MRangeArgs_Free(&data->args);
+    free(data);
+}
+
+static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
+    RedisModuleBlockedClient *bc = data->bc;
+    RedisModuleCtx *rctx = ctx; // mrange_done (dispatcher) already created/owns this ctx.
     SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
-    if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
         goto __done;
     }
 
@@ -332,9 +351,9 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
     TS_StreamingResultSet *streaming_rs = NULL;
 
-    // First pass: validate slot ownership metadata and compute total length if needed
-    // (non-groupby).
-    size_t total_len = 0;
+    // First pass: validate slot ownership metadata across shard replies. (Reply length for
+    // the non-groupby case is no longer precomputed here — EXCLUDEEMPTY may skip series, so
+    // the real count is only known after emission; see the postponed-length reply below.)
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
@@ -346,17 +365,6 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         if (!validate_and_accumulate_shard_slots(rctx, &acc, env)) {
             SlotRangeAccum_Free(&acc);
             goto __done;
-        }
-        Record *payload = ShardEnvelopeRecord_GetPayload(env);
-        if (payload->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected payload record type: %s",
-                            payload->recordType->type.type);
-            continue;
-        }
-        if (!data->args.groupByLabel) {
-            total_len += ListRecord_GetLen((ListRecord *)payload);
         }
     }
     if (!validate_slot_coverage_or_reply(rctx, &acc)) {
@@ -373,10 +381,14 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         RangeArgs rargs = data->args.rangeArgs;
         rargs.latest = false; // already handled on client side
         streaming_rs = StreamingResultSet_Create(
-            data->args.groupByLabel, &data->args.gropuByReducerArgs, &rargs);
+            data->args.groupByLabel, &data->args.groupByReducerArgs, &rargs);
     } else {
-        RedisModule_ReplyWithMapOrArray(rctx, total_len, false);
+        // ponytail: postponed length — EXCLUDEEMPTY may skip series, so the real
+        // count is only known after emission (see ReplySetMapOrArrayLength below).
+        RedisModule_ReplyWithMapOrArray(rctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     }
+
+    long long replylen = 0;
 
     // tempSeries keeps ungrouped Series alive across the reply iteration.
     // Grouped (streaming) frees each Series immediately after feeding.
@@ -393,6 +405,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         }
         Record *raw_listRecord = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
         if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
             continue;
         }
 
@@ -403,6 +419,15 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                 continue;
             }
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
+
+            EnrichedChunk *first_chunk = NULL;
+            AbstractIterator *probe = NULL;
+            if (data->args.excludeEmpty) {
+                probe = SeriesQueryIfNonEmpty(
+                    s, &data->args.rangeArgs, data->args.reverse, &first_chunk);
+                if (!probe)
+                    continue;
+            }
 
             if (data->args.groupByLabel) {
                 StreamingResultSet_FeedSeries(streaming_rs, s);
@@ -416,9 +441,16 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                                     data->args.numLimitLabels,
                                     &data->args.rangeArgs,
                                     data->args.reverse,
-                                    false);
+                                    false,
+                                    probe,
+                                    first_chunk);
+                replylen++;
             }
         }
+    }
+
+    if (!data->args.groupByLabel) {
+        ReplySetMapOrArrayLength(ctx, replylen, false);
     }
 
     if (data->args.groupByLabel) {
@@ -439,16 +471,317 @@ __done:
     MRangeArgs_Free(&data->args);
     free(data);
     SlotRangeAccum_Free(&acc);
-    RTS_UnblockClient(bc, rctx);
+    // NOTE: no RTS_UnblockClient here — mrange_done (the gears/internal dispatcher) unblocks
+    // the client once, after this function returns, using the ctx it created.
 }
 
-int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
+    MRangeData *data = privateData;
+    RedisModuleBlockedClient *bc = data->bc;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            mrange_done_gears(eCtx, ctx, data);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            mrange_done_internal(eCtx, ctx, data);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
+
+    RTS_UnblockClient(bc, ctx);
+}
+
+static void mget_done_internal(ExecutionCtx *eCtx,
+                               RedisModuleCtx *ctx,
+                               RedisModuleBlockedClient *bc) {
+    ARR(SeriesListRecord *) nodesResults = collect_node_results(eCtx, ctx);
+    if (!nodesResults)
+        goto __done;
+
+    ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    size_t len = 0;
+    array_foreach(nodesResults, record, {
+        array_foreach(record->seriesList, s, {
+            if (!_ReplyMap(ctx))
+                RedisModule_ReplyWithArray(ctx, 3); // name, labels, sample
+            RedisModule_ReplyWithString(ctx, s->keyName);
+            if (_ReplyMap(ctx))
+                RedisModule_ReplyWithArray(ctx, 2);
+            ReplyWithSeriesLabels(ctx, s);
+            ReplyWithSeriesLastDatapoint(ctx, s);
+            len++;
+        });
+    });
+    ReplySetMapOrArrayLength(ctx, len, false);
+
+__done:
+    if (nodesResults)
+        array_free(nodesResults);
+}
+
+// MERGE (public->private, MOD-15896 Flex): the public/master "gears" done-handler for MGET
+// unwraps plain ListRecord results directly. That doesn't match this fork's shard-side mapper
+// (ShardMgetMapper in libmr_integration.c), which always wraps its payload in a
+// ShardEnvelopeRecord carrying slot ownership metadata, and — mirroring mget_done_resp3/mget_done
+// from before this merge — builds a MapRecord instead of a ListRecord when the querying client is
+// RESP3. Restored that ShardEnvelopeRecord/SlotRangeAccum unwrap + slot-coverage validation here
+// (previously two separate functions), dispatched on protocol/reply-shape exactly like the
+// original queryArg->resp3 flag (recomputed via _ReplyMap(ctx), same expression used to set that
+// flag in TSDB_mget_MR).
+static void mget_done_gears_resp3(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModuleBlockedClient *bc) {
+    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
+
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        goto __done;
+    }
+
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
+    for (int i = 0; i < len; i++) {
+        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
+            RedisModule_Log(
+                ctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            continue;
+        }
+        ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
+        if (!validate_and_accumulate_shard_slots(ctx, &acc, env)) {
+            SlotRangeAccum_Free(&acc);
+            goto __done;
+        }
+        Record *payload = ShardEnvelopeRecord_GetPayload(env);
+        if (payload->recordType != GetMapRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected payload record type: %s",
+                            payload->recordType->type.type);
+            continue;
+        }
+        total_len += MapRecord_GetLen((MapRecord *)payload);
+    }
+
+    if (!validate_slot_coverage_or_reply(ctx, &acc)) {
+        SlotRangeAccum_Free(&acc);
+        goto __done;
+    }
+
+    RedisModule_ReplyWithMap(ctx, total_len / 2);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
+            continue;
+        }
+        Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
+        if (payload->recordType != GetMapRecordType()) {
+            continue;
+        }
+        size_t map_len = MapRecord_GetLen((MapRecord *)payload);
+        for (size_t j = 0; j < map_len; j++) {
+            Record *r = MapRecord_GetRecord((MapRecord *)payload, j);
+            r->recordType->sendReply(ctx, r);
+        }
+    }
+
+__done:
+    SlotRangeAccum_Free(&acc);
+}
+
+static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModuleBlockedClient *bc) {
+    if (_ReplyMap(ctx)) {
+        mget_done_gears_resp3(eCtx, ctx, bc);
+        return;
+    }
+
+    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
+
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        goto __done;
+    }
+
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
+    for (int i = 0; i < len; i++) {
+        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
+            RedisModule_Log(
+                ctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            continue;
+        }
+        ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
+        if (!validate_and_accumulate_shard_slots(ctx, &acc, env)) {
+            SlotRangeAccum_Free(&acc);
+            goto __done;
+        }
+        Record *payload = ShardEnvelopeRecord_GetPayload(env);
+        if (payload->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected payload record type: %s",
+                            payload->recordType->type.type);
+            continue;
+        }
+        total_len += ListRecord_GetLen((ListRecord *)payload);
+    }
+    if (!validate_slot_coverage_or_reply(ctx, &acc)) {
+        SlotRangeAccum_Free(&acc);
+        goto __done;
+    }
+    RedisModule_ReplyWithArray(ctx, total_len);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
+            RedisModule_Log(
+                ctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            continue;
+        }
+
+        Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
+        if (payload->recordType != GetListRecordType()) {
+            continue;
+        }
+        size_t list_len = ListRecord_GetLen((ListRecord *)payload);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *r = ListRecord_GetRecord((ListRecord *)payload, j);
+            r->recordType->sendReply(ctx, r);
+        }
+    }
+
+__done:
+    SlotRangeAccum_Free(&acc);
+}
+
+static void mget_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            mget_done_gears(eCtx, ctx, bc);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            mget_done_internal(eCtx, ctx, bc);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
+
+    RTS_UnblockClient(bc, ctx);
+}
+
+static void queryindex_done_internal(ExecutionCtx *eCtx,
+                                     RedisModuleCtx *ctx,
+                                     RedisModuleBlockedClient *bc) {
+    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
+    if (!nodesResults)
+        goto __done;
+
+    ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    size_t len = 0;
+    array_foreach(nodesResults, stringList, {
+        array_foreach(stringList, keyName, {
+            RedisModule_ReplyWithString(ctx, keyName);
+            len++;
+        });
+    });
+    ReplySetSetOrArrayLength(ctx, len);
+
+__done:
+    if (nodesResults)
+        array_free(nodesResults);
+}
+
+// MERGE (public->private, MOD-15896 Flex): same ShardEnvelopeRecord/SlotRangeAccum restoration
+// as mget_done_gears above — ShardQueryindexMapper (libmr_integration.c) always wraps its
+// ListRecord payload in a ShardEnvelopeRecord, and (unlike mget) never varies the payload shape
+// on resp3, so this just needs the envelope unwrap + slot-coverage validation, no dual dispatch.
+static void queryindex_done_gears(ExecutionCtx *eCtx,
+                                  RedisModuleCtx *ctx,
+                                  RedisModuleBlockedClient *bc) {
+    SlotRangeAccum acc = (SlotRangeAccum){ 0 };
+
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        goto __done;
+    }
+
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    size_t total_len = 0;
+    for (int i = 0; i < len; i++) {
+        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
+            RedisModule_Log(
+                ctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            continue;
+        }
+        ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
+        if (!validate_and_accumulate_shard_slots(ctx, &acc, env)) {
+            SlotRangeAccum_Free(&acc);
+            goto __done;
+        }
+        Record *payload = ShardEnvelopeRecord_GetPayload(env);
+        if (payload->recordType != GetListRecordType()) {
+            continue;
+        }
+        total_len += ListRecord_GetLen((ListRecord *)payload);
+    }
+    if (!validate_slot_coverage_or_reply(ctx, &acc)) {
+        SlotRangeAccum_Free(&acc);
+        goto __done;
+    }
+    RedisModule_ReplyWithSet(ctx, total_len);
+
+    for (int i = 0; i < len; i++) {
+        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
+            RedisModule_Log(
+                ctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            continue;
+        }
+
+        Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
+        if (payload->recordType != GetListRecordType()) {
+            continue;
+        }
+        size_t list_len = ListRecord_GetLen((ListRecord *)payload);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *r = ListRecord_GetRecord((ListRecord *)payload, j);
+            r->recordType->sendReply(ctx, r);
+        }
+    }
+
+__done:
+    SlotRangeAccum_Free(&acc);
+}
+
+static void queryindex_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            queryindex_done_gears(eCtx, ctx, bc);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            queryindex_done_internal(eCtx, ctx, bc);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
+
+    RTS_UnblockClient(bc, ctx);
+}
+
+int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     MGetArgs args;
     if (parseMGetCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
@@ -467,11 +800,29 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
     queryArg->resp3 = _ReplyMap(ctx);
+    queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->numAggClasses = 0;
+
     MRError *err = NULL;
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
 
-    MR_ExecutionBuilderCollect(builder);
-
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardMgetMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MGET", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
@@ -480,30 +831,33 @@ int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? mget_done_resp3 : mget_done, bc);
+    MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
     MR_Run(exec);
-
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
     return REDISMODULE_OK;
 }
 
-int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse) {
+int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse) {
     MRangeArgs args;
     if (parseMRangeCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_OK;
     }
     args.reverse = reverse;
 
-    QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
     queryArg->latest = args.rangeArgs.latest;
-    args.queryPredicates->ref++;
+    // Atomic even though this call site is main-thread-only: LibMR's own Duplicate/ObjectFree
+    // step-arg callbacks (QueryPredicates_Duplicate/QueryPredicates_ObjectFree) touch this same
+    // ref from their own execution threads over the object's life, so every mutation site has
+    // to stay atomic for the count to be consistent (see QueryPredicateList_Free in indexer.c).
+    __atomic_add_fetch(&args.queryPredicates->ref, 1, __ATOMIC_RELAXED);
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
     queryArg->limitLabelsSize = args.numLimitLabels;
@@ -515,12 +869,46 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         RedisModule_RetainString(ctx, queryArg->limitLabels[i]);
     }
 
+    queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->excludeEmpty = args.excludeEmpty;
+    // Always send FILTERBY to shards; they apply it regardless of aggregation.
+    queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
+    queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;
+    // Push aggregation to every shard for all cases (single-agg and multi-agg).
+    // Multi-agg + GROUPBY is rejected at parse time, so no special case is needed.
+    if (args.rangeArgs.aggregationArgs.numClasses > 0) {
+        queryArg->numAggClasses = args.rangeArgs.aggregationArgs.numClasses;
+        for (size_t i = 0; i < args.rangeArgs.aggregationArgs.numClasses; i++)
+            queryArg->aggTypes[i] = args.rangeArgs.aggregationArgs.classes[i]->type;
+        queryArg->aggTimeDelta = args.rangeArgs.aggregationArgs.timeDelta;
+        queryArg->aggBucketTS = args.rangeArgs.aggregationArgs.bucketTS;
+        queryArg->aggEmpty = args.rangeArgs.aggregationArgs.empty;
+        queryArg->alignment = args.rangeArgs.alignment;
+        queryArg->timestampAlignment = args.rangeArgs.timestampAlignment;
+    } else {
+        queryArg->numAggClasses = 0;
+    }
+
     MRError *err = NULL;
 
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardSeriesMapper", queryArg);
-
-    MR_ExecutionBuilderCollect(builder);
-
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardSeriesMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
@@ -529,9 +917,10 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MRangeData *data = malloc(sizeof(struct MRangeData));
+    MRangeData *data = malloc(sizeof(struct MRangeData)); // freed by mrange_done
     data->bc = bc;
     data->args = args;
+
     MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
 
     MR_Run(exec);
@@ -540,26 +929,42 @@ int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     return REDISMODULE_OK;
 }
 
-int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    MRError *err = NULL;
-
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
+int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof(QueryPredicates_Arg));
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
-    queries->ref++;
+    __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
     queryArg->predicates = queries;
     queryArg->withLabels = false;
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
+    queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->numAggClasses = 0;
 
-    ExecutionBuilder *builder = MR_CreateExecutionBuilder("ShardQueryindexMapper", queryArg);
+    MRError *err = NULL;
 
-    MR_ExecutionBuilderCollect(builder);
-
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardQueryindexMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYINDEX", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
     Execution *exec = MR_CreateExecution(builder, &err);
     if (err) {
         RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
@@ -568,10 +973,133 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, bc);
+    MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
 
     MR_Run(exec);
+    MR_FreeExecution(exec);
+    MR_FreeExecutionBuilder(builder);
+    return REDISMODULE_OK;
+}
 
+static void querylabels_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    for (size_t i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            StringRecord *sr =
+                (StringRecord *)ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            RedisModule_DictSetC(agg, sr->str, sr->len, NULL);
+        }
+    }
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
+static void querylabels_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
+    if (!nodesResults) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    array_foreach(nodesResults, stringList, {
+        array_foreach(stringList, s, { RedisModule_DictSet(agg, s, NULL); });
+    });
+    array_free(nodesResults);
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
+static void querylabels_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            querylabels_done_gears(eCtx, ctx);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            querylabels_done_internal(eCtx, ctx);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
+
+    RTS_UnblockClient(bc, ctx);
+}
+
+int TSDB_querylabels_MR(RedisModuleCtx *ctx,
+                        QueryLabelsSubtype subtype,
+                        RedisModuleString *label,
+                        QueryPredicateList *queries) {
+    QueryLabelsArg *queryArg = calloc(1, sizeof(QueryLabelsArg));
+    queryArg->shouldReturnNull = false;
+    queryArg->refCount = 1;
+    queryArg->subtype = subtype;
+    queryArg->userName = CopyCurrentUserName(ctx);
+    if (label != NULL) {
+        queryArg->label = RedisModule_CreateStringFromString(NULL, label);
+    }
+    if (queries != NULL) {
+        __atomic_add_fetch(
+            &queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
+        queryArg->predicates = queries;
+        queryArg->hasFilter = true;
+    }
+
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardQuerylabelsMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYLABELS", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
+
+    MRError *err = NULL;
+    Execution *exec = MR_CreateExecution(builder, &err);
+    if (err) {
+        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        // MR_CreateExecution always allocates and returns exec, even on error (it copies
+        // and dups every step's args before checking the error) - free it or exec plus its
+        // duplicated QueryLabelsArg reference leak on every failed call. That only drops
+        // the execution's dup'd reference though - also drop our own original reference
+        // (which in turn releases the extra QueryPredicateList ref taken above for FILTER).
+        MR_FreeExecution(exec);
+        QueryLabelsArg_ObjectFree(queryArg);
+        MR_FreeExecutionBuilder(builder);
+        return REDISMODULE_OK;
+    }
+
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
+    MR_ExecutionSetOnDoneHandler(exec, querylabels_done, bc);
+
+    MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
     return REDISMODULE_OK;

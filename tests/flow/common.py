@@ -1,7 +1,8 @@
 
 import sys
 import os
-from RLTest import Env, Defaults
+from includes import Env
+from RLTest import Defaults
 from redis import ResponseError
 from packaging import version
 

@@ -634,20 +634,9 @@ MU_TEST(test_mrange_aggregation_options) {
                     
                     int found_aggregator = 0;
                     for (int k = 0; agg_subargs[k].name != NULL; k++) {
-                        if (strcmp(agg_subargs[k].name, "aggregator") == 0) {
+                        if (strcmp(agg_subargs[k].name, "aggregators") == 0) {
                             found_aggregator = 1;
-                            mu_check(agg_subargs[k].type == REDISMODULE_ARG_TYPE_ONEOF);
-                            
-                            // Check some aggregation types exist
-                            const RedisModuleCommandArg *agg_options = agg_subargs[k].subargs;
-                            mu_check(agg_options != NULL);
-                            
-                            int found_avg = 0, found_sum = 0;
-                            for (int l = 0; agg_options[l].name != NULL; l++) {
-                                if (strcmp(agg_options[l].name, "avg") == 0) found_avg = 1;
-                                if (strcmp(agg_options[l].name, "sum") == 0) found_sum = 1;
-                            }
-                            mu_check(found_avg && found_sum);
+                            mu_check(agg_subargs[k].type == REDISMODULE_ARG_TYPE_STRING);
                             break;
                         }
                     }

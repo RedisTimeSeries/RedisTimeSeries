@@ -30,6 +30,8 @@ static const RedisModuleCommandArg AGGREGATOR_OPTIONS[] = {
     { .name = "var.p", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "var.p" },
     { .name = "var.s", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "var.s" },
     { .name = "twa", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "twa" },
+    { .name = "countnan", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "countnan" },
+    { .name = "countall", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "countall" },
     { 0 }
 };
 
@@ -721,6 +723,52 @@ static const RedisModuleCommandInfo TS_GET_INFO = {
 };
 
 // ===============================
+// TS.READ key timestamp [BLOCK milliseconds min_count] [MAX_COUNT max_count]
+// ===============================
+static const RedisModuleCommandKeySpec TS_READ_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RO,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_RANGE,
+      .fk.range = { .lastkey = 0, .keystep = 1, .limit = 0 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_READ_ARGS[] = {
+    { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
+    { .name = "timestamp", .type = REDISMODULE_ARG_TYPE_STRING },
+    { .name = "BLOCK",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "milliseconds", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "BLOCK" },
+              { .name = "min_count", .type = REDISMODULE_ARG_TYPE_INTEGER },
+              { 0 } } },
+    { .name = "MAX_COUNT",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "max_count", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "MAX_COUNT" },
+              { 0 } } },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_READ_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Read: return up to max_count samples with timestamp >= timestamp. With BLOCK, "
+               "waits up to milliseconds ms until at least min_count qualifying samples exist",
+    .complexity = "O(log(n)+k) where n is the number of samples in the series and k is the number "
+                  "of returned samples",
+    .since = "8.10.0",
+    .tips = "dont_cache",
+    .arity = -3,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_READ_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_READ_ARGS,
+};
+
+// ===============================
 // TS.REVRANGE key fromTimestamp toTimestamp
 //  [LATEST]
 //  [FILTER_BY_TS ts...]
@@ -791,9 +839,7 @@ static const RedisModuleCommandArg TS_REVRANGE_ARGS[] = {
               { .name = "aggregation",
                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
                 .token = "AGGREGATION" },
-              { .name = "aggregator",
-                .type = REDISMODULE_ARG_TYPE_ONEOF,
-                .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
+              { .name = "aggregators", .type = REDISMODULE_ARG_TYPE_STRING },
               { .name = "bucketDuration", .type = REDISMODULE_ARG_TYPE_INTEGER },
               { .name = "buckettimestamp_block",
                 .type = REDISMODULE_ARG_TYPE_BLOCK,
@@ -896,9 +942,7 @@ static const RedisModuleCommandArg TS_RANGE_ARGS[] = {
               { .name = "aggregation",
                 .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
                 .token = "AGGREGATION" },
-              { .name = "aggregator",
-                .type = REDISMODULE_ARG_TYPE_ONEOF,
-                .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
+              { .name = "aggregators", .type = REDISMODULE_ARG_TYPE_STRING },
               { .name = "bucketDuration", .type = REDISMODULE_ARG_TYPE_INTEGER },
               { .name = "buckettimestamp_block",
                 .type = REDISMODULE_ARG_TYPE_BLOCK,
@@ -931,6 +975,224 @@ static const RedisModuleCommandInfo TS_RANGE_INFO = {
 };
 
 // ===============================
+// TS.NREVRANGE numkeys key [key ...] fromTimestamp toTimestamp
+//  [LATEST]
+//  [FILTER_BY_TS ts...]
+//  [FILTER_BY_VALUE min max]
+//  [COUNT count]
+//  [[ALIGN align] AGGREGATION aggregator[,aggregator...] bucketDuration [BUCKETTIMESTAMP bt]
+//  [EMPTY]]
+// ===============================
+static const RedisModuleCommandKeySpec TS_NREVRANGE_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RO | REDISMODULE_CMD_KEY_ACCESS,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_KEYNUM,
+      .fk.keynum = { .keynumidx = 0, .firstkey = 1, .keystep = 1 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_NREVRANGE_ARGS[] = {
+    { .name = "numkeys", .type = REDISMODULE_ARG_TYPE_INTEGER },
+    { .name = "key",
+      .type = REDISMODULE_ARG_TYPE_KEY,
+      .key_spec_index = 0,
+      .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+    { .name = "fromTimestamp",
+      .type = REDISMODULE_ARG_TYPE_STRING }, // Actually an int, but we also allow '-'
+    { .name = "toTimestamp",
+      .type = REDISMODULE_ARG_TYPE_STRING }, // Actually an int, but we also allow '+'
+    { .name = "latest",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "LATEST" },
+    { .name = "filter_by_ts_block",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs = (RedisModuleCommandArg[]){ { .name = "filter_by_ts_token",
+                                              .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                              .token = "FILTER_BY_TS" },
+                                            { .name = "ts",
+                                              .type = REDISMODULE_ARG_TYPE_INTEGER,
+                                              .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+                                            { 0 } } },
+    { .name = "filter_by_value_block",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs = (RedisModuleCommandArg[]){ { .name = "filter_by_value_token",
+                                              .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                              .token = "FILTER_BY_VALUE" },
+                                            { .name = "min", .type = REDISMODULE_ARG_TYPE_DOUBLE },
+                                            { .name = "max", .type = REDISMODULE_ARG_TYPE_DOUBLE },
+                                            { 0 } } },
+    { .name = "count_block",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "count_token", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "COUNT" },
+              { .name = "count", .type = REDISMODULE_ARG_TYPE_INTEGER },
+              { 0 } } },
+    { .name = "aggregation_block",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "align_block",
+                .type = REDISMODULE_ARG_TYPE_BLOCK,
+                .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+                .subargs = (RedisModuleCommandArg[]){ { .name = "align_token",
+                                                        .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                        .token = "ALIGN" },
+                                                      { .name = "align",
+                                                        .type = REDISMODULE_ARG_TYPE_STRING },
+                                                      { 0 } } },
+              { .name = "aggregation",
+                .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                .token = "AGGREGATION" },
+              { .name = "aggregators", .type = REDISMODULE_ARG_TYPE_STRING },
+              { .name = "bucketDuration", .type = REDISMODULE_ARG_TYPE_INTEGER },
+              { .name = "buckettimestamp_block",
+                .type = REDISMODULE_ARG_TYPE_BLOCK,
+                .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+                .subargs = (RedisModuleCommandArg[]){ { .name = "buckettimestamp_token",
+                                                        .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                        .token = "BUCKETTIMESTAMP" },
+                                                      { .name = "bt",
+                                                        .type = REDISMODULE_ARG_TYPE_ONEOF,
+                                                        .subargs = (RedisModuleCommandArg *)
+                                                            BUCKETTIMESTAMP_OPTIONS },
+                                                      { 0 } } },
+              { .name = "empty_token",
+                .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+                .token = "EMPTY" },
+              { 0 } } },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_NREVRANGE_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Query a range across multiple time series in reverse direction, returning the "
+               "results pivoted by timestamp (one value column per key)",
+    .complexity = "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples "
+                  "per chunk), k = Number of samples that are in the requested range",
+    .since = "8.10.0",
+    .arity = -5,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_NREVRANGE_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_NREVRANGE_ARGS,
+};
+
+// ===============================
+// TS.NRANGE numkeys key [key ...] fromTimestamp toTimestamp
+//  [LATEST]
+//  [FILTER_BY_TS ts...]
+//  [FILTER_BY_VALUE min max]
+//  [COUNT count]
+//  [[ALIGN align] AGGREGATION aggregator[,aggregator...] bucketDuration [BUCKETTIMESTAMP bt]
+//  [EMPTY]]
+// ===============================
+static const RedisModuleCommandKeySpec TS_NRANGE_KEYSPECS[] = {
+    { .flags = REDISMODULE_CMD_KEY_RO | REDISMODULE_CMD_KEY_ACCESS,
+      .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
+      .bs.index = { .pos = 1 },
+      .find_keys_type = REDISMODULE_KSPEC_FK_KEYNUM,
+      .fk.keynum = { .keynumidx = 0, .firstkey = 1, .keystep = 1 } },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_NRANGE_ARGS[] = {
+    { .name = "numkeys", .type = REDISMODULE_ARG_TYPE_INTEGER },
+    { .name = "key",
+      .type = REDISMODULE_ARG_TYPE_KEY,
+      .key_spec_index = 0,
+      .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+    { .name = "fromTimestamp",
+      .type = REDISMODULE_ARG_TYPE_STRING }, // Actually an int, but we also allow '-'
+    { .name = "toTimestamp",
+      .type = REDISMODULE_ARG_TYPE_STRING }, // Actually an int, but we also allow '+'
+    { .name = "latest",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "LATEST" },
+    { .name = "filter_by_ts_block",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs = (RedisModuleCommandArg[]){ { .name = "filter_by_ts_token",
+                                              .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                              .token = "FILTER_BY_TS" },
+                                            { .name = "ts",
+                                              .type = REDISMODULE_ARG_TYPE_INTEGER,
+                                              .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+                                            { 0 } } },
+    { .name = "filter_by_value_block",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs = (RedisModuleCommandArg[]){ { .name = "filter_by_value_token",
+                                              .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                              .token = "FILTER_BY_VALUE" },
+                                            { .name = "min", .type = REDISMODULE_ARG_TYPE_DOUBLE },
+                                            { .name = "max", .type = REDISMODULE_ARG_TYPE_DOUBLE },
+                                            { 0 } } },
+    { .name = "count_block",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "count_token", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "COUNT" },
+              { .name = "count", .type = REDISMODULE_ARG_TYPE_INTEGER },
+              { 0 } } },
+    { .name = "aggregation_block",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "align_block",
+                .type = REDISMODULE_ARG_TYPE_BLOCK,
+                .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+                .subargs = (RedisModuleCommandArg[]){ { .name = "align_token",
+                                                        .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                        .token = "ALIGN" },
+                                                      { .name = "align",
+                                                        .type = REDISMODULE_ARG_TYPE_STRING },
+                                                      { 0 } } },
+              { .name = "aggregation",
+                .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                .token = "AGGREGATION" },
+              { .name = "aggregators", .type = REDISMODULE_ARG_TYPE_STRING },
+              { .name = "bucketDuration", .type = REDISMODULE_ARG_TYPE_INTEGER },
+              { .name = "buckettimestamp_block",
+                .type = REDISMODULE_ARG_TYPE_BLOCK,
+                .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+                .subargs = (RedisModuleCommandArg[]){ { .name = "buckettimestamp_token",
+                                                        .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                                                        .token = "BUCKETTIMESTAMP" },
+                                                      { .name = "bt",
+                                                        .type = REDISMODULE_ARG_TYPE_ONEOF,
+                                                        .subargs = (RedisModuleCommandArg *)
+                                                            BUCKETTIMESTAMP_OPTIONS },
+                                                      { 0 } } },
+              { .name = "empty_token",
+                .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+                .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+                .token = "EMPTY" },
+              { 0 } } },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_NRANGE_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Query a range across multiple time series in forward direction, returning the "
+               "results pivoted by timestamp (one value column per key)",
+    .complexity = "O(numkeys*(n/m+k)) where n = Number of samples, m = Chunk size (samples "
+                  "per chunk), k = Number of samples that are in the requested range",
+    .since = "8.10.0",
+    .arity = -5,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_NRANGE_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_NRANGE_ARGS,
+};
+
+// ===============================
 // TS.QUERYINDEX filterExpr...
 // ===============================
 static const RedisModuleCommandArg TS_QUERYINDEX_ARGS[] = { { .name = "filterExpr",
@@ -944,9 +1206,57 @@ static const RedisModuleCommandInfo TS_QUERYINDEX_INFO = {
     .summary = "Get all time series keys matching a filter list",
     .complexity = "O(n) where n is the number of time-series that match the filters",
     .since = "1.0.0",
+    .tips = "dont_cache",
     .arity = -2,
     .key_specs = NULL, // No key specs - this command doesn't access specific keys
     .args = (RedisModuleCommandArg *)TS_QUERYINDEX_ARGS,
+};
+
+// ===============================
+// TS.QUERYLABELS <LABELS | VALUES label> [FILTER filterExpr...]
+// ===============================
+static const RedisModuleCommandArg TS_QUERYLABELS_VALUES_ARGS[] = {
+    { .name = "VALUES", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "VALUES" },
+    { .name = "label", .type = REDISMODULE_ARG_TYPE_STRING },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_QUERYLABELS_SUBTYPE_OPTIONS[] = {
+    { .name = "LABELS", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "LABELS" },
+    { .name = "VALUES",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .subargs = (RedisModuleCommandArg *)TS_QUERYLABELS_VALUES_ARGS },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_QUERYLABELS_ARGS[] = {
+    { .name = "subtype",
+      .type = REDISMODULE_ARG_TYPE_ONEOF,
+      .subargs = (RedisModuleCommandArg *)TS_QUERYLABELS_SUBTYPE_OPTIONS },
+    { .name = "FILTER",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "FILTER", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "FILTER" },
+              { .name = "filterExpr",
+                .type = REDISMODULE_ARG_TYPE_STRING,
+                .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+              { 0 } } },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_QUERYLABELS_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Get all label names, or all values of a given label, for time series matching a "
+               "filter list, or all series",
+    .complexity = "O(n) where n is the number of time-series that match the filters (all "
+                  "indexed series when FILTER is omitted)",
+    .since = "8.10.0",
+    .tips = "dont_cache",
+    .arity = -2,
+    .key_specs = NULL,
+    .args = (RedisModuleCommandArg *)TS_QUERYLABELS_ARGS,
 };
 
 // ===============================
@@ -975,6 +1285,7 @@ static const RedisModuleCommandInfo TS_INFO_INFO = {
     .summary = "Returns information and statistics for a time series",
     .complexity = "O(1)",
     .since = "1.0.0",
+    .tips = "dont_cache",
     .arity = -2,
     .key_specs = (RedisModuleCommandKeySpec *)TS_INFO_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_INFO_ARGS,
@@ -1056,6 +1367,7 @@ static const RedisModuleCommandInfo TS_MGET_INFO = {
                "specific filter",
     .complexity = "O(n) where n is the number of time-series that match the filters",
     .since = "1.0.0",
+    .tips = "dont_cache",
     .arity = -3,
     .key_specs = NULL, // No key specs - this command doesn't access specific keys, uses filters
     .args = (RedisModuleCommandArg *)TS_MGET_ARGS,
@@ -1136,9 +1448,7 @@ static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
                         { .name = "AGGREGATION",
                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
                           .token = "AGGREGATION" },
-                        { .name = "aggregator",
-                          .type = REDISMODULE_ARG_TYPE_ONEOF,
-                          .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
+                        { .name = "aggregators", .type = REDISMODULE_ARG_TYPE_STRING },
                         { .name = "bucketDuration", .type = REDISMODULE_ARG_TYPE_INTEGER },
                         { .name = "BUCKETTIMESTAMP",
                           .type = REDISMODULE_ARG_TYPE_ONEOF,
@@ -1191,6 +1501,11 @@ static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
                 .type = REDISMODULE_ARG_TYPE_ONEOF,
                 .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
               { 0 } } },
+    { .name = "EXCLUDEEMPTY",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "EXCLUDEEMPTY",
+      .since = "8.10.0" },
     { 0 }
 };
 
@@ -1200,6 +1515,7 @@ static const RedisModuleCommandInfo TS_MRANGE_INFO = {
     .complexity = "O(n/m+k) where n = Number of data points, m = Chunk size (data points per "
                   "chunk), k = Number of data points that are in the requested ranges",
     .since = "1.0.0",
+    .tips = "dont_cache",
     .arity = -4,
     .key_specs = (RedisModuleCommandKeySpec *)TS_MRANGE_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_MRANGE_ARGS,
@@ -1280,9 +1596,7 @@ static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
                         { .name = "AGGREGATION",
                           .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
                           .token = "AGGREGATION" },
-                        { .name = "aggregator",
-                          .type = REDISMODULE_ARG_TYPE_ONEOF,
-                          .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
+                        { .name = "aggregators", .type = REDISMODULE_ARG_TYPE_STRING },
                         { .name = "bucketDuration", .type = REDISMODULE_ARG_TYPE_INTEGER },
                         { .name = "BUCKETTIMESTAMP",
                           .type = REDISMODULE_ARG_TYPE_ONEOF,
@@ -1335,6 +1649,11 @@ static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
                 .type = REDISMODULE_ARG_TYPE_ONEOF,
                 .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
               { 0 } } },
+    { .name = "EXCLUDEEMPTY",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "EXCLUDEEMPTY",
+      .since = "8.10.0" },
     { 0 }
 };
 
@@ -1344,6 +1663,7 @@ static const RedisModuleCommandInfo TS_MREVRANGE_INFO = {
     .complexity = "O(n/m+k) where n = Number of data points, m = Chunk size (data points per "
                   "chunk), k = Number of data points that are in the requested ranges",
     .since = "1.4.0",
+    .tips = "dont_cache",
     .arity = -4,
     .key_specs = (RedisModuleCommandKeySpec *)TS_MREVRANGE_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_MREVRANGE_ARGS,
@@ -1412,6 +1732,11 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     if (!cmd_get || RedisModule_SetCommandInfo(cmd_get, &TS_GET_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    // Register TS.READ command info
+    RedisModuleCommand *cmd_read = RedisModule_GetCommand(ctx, "TS.READ");
+    if (!cmd_read || RedisModule_SetCommandInfo(cmd_read, &TS_READ_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
     // Register TS.RANGE command info
     RedisModuleCommand *cmd_range = RedisModule_GetCommand(ctx, "TS.RANGE");
     if (!cmd_range || RedisModule_SetCommandInfo(cmd_range, &TS_RANGE_INFO) == REDISMODULE_ERR)
@@ -1423,10 +1748,27 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
         RedisModule_SetCommandInfo(cmd_revrange, &TS_REVRANGE_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    // Register TS.NRANGE command info
+    RedisModuleCommand *cmd_nrange = RedisModule_GetCommand(ctx, "TS.NRANGE");
+    if (!cmd_nrange || RedisModule_SetCommandInfo(cmd_nrange, &TS_NRANGE_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.NREVRANGE command info
+    RedisModuleCommand *cmd_nrevrange = RedisModule_GetCommand(ctx, "TS.NREVRANGE");
+    if (!cmd_nrevrange ||
+        RedisModule_SetCommandInfo(cmd_nrevrange, &TS_NREVRANGE_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
     // Register TS.QUERYINDEX command info
     RedisModuleCommand *cmd_queryindex = RedisModule_GetCommand(ctx, "TS.QUERYINDEX");
     if (!cmd_queryindex ||
         RedisModule_SetCommandInfo(cmd_queryindex, &TS_QUERYINDEX_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.QUERYLABELS command info
+    RedisModuleCommand *cmd_querylabels = RedisModule_GetCommand(ctx, "TS.QUERYLABELS");
+    if (!cmd_querylabels ||
+        RedisModule_SetCommandInfo(cmd_querylabels, &TS_QUERYLABELS_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.INFO command info

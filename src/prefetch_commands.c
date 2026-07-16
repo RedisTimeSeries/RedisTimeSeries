@@ -287,7 +287,7 @@ int MRange_ReplyAsync(RedisModuleCtx *ctx, RedisModuleDict *resultSeries, MRange
     // streaming_rs is NULL, which would unblock the client with no reply.
     if (grouped_streaming) {
         m->streaming_rs = StreamingResultSet_Create(
-            m->args.groupByLabel, &m->args.gropuByReducerArgs, &m->args.rangeArgs);
+            m->args.groupByLabel, &m->args.groupByReducerArgs, &m->args.rangeArgs);
         if (!m->streaming_rs) {
             // Guard not armed yet — destroy directly rather than via the unref path.
             mrange_async_ctx_destroy(m);

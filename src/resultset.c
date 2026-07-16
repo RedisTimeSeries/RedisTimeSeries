@@ -52,12 +52,12 @@ void FreeTempSeries(Series *s) {
 Label *createReducedSeriesLabels(RedisModuleCtx *ctx,
                                  char *labelKey,
                                  char *labelValue,
-                                 const ReducerArgs *gropuByReducerArgs) {
+                                 const ReducerArgs *groupByReducerArgs) {
     // Labels:
     // <label>=<groupbyvalue>
     // __reducer__=<reducer>
     // __source__=key1,key2,key3
-    const char *reducer_str = AggTypeEnumToStringLowerCase(gropuByReducerArgs->agg_type);
+    const char *reducer_str = AggTypeEnumToStringLowerCase(groupByReducerArgs->agg_type);
 
     Label *labels = calloc(3, sizeof(Label));
     labels[0].key = RedisModule_CreateStringPrintf(NULL, "%s", labelKey);

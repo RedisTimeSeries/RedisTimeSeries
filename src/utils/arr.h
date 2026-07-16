@@ -206,7 +206,7 @@ static inline uint32_t array_len(array_t arr) {
 }
 
 #define ARR_CAP_NOSHRINK ((uint32_t)-1)
-static inline void *array_trimm(array_t arr, uint32_t len, uint32_t cap) {
+static inline void *array_trim(array_t arr, uint32_t len, uint32_t cap) {
 	array_hdr_t *arr_hdr = array_hdr(arr);
 	assert((cap == ARR_CAP_NOSHRINK || cap > 0 || len == cap) && "trimming capacity is illegal");
 	assert((cap == ARR_CAP_NOSHRINK || cap >= len) && "trimming len is greater then capacity");
@@ -219,8 +219,8 @@ static inline void *array_trimm(array_t arr, uint32_t len, uint32_t cap) {
 	return arr_hdr->buf;
 }
 
-#define array_trimm_len(arr, len) (__typeof__(arr)) array_trimm(arr, len, ARR_CAP_NOSHRINK)
-#define array_trimm_cap(arr, len) (__typeof__(arr)) array_trimm(arr, len, len)
+#define array_trim_len(arr, len) (__typeof__(arr)) array_trim(arr, len, ARR_CAP_NOSHRINK)
+#define array_trim_cap(arr, len) (__typeof__(arr)) array_trim(arr, len, len)
 
 /* Free the array, without dealing with individual elements */
 static void array_free(array_t arr) {

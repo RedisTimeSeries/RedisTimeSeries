@@ -55,6 +55,7 @@ typedef struct CompactionRule
     struct CompactionRule *nextRule;
     timestamp_t startCurrentTimeBucket; // Beware that the first bucket is alway starting in 0 no
                                         // matter the alignment
+    bool validSamplesInBucket;          // Are there any valid samples in current bucket
 } CompactionRule;
 
 typedef struct Series
@@ -196,8 +197,6 @@ typedef enum
 int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op);
 
 void seriesEncodeTimestamp(void *buf, timestamp_t timestamp);
-
-CompactionRule *find_rule(CompactionRule *rules, RedisModuleString *keyName);
 
 #define should_finalize_last_bucket_get(latest, series) ((latest) && (series)->srcKey)
 

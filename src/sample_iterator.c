@@ -9,6 +9,8 @@
 
 #include "sample_iterator.h"
 
+#include "enriched_chunk.h"
+
 ChunkResult SeriesSampleIterator_GetNext(struct AbstractSampleIterator *base, Sample *sample) {
     SeriesSampleIterator *iter = (SeriesSampleIterator *)base;
     if (unlikely(!iter->chunk || iter->cur_index >= iter->chunk->samples.num_samples)) {
@@ -20,7 +22,7 @@ ChunkResult SeriesSampleIterator_GetNext(struct AbstractSampleIterator *base, Sa
     }
 
     sample->timestamp = iter->chunk->samples.timestamps[iter->cur_index];
-    sample->value = iter->chunk->samples.values[iter->cur_index];
+    sample->value = Samples_value_at(&iter->chunk->samples, iter->cur_index, 0);
     iter->cur_index++;
     return CR_OK;
 }

@@ -43,27 +43,38 @@ EnrichedChunk *SeriesFilterValIterator_GetNextChunk(struct AbstractIterator *bas
 typedef struct AggregationIterator
 {
     AbstractIterator base;
-    AggregationClass *aggregation;
+    size_t numAggregations;
+    AggregationClass aggregations[TS_AGG_TYPES_MAX];
+    void *aggregationContexts[TS_AGG_TYPES_MAX];
     int64_t aggregationTimeDelta;
     timestamp_t timestampAlignment;
-    void *aggregationContext;
     timestamp_t aggregationLastTimestamp;
     bool hasUnFinalizedContext;
     bool reverse;
-    bool initilized;
+    bool initialized;
     bool empty; // should report empty buckets
     BucketTimestamp bucketTS;
     EnrichedChunk *aux_chunk; // auxiliary chunk for containing the final bucket
     Series *series;
     api_timestamp_t startTimestamp;
     api_timestamp_t endTimestamp;
-    bool handled_twa_empty_prefix;
-    bool handled_twa_empty_suffix;
+    bool hasTwa; // precomputed: any aggregation is TWA
+    bool handled_empty_prefix;
+    bool handled_empty_suffix;
     timestamp_t prev_ts;
+    bool validSamplesInBucket; // are there any valid samples in current bucket (any aggregation)
+    bool validPerAgg[TS_AGG_TYPES_MAX]; // per-aggregation validity tracking for current bucket
+    // Same sample filters as the query, so neighbor lookups (edge-gap drop, LOCF seed, TWA
+    // interpolation) count only kept samples: a sample removed by FILTER_BY_VALUE/FILTER_BY_TS must
+    // not make an edge gap look interior. Borrowed by value from the query's RangeArgs (which
+    // outlives this iterator); byTsArgs holds a pointer we do not own and must not free.
+    FilterByValueArgs byValueArgs;
+    FilterByTSArgs byTsArgs;
 } AggregationIterator;
 
 AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
-                                             AggregationClass *aggregation,
+                                             size_t numAggregations,
+                                             AggregationClass **aggregations,
                                              int64_t aggregationTimeDelta,
                                              timestamp_t timestampAlignment,
                                              bool reverse,
@@ -71,7 +82,9 @@ AggregationIterator *AggregationIterator_New(struct AbstractIterator *input,
                                              BucketTimestamp bucketTS,
                                              Series *series,
                                              api_timestamp_t startTimestamp,
-                                             api_timestamp_t endTimestamp);
+                                             api_timestamp_t endTimestamp,
+                                             FilterByValueArgs byValueArgs,
+                                             FilterByTSArgs byTsArgs);
 EnrichedChunk *AggregationIterator_GetNextChunk(struct AbstractIterator *iter);
 void AggregationIterator_Close(struct AbstractIterator *iterator);
 

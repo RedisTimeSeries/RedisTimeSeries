@@ -1,6 +1,6 @@
 import pytest
 import redis
-from RLTest import Env
+from includes import Env
 from test_helper_classes import TSInfo, ALLOWED_ERROR, _insert_data, _get_ts_info, \
     _insert_agg_data
 from includes import *

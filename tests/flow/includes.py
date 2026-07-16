@@ -1,4 +1,7 @@
 import os
+import re
+import shutil
+import subprocess
 import sys
 from logging import exception
 from RLTest import Env as rltestEnv, Defaults
@@ -25,7 +28,7 @@ OSNICK = paella.Platform().osnick
 RLEC_CLUSTER = os.getenv('RLEC_CLUSTER') == '1'
 
 SANITIZER = os.getenv('SANITIZER', '')
-VALGRIND = os.getenv('VALGRIND', '0') == '1'
+VALGRIND = (os.getenv('VALGRIND', '0') == '1') or (os.getenv('VG', '0') == '1')
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
 BIGREDIS_TESTS = os.getenv('BIGREDIS_TESTS', '0') == '1'
@@ -91,8 +94,19 @@ def _install_bigredis_per_shard_patch():
 if BIGREDIS_TESTS:
     _install_bigredis_per_shard_patch()
 
+# CI matrix runner label (e.g. "macos-15-intel"), exported by the workflow. Empty locally.
+RUNNER_LABEL = os.getenv('RUNNER_LABEL', '')
 
-Defaults.terminate_retries = 3
+# Upper bound on how long a "prompt" wake (e.g. TS.READ woken by a key deletion)
+# may take before we consider it a regression. Scaled up under Valgrind/sanitizer
+# so the slower wake-up callback there can't produce a false failure.
+WAKE_TIMEOUT_SECS = 30 if (VALGRIND or SANITIZER) else 5
+
+# Use generous terminate patience for all configurations. RLTest polls and
+# returns as soon as the process exits, so a high retry count costs nothing
+# when shutdown is fast, but prevents force-kills under Valgrind/sanitizer
+# where shutdown is much slower.
+Defaults.terminate_retries = 20
 Defaults.terminate_retries_secs = 1
 
 
@@ -201,7 +215,12 @@ def Env(*args, **kwargs):
         # Defaults.no_capture_output = True
         del kwargs['noLog']
 
-    env = rltestEnv(*args, terminateRetries=3, terminateRetrySecs=1, **kwargs)
+    skipRefreshCluster = kwargs.pop('skipRefreshCluster', False)
+
+    env = rltestEnv(*args,
+                    terminateRetries=Defaults.terminate_retries,
+                    terminateRetrySecs=Defaults.terminate_retries_secs,
+                    **kwargs)
     Defaults.no_log = temp_no_log
     Defaults.no_capture_output = no_capture_output
 
@@ -258,7 +277,7 @@ def Env(*args, **kwargs):
                 f"bigredis-enabled={val!r} — config injection broken, "
                 "tests would silently run on OSS instead of Flex")
 
-    if not RLEC_CLUSTER:
+    if not RLEC_CLUSTER and not skipRefreshCluster:
         for shard in range(0, env.shardsCount):
             conn = env.getConnection(shard)
             modules = conn.execute_command('MODULE', 'LIST')
@@ -367,6 +386,65 @@ def is_line_in_server_log(env, line):
             if line in file_line:
                 return True
     return False
+
+
+def _get_worker_thread_names_linux(pid, prefix):
+    task_dir = f"/proc/{pid}/task"
+    if not os.path.isdir(task_dir):
+        return None
+
+    names = []
+    for tid in os.listdir(task_dir):
+        comm_path = os.path.join(task_dir, tid, "comm")
+        try:
+            with open(comm_path) as f:
+                name = f.read().strip()
+        except OSError:
+            continue
+        if re.fullmatch(re.escape(prefix) + r"\d+", name):
+            names.append(name)
+    return names
+
+def _get_worker_thread_names_darwin_sample(pid, prefix):
+    """Use /usr/bin/sample (1s) to read pthread names; returns None if sampling fails."""
+    sample_bin = shutil.which("sample")
+    if not sample_bin:
+        return None
+    r = subprocess.run(
+        [sample_bin, str(pid), "1"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        return None
+    text = r.stdout or ""
+    # e.g. "    873 Thread_4791505: timeseries-5"
+    pat = re.compile(r"Thread_\d+:\s*(" + re.escape(prefix) + r"\d+)")
+    found = pat.findall(text)
+    return list(dict.fromkeys(found))
+
+
+def get_worker_thread_names(conn, prefix="timeseries-"):
+    """Return the list of LibMR worker thread names for a Redis server process.
+
+    *conn* is an open Redis connection to the instance to inspect.
+    On Linux, reads /proc/<pid>/task/*/comm. On macOS, runs ``sample`` for one
+    second and parses its stdout (requires ``/usr/bin/sample``).
+    Only includes numbered pool threads (*prefix* + digits), not e.g.
+    *prefix* + ``el``. Returns None if thread names cannot be read.
+    """
+    info = conn.info("server")
+    pid = info["process_id"]
+
+    if sys.platform == "linux":
+        return _get_worker_thread_names_linux(pid, prefix)
+
+    if sys.platform == "darwin":
+        return _get_worker_thread_names_darwin_sample(pid, prefix)
+
+    return None
+
 
 # Creates a temporary file with the content provided.
 # Returns the filepath of the created file.

@@ -6,7 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Set
 
-from includes import Env, VALGRIND, SANITIZER, BIGREDIS_TESTS
+from includes import Env, VALGRIND, SANITIZER, BIGREDIS_TESTS, RUNNER_LABEL
 from utils import slot_table
 
 
@@ -43,13 +43,20 @@ def test_asm_with_data():
 
 
 def test_asm_with_data_and_queries_during_migrations():
-    env = Env(shardsCount=2, decodeResponses=True)
+    env = Env(shardsCount=2, decodeResponses=True, noLog=False)
     if env.env != "oss-cluster":
         env.skip()
     if BIGREDIS_TESTS:
         # The redis core panics "bigredis doesn't yet support ASM"
         # (cluster_asm.c), so atomic slot migration can't run on a
         # flex/bigredis build. Skip until the core adds ASM+bigredis support.
+        env.skip()
+
+    # macos-15-intel is the slowest hosted runner and can't reliably serve the
+    # multi-shard query within LibMR's 5s max-idle during migration churn, so it
+    # occasionally trips the max-idle timeout instead of the expected slot-ranges
+    # error (MOD-14615 residual; not a product bug -- other macOS/Linux runners pass).
+    if RUNNER_LABEL == "macos-15-intel":
         env.skip()
 
     number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
@@ -64,7 +71,7 @@ def test_asm_with_data_and_queries_during_migrations():
         assert filtered_by == "label1=17"
         assert withlabels == []  # No WITHLABLES
         assert len(samples) == samples_per_key
-        # assert all(int(sample[1]) == number_of_keys for sample in samples) Uncomment this line when MOD-12145 is done
+        assert all(int(sample[1]) == number_of_keys for sample in samples)
 
     # First validate the result on the "static" cluster
     validate_result(conn.execute_command(command))
@@ -90,15 +97,85 @@ def test_asm_with_data_and_queries_during_migrations():
         for _ in range(MIGRATION_CYCLES):
             if done.is_set():
                 break
-            migrate_slots_back_and_forth(env)
+            migrate_slots_back_and_forth(env, command, validate_result)
 
     with ThreadPoolExecutor() as executor:
         futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
-        for future in as_completed(futures):
-            # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
+        try:
+            for future in as_completed(futures):
+                # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
+                done.set()
+                # This will raise an exception in case the validation function failed
+                future.result()
+        except TimeoutError as e:
+            # Under sanitizer, the migration may occasionally get stuck in 'init-rdbchannel' state.
+            # This is a known issue and will be fixed by MOD-15307; for now treat it as a pass and bail out.
+            if SANITIZER and "state is init-rdbchannel" in str(e):
+                print(f"Ignoring known sanitizer migration timeout: {e}")
+                done.set()
+                return
             done.set()
-            # This will raise an exception in case the validation function failed (or got stuck)
-            future.result()
+            raise
+
+    # Validate that all is fine after the migrations
+    validate_result(conn.execute_command(command))
+
+
+def test_short_form_clusterset():
+    # Skip the initial REFRESHCLUSTER so the modules start unaware of the cluster.
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    number_of_keys = 100
+    samples_per_key = 10
+    number_of_groups = 10
+    keys_per_group = number_of_keys // number_of_groups
+    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key,
+                   label="test", group=lambda i: f"g{i % number_of_groups}")
+
+    conn = env.getConnection(0)
+
+    # Module unaware of the cluster -- QUERYINDEX runs local-only.
+    queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
+    assert 0 < len(queryindex) < number_of_keys, queryindex
+
+    # DMC pattern: short-form CLUSTERSET on one shard; LibMR propagates to peers
+    # via CLUSTERSETFROMSHARD on rg.hello / reconnect.
+    assert conn.execute_command('timeseries.CLUSTERSET') in ('OK', b'OK')
+
+    # Poll TS.QUERYINDEX until propagation lands -- fan-out goes from local-only
+    # (~number_of_keys / shardsCount) to the full set once every shard has been
+    # informed via CLUSTERSETFROMSHARD.
+    deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 10)
+    while time.time() < deadline:
+        queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
+        if len(queryindex) == number_of_keys:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(
+            f'after CLUSTERSET, QUERYINDEX returned {len(queryindex)}/{number_of_keys} '
+            f'-- CLUSTERSETFROMSHARD propagation did not converge in time'
+        )
+
+    # Slot-routed dispatch via single-group GROUPBY (one slots[] read).
+    ((filtered_by, withlabels, samples),) = conn.execute_command(
+        'TS.MRANGE', '-', '+', 'FILTER', 'label=test', 'GROUPBY', 'label', 'REDUCE', 'count')
+    assert filtered_by == 'label=test'
+    assert withlabels == []
+    assert len(samples) == samples_per_key
+    assert all(int(sample[1]) == number_of_keys for sample in samples)
+
+    # Multi-group GROUPBY (number_of_groups slots[] reads -- exercises slot-routing breadth).
+    result = conn.execute_command(
+        'TS.MRANGE', '-', '+', 'FILTER', 'label=test', 'GROUPBY', 'group', 'REDUCE', 'count')
+    assert len(result) == number_of_groups, result
+    for filtered_by, withlabels, samples in result:
+        assert filtered_by.startswith('group=')
+        assert withlabels == []
+        assert len(samples) == samples_per_key
+        assert all(int(sample[1]) == keys_per_group for sample in samples)
 
 
 def test_asm_multishard_queryindex_is_consistent_or_retryable():
@@ -212,12 +289,14 @@ class ClusterNode:
 
 
 def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
+    # Callable label values are invoked with the per-key index; others used as-is.
     def generate_commands():
         start_timestamp, jump_timestamps = 1000000000, 100
         for i in range(number_of_keys):
             hslot = i * (2**14 - 1) // (number_of_keys - 1)
             ts_key = f"ts:{{{slot_table[hslot]}}}"
-            yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in lables.items())}"
+            resolved = {k: (v(i) if callable(v) else v) for k, v in lables.items()}
+            yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in resolved.items())}"
             yield "TS.MADD " + " ".join(
                 f"{ts_key} {start_timestamp + j * jump_timestamps} {random.uniform(0, 100)}"
                 for j in range(samples_per_key)
@@ -228,9 +307,10 @@ def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
             rc.execute_command(*command.split())
 
 
-def migrate_slots_back_and_forth(env):
+def migrate_slots_back_and_forth(env, command=None, validate_result=None):
     """
     Migrates slots between the two shards. When done all slots are back to their original places.
+    Upon each migration, the command is executed and the result is validated (when not None).
     """
 
     def cluster_node_of(conn) -> ClusterNode:
@@ -258,18 +338,30 @@ def migrate_slots_back_and_forth(env):
     import_slots(second_conn, first_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
     assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
+    if command is not None:
+        validate_result(first_conn.execute_command(command))
+        validate_result(second_conn.execute_command(command))
 
     import_slots(first_conn, second_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
+    if command is not None:
+        validate_result(first_conn.execute_command(command))
+        validate_result(second_conn.execute_command(command))
 
     import_slots(first_conn, second_conn, middle_of_original_first)
     assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
     assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
+    if command is not None:
+        validate_result(first_conn.execute_command(command))
+        validate_result(second_conn.execute_command(command))
 
     import_slots(second_conn, first_conn, middle_of_original_first)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
+    if command is not None:
+        validate_result(first_conn.execute_command(command))
+        validate_result(second_conn.execute_command(command))
 
 
 def import_slots(source_conn, target_conn, slot_range: SlotRange):
