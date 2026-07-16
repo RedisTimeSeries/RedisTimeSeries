@@ -2872,10 +2872,11 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                 ctx, RedisModuleEvent_ClusterSlotMigrationTrim, ClusterAsmTrimCallback);
         }
 
-        RedisModule_Log(ctx, "notice", "%s", "Subscribe to topology changes events");
-        RedisModule_SubscribeToServerEvent(
-            ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
-
+        if (TSGlobalConfig.topologyEvents) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to topology changes events");
+            RedisModule_SubscribeToServerEvent(
+                ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
+        }
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Persistence, persistCallback);
