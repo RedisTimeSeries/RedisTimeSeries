@@ -43,7 +43,7 @@ def test_asm_with_data():
 
 
 def test_asm_with_data_and_queries_during_migrations():
-    env = Env(shardsCount=2, decodeResponses=True, noLog=False)
+    env = Env(shardsCount=2, decodeResponses=True, noLog=False, moduleArgs="ts-topology-events no")
     if env.env != "oss-cluster":
         env.skip()
     if BIGREDIS_TESTS:
@@ -123,7 +123,7 @@ def test_asm_with_data_and_queries_during_migrations():
 
 def test_short_form_clusterset():
     # Skip the initial REFRESHCLUSTER so the modules start unaware of the cluster.
-    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True, moduleArgs="ts-topology-events no")
     if env.env != "oss-cluster":
         env.skip()
     if BIGREDIS_TESTS:
