@@ -2872,9 +2872,17 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                 ctx, RedisModuleEvent_ClusterSlotMigrationTrim, ClusterAsmTrimCallback);
         }
 
-        RedisModule_Log(ctx, "notice", "%s", "Subscribe to topology changes events");
-        RedisModule_SubscribeToServerEvent(
-            ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
+        if (TSGlobalConfig.topologyAutoRefresh) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to topology changes events");
+            RedisModule_SubscribeToServerEvent(
+                ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
+        } else {
+            RedisModule_Log(ctx,
+                            "notice",
+                            "%s",
+                            "Topology auto-refresh disabled (ts-topology-auto-refresh no); "
+                            "relying on manual TIMESERIES.REFRESHCLUSTER");
+        }
 
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);

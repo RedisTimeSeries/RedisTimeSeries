@@ -42,6 +42,9 @@ typedef struct
     bool dontAssertOnFailure;    // Internal debug configuration param
     long long ignoreMaxTimeDiff; // Insert filter max time diff with the last sample
     double ignoreMaxValDiff;     // Insert filter max value diff with the last sample
+    bool topologyAutoRefresh;    // MOD-16382: auto-refresh the LibMR cluster view on the
+                                 // cluster topology-change event (disable to keep the legacy
+                                 // manual TIMESERIES.REFRESHCLUSTER contract)
 } TSConfig;
 
 extern TSConfig TSGlobalConfig;

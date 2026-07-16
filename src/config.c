@@ -48,6 +48,7 @@ void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_DEFAULT;
     TSGlobalConfig.password = NULL;
+    TSGlobalConfig.topologyAutoRefresh = true;
 
     if (getConfigStringCache) {
         RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
@@ -396,6 +397,27 @@ static int setModernIntegerConfigValue(const char *name,
     return REDISMODULE_ERR;
 }
 
+static int getModernBoolConfigValue(const char *name, void *privdata) {
+    if (!strcasecmp("ts-topology-auto-refresh", name)) {
+        return TSGlobalConfig.topologyAutoRefresh;
+    }
+
+    return 0;
+}
+
+static int setModernBoolConfigValue(const char *name,
+                                    int value,
+                                    void *data,
+                                    RedisModuleString **err) {
+    if (!strcasecmp("ts-topology-auto-refresh", name)) {
+        TSGlobalConfig.topologyAutoRefresh = value;
+
+        return REDISMODULE_OK;
+    }
+
+    return REDISMODULE_ERR;
+}
+
 bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     RedisModule_Log(ctx, "notice", "Registering configuration options: [");
     {
@@ -578,6 +600,25 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
         RedisModule_Log(
             ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-ignore-max-val-diff", 12, oldValue);
     }
+
+    if (RedisModule_RegisterBoolConfig(ctx,
+                                       "ts-topology-auto-refresh",
+                                       TSGlobalConfig.topologyAutoRefresh,
+                                       REDISMODULE_CONFIG_UNPREFIXED,
+                                       getModernBoolConfigValue,
+                                       setModernBoolConfigValue,
+                                       NULL,
+                                       NULL)) {
+        return false;
+    }
+
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*s }",
+                    23,
+                    "ts-topology-auto-refresh",
+                    12,
+                    TSGlobalConfig.topologyAutoRefresh ? "yes" : "no");
 
     RedisModule_Log(ctx, "notice", "]");
 
@@ -903,6 +944,34 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         LOG_DEPRECATED_OPTION(
             "IGNORE_MAX_VAL_DIFF", "ts-ignore-max-val-diff", showDeprecationWarning);
         isDeprecated = true;
+    }
+
+    // MOD-16382: modern module argument controlling cluster topology auto-refresh.
+    // Parsed here (like ts-num-threads) because module configs set on the loadmodule
+    // line are not auto-applied by RedisModule_LoadConfigs(); the registered
+    // ts-topology-auto-refresh config still exposes CONFIG GET/SET at runtime.
+    // Default (InitConfig) is enabled; this is not a deprecated option.
+    if (argc > 1 && RMUtil_ArgIndex("ts-topology-auto-refresh", argv, argc) >= 0) {
+        RedisModuleString *value;
+        if (RMUtil_ParseArgsAfter("ts-topology-auto-refresh", argv, argc, "s", &value) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(
+                ctx, "warning", "Unable to parse argument after ts-topology-auto-refresh");
+            return TSDB_ERROR;
+        }
+        size_t value_len;
+        const char *value_cstr = RedisModule_StringPtrLen(value, &value_len);
+        if (!strcasecmp(value_cstr, "yes") || !strcasecmp(value_cstr, "true") ||
+            !strcasecmp(value_cstr, "1") || !strcasecmp(value_cstr, "enable")) {
+            TSGlobalConfig.topologyAutoRefresh = true;
+        } else if (!strcasecmp(value_cstr, "no") || !strcasecmp(value_cstr, "false") ||
+                   !strcasecmp(value_cstr, "0") || !strcasecmp(value_cstr, "disable")) {
+            TSGlobalConfig.topologyAutoRefresh = false;
+        } else {
+            RedisModule_Log(
+                ctx, "warning", "Invalid value for ts-topology-auto-refresh: %s", value_cstr);
+            return TSDB_ERROR;
+        }
     }
 
     if (isDeprecated && showDeprecationWarning) {
