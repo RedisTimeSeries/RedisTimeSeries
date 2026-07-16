@@ -1,4 +1,3 @@
-import os
 import time
 import random
 from dataclasses import dataclass
@@ -13,12 +12,6 @@ from utils import slot_table, Refresh_Cluster
 
 
 MIGRATION_CYCLES = 10
-
-# MOD-16382: a redis config file that turns off topology auto-refresh via the modern
-# ts-topology-auto-refresh config. Delivered through RLTest's Env(redisConfigFile=...)
-# because module configs set on the loadmodule line are not applied by
-# RedisModule_LoadConfigs() -- a config-file directive is.
-AUTO_REFRESH_OFF_CONF = os.path.join(os.path.dirname(__file__), 'topology_auto_refresh_off.conf')
 
 
 def test_asm_without_data():
@@ -45,7 +38,7 @@ def test_asm_with_data_and_queries_during_migrations():
     # only transient a query can hit mid-migration is the slot-ranges error (no auto-refresh
     # abort). The auto-notified counterpart below covers the default (auto-refresh on) behavior.
     env = Env(shardsCount=2, decodeResponses=True, noLog=False,
-              redisConfigFile=AUTO_REFRESH_OFF_CONF)
+              moduleArgs='ts-topology-auto-refresh no')
     if env.env != "oss-cluster":
         env.skip()
 
@@ -237,9 +230,9 @@ def test_manual_refreshcluster_after_persistent_reshard():
     # Backwards-compat (MOD-16382): with topology auto-refresh disabled, a persistent reshard
     # leaves the module's cluster view stale until an explicit TIMESERIES.REFRESHCLUSTER, after
     # which a multi-shard query converges again. Confirms the legacy manual path still works when
-    # the auto-refresh is turned off via the config (the mirror of the auto test above).
+    # the auto-refresh is turned off via the module arg (the mirror of the auto test above).
     env = Env(shardsCount=2, decodeResponses=True, noLog=False,
-              redisConfigFile=AUTO_REFRESH_OFF_CONF)
+              moduleArgs='ts-topology-auto-refresh no')
     if env.env != "oss-cluster":
         env.skip()
     if RUNNER_LABEL == "macos-15-intel":
@@ -281,7 +274,7 @@ def test_short_form_clusterset():
     # would rebuild the cluster view from the native OSS topology and the module would become
     # aware without the explicit short-form CLUSTERSET this test is exercising.
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True,
-              redisConfigFile=AUTO_REFRESH_OFF_CONF)
+              moduleArgs='ts-topology-auto-refresh no')
     if env.env != "oss-cluster":
         env.skip()
 
