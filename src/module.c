@@ -2531,6 +2531,31 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
     }
 }
 
+static void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
+                                          RedisModuleEvent eid,
+                                          uint64_t subevent,
+                                          void *data) {
+    REDISMODULE_NOT_USED(subevent);
+    if (eid.id != REDISMODULE_EVENT_CLUSTER_TOPOLOGY_CHANGE) {
+        RedisModule_Log(
+            ctx, "warning", "Bad topology event given (id=%" PRIu64 "), ignored.", eid.id);
+        return;
+    }
+
+    RedisModuleClusterTopologyChangeInfo *info = data;
+    uint64_t flags = info->change_flags;
+    RedisModule_Log(ctx,
+                    "notice",
+                    "Cluster topology change: flags=0x%" PRIx64 "%s%s%s%s",
+                    flags,
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_SLOT) ? " SLOT" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_ROLE) ? " ROLE" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_STATE) ? " STATE" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_NODE) ? " NODE" : "");
+
+    MR_UpdateClusterTopology();
+}
+
 void ReplicaBackupCallback(RedisModuleCtx *ctx,
                            RedisModuleEvent eid,
                            uint64_t subevent,
@@ -2845,6 +2870,12 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                 ctx, RedisModuleEvent_ClusterSlotMigration, ClusterAsmCallback);
             RedisModule_SubscribeToServerEvent(
                 ctx, RedisModuleEvent_ClusterSlotMigrationTrim, ClusterAsmTrimCallback);
+        }
+
+        if (TSGlobalConfig.topologyEvents) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to topology changes events");
+            RedisModule_SubscribeToServerEvent(
+                ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
         }
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);
