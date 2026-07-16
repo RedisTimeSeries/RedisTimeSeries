@@ -14,6 +14,33 @@ from utils import slot_table
 MIGRATION_CYCLES = 10
 
 
+# Errors a keyless multi-shard command can transiently return while the cluster
+# topology is in flux: slots mid-migration ("unavailable slots"), or the module
+# auto-refreshing its topology mid-fan-out, which aborts in-flight executions
+# (see libmr_commands.c). A client is expected to retry; these tests do the same.
+TOPOLOGY_FLUX_ERRORS = (
+    "Query requires unavailable slots",
+    "A multi-shard command failed because the cluster topology has changed",
+)
+
+
+def is_topology_flux_error(err):
+    return any(msg in str(err) for msg in TOPOLOGY_FLUX_ERRORS)
+
+
+def execute_through_topology_flux(conn, *args, timeout=10):
+    """Run a multi-shard command, retrying past transient topology-flux errors."""
+    deadline = time.time() + (timeout * 6 if (VALGRIND or SANITIZER) else timeout)
+    while True:
+        try:
+            return conn.execute_command(*args)
+        except redis.exceptions.ResponseError as err:
+            if is_topology_flux_error(err) and time.time() < deadline:
+                time.sleep(0.05)
+                continue
+            raise
+
+
 def test_asm_without_data():
     env = Env(shardsCount=2, decodeResponses=True)
     if env.env != "oss-cluster":  # TODO: convert to a proper fixture (here and below)
@@ -60,21 +87,20 @@ def test_asm_with_data_and_queries_during_migrations():
         assert all(int(sample[1]) == number_of_keys for sample in samples)
 
     # First validate the result on the "static" cluster
-    validate_result(conn.execute_command(command))
+    validate_result(execute_through_topology_flux(conn, command))
 
     # Now validate the command's result in a loop during the back and forth migrations
     done = threading.Event()
 
     def validate_command_in_a_loop():
-        # Note: should be the same as in libmr_commands.c
-        SLOT_RANGES_ERROR = "Query requires unavailable slots"
         while not done.is_set():
             try:
                 result = conn.execute_command(command)
             except redis.exceptions.ResponseError as x:
-                error_message = str(x)
-                # An occasional SLOT_RANGES_ERROR is expected
-                assert error_message == SLOT_RANGES_ERROR, error_message
+                # Occasional transient errors while the topology is in flux are
+                # expected (slots mid-migration, or an auto-refresh aborting the
+                # in-flight fan-out); skip and retry on the next iteration.
+                assert is_topology_flux_error(x), str(x)
                 continue
             validate_result(result)
 
@@ -103,7 +129,7 @@ def test_asm_with_data_and_queries_during_migrations():
             raise
 
     # Validate that all is fine after the migrations
-    validate_result(conn.execute_command(command))
+    validate_result(execute_through_topology_flux(conn, command))
 
 
 def test_short_form_clusterset():
@@ -121,12 +147,28 @@ def test_short_form_clusterset():
 
     conn = env.getConnection(0)
 
-    # Module unaware of the cluster -- QUERYINDEX runs local-only.
-    queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
-    assert 0 < len(queryindex) < number_of_keys, queryindex
+    def queryindex_count():
+        return len(conn.execute_command('TS.QUERYINDEX', 'label=test'))
+
+    # With the initial REFRESHCLUSTER skipped the module is cluster-unaware --
+    # unless the server fires RedisModuleEvent_ClusterTopologyChange
+    # (redis/redis#15350), in which case it auto-refreshes on startup. Detect
+    # which world we are in (give auto-refresh a moment to connect to peers).
+    auto_aware = False
+    detect_deadline = time.time() + (10 if (VALGRIND or SANITIZER) else 2)
+    while time.time() < detect_deadline:
+        if queryindex_count() == number_of_keys:
+            auto_aware = True
+            break
+        time.sleep(0.1)
+
+    if not auto_aware:
+        # No auto-refresh: QUERYINDEX runs local-only until told about the cluster.
+        assert 0 < queryindex_count() < number_of_keys
 
     # DMC pattern: short-form CLUSTERSET on one shard; LibMR propagates to peers
-    # via CLUSTERSETFROMSHARD on rg.hello / reconnect.
+    # via CLUSTERSETFROMSHARD on rg.hello / reconnect. Idempotent (and a no-op for
+    # routing) when the module is already cluster-aware via auto-refresh.
     assert conn.execute_command('timeseries.CLUSTERSET') in ('OK', b'OK')
 
     # Poll TS.QUERYINDEX until propagation lands -- fan-out goes from local-only
@@ -161,6 +203,60 @@ def test_short_form_clusterset():
         assert withlabels == []
         assert len(samples) == samples_per_key
         assert all(int(sample[1]) == keys_per_group for sample in samples)
+
+
+def test_auto_refresh_on_topology_change():
+    # Counterpart to test_short_form_clusterset: the module starts unaware of the
+    # cluster (no initial REFRESHCLUSTER), but instead of being told via a manual
+    # timeseries.CLUSTERSET it should discover the topology automatically through
+    # the RedisModuleEvent_ClusterTopologyChange server event (redis/redis#15350),
+    # and keep cross-shard queries complete across an ASM migration -- with no
+    # manual REFRESHCLUSTER / CLUSTERSET anywhere.
+    env = Env(shardsCount=2, decodeResponses=True, skipRefreshCluster=True)
+    if env.env != "oss-cluster":
+        env.skip()
+
+    number_of_keys = 100
+    samples_per_key = 10
+    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key, label="auto")
+
+    conn = env.getConnection(0)
+
+    # Capability gate: on a server that fires the topology-change event the module
+    # auto-refreshes once the cluster is ready, so QUERYINDEX converges to the full
+    # set with no manual REFRESHCLUSTER/CLUSTERSET. On servers that predate the
+    # event it stays local-only forever -- skip there (the feature lands with
+    # redis/redis#15350). NOTE: this gate also skips if auto-refresh is silently
+    # broken; the event firing itself is hard-tested on the core side, and the
+    # end-to-end refresh path is exercised by the assertions below once we proceed.
+    deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 5)
+    while time.time() < deadline:
+        if len(execute_through_topology_flux(conn, 'TS.QUERYINDEX', 'label=auto')) == number_of_keys:
+            break
+        time.sleep(0.1)
+    else:
+        env.skip()  # redis build does not fire RedisModuleEvent_ClusterTopologyChange
+
+    # Change the topology via an ASM migration and confirm the module auto-refreshes
+    # (still no manual REFRESHCLUSTER) and the cross-shard query is complete once the
+    # refresh settles -- polling past the transient flux the refresh causes in-flight.
+    migrate_slots_back_and_forth(env)
+
+    deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 10)
+    while time.time() < deadline:
+        if len(execute_through_topology_flux(conn, 'TS.QUERYINDEX', 'label=auto')) == number_of_keys:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError('QUERYINDEX did not return the full set after the reshard')
+
+    # Slot-routed GROUPBY: exercises the (auto-refreshed) slot map.
+    ((filtered_by, withlabels, samples),) = execute_through_topology_flux(
+        conn, 'TS.MRANGE', '-', '+', 'FILTER', 'label=auto', 'GROUPBY', 'label', 'REDUCE', 'count')
+    assert filtered_by == 'label=auto'
+    assert withlabels == []
+    assert len(samples) == samples_per_key
+    assert all(int(sample[1]) == number_of_keys for sample in samples)
 
 
 # Helper structs and functions
@@ -272,29 +368,29 @@ def migrate_slots_back_and_forth(env, command=None, validate_result=None):
     assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
     assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
     if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
+        validate_result(execute_through_topology_flux(first_conn, command))
+        validate_result(execute_through_topology_flux(second_conn, command))
 
     import_slots(first_conn, second_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
     if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
+        validate_result(execute_through_topology_flux(first_conn, command))
+        validate_result(execute_through_topology_flux(second_conn, command))
 
     import_slots(first_conn, second_conn, middle_of_original_first)
     assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
     assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
     if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
+        validate_result(execute_through_topology_flux(first_conn, command))
+        validate_result(execute_through_topology_flux(second_conn, command))
 
     import_slots(second_conn, first_conn, middle_of_original_first)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
     if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
+        validate_result(execute_through_topology_flux(first_conn, command))
+        validate_result(execute_through_topology_flux(second_conn, command))
 
 
 def import_slots(source_conn, target_conn, slot_range: SlotRange):
