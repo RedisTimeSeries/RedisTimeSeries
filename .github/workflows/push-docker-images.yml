@@ -19,6 +19,7 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+'
       - '[0-9]+.[0-9]+'
       - 'release/**'
+      - tal.ba/test/baseline
   push:
     branches:
       - main
@@ -26,6 +27,7 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+'
       - '[0-9]+.[0-9]+'
       - 'release/**'
+      - tal.ba/test/baseline
     paths:
       - 'pack/ramp.yml'
   workflow_dispatch:
