@@ -182,10 +182,7 @@ def test_asm_with_data_and_queries_during_migrations_auto_notified():
 
 
 def test_short_form_clusterset():
-    # Skip the initial REFRESHCLUSTER. With MOD-16382 the module still auto-configures
-    # from the cluster topology-change event, so it may already be cluster-aware before
-    # any CLUSTERSET -- this test asserts the end state (full fan-out) and that a
-    # short-form CLUSTERSET is accepted, not a pre-CLUSTERSET "unaware" window.
+    # Skip the initial REFRESHCLUSTER so the modules start unaware of the cluster.
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     if env.env != "oss-cluster":
         env.skip()
@@ -199,18 +196,17 @@ def test_short_form_clusterset():
 
     conn = env.getConnection(0)
 
-    # QUERYINDEX may be local-only (topology event not delivered yet) or already the
-    # full set (auto-refresh landed) -- both are valid; just sanity-check it returns keys.
+    # Module unaware of the cluster -- QUERYINDEX runs local-only.
     queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
-    assert 0 < len(queryindex) <= number_of_keys, queryindex
+    assert 0 < len(queryindex) < number_of_keys, queryindex
 
-    # DMC pattern: a short-form CLUSTERSET on one shard must be accepted (LibMR
-    # propagates to peers via CLUSTERSETFROMSHARD on rg.hello / reconnect); alongside
-    # auto-refresh it is an idempotent re-affirmation of the topology.
+    # DMC pattern: short-form CLUSTERSET on one shard; LibMR propagates to peers
+    # via CLUSTERSETFROMSHARD on rg.hello / reconnect.
     assert conn.execute_command('timeseries.CLUSTERSET') in ('OK', b'OK')
 
-    # Poll TS.QUERYINDEX until the fan-out is the full set -- converges via auto-refresh
-    # and/or CLUSTERSETFROMSHARD propagation once every shard knows the topology.
+    # Poll TS.QUERYINDEX until propagation lands -- fan-out goes from local-only
+    # (~number_of_keys / shardsCount) to the full set once every shard has been
+    # informed via CLUSTERSETFROMSHARD.
     deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 10)
     while time.time() < deadline:
         queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
