@@ -1,5 +1,18 @@
-from utils import Env
+import time
+import threading
+import redis
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from utils import Env, Refresh_Cluster
 from includes import *
+from test_asm import (
+    MIGRATION_CYCLES,
+    SlotRange,
+    ClusterNode,
+    fill_some_data,
+    migrate_slots_back_and_forth,
+    import_slots,
+)
 
 
 # MOD-16382: a subsequent long-form timeseries.CLUSTERSET that moves a peer to a
@@ -195,3 +208,174 @@ def test_clusterset_repeated_identical_is_stable():
     env.assertEqual(sorted(int(n['minHslot']) for n in nodes), [0, 8192])
     env.assertEqual(int(_node_by_min(nodes, 0)['maxHslot']), 8191)
     env.assertEqual(int(_node_by_min(nodes, 8192)['maxHslot']), 16383)
+
+
+# ---------------------------------------------------------------------------
+# MOD-16382 / MOD-16951: cluster topology-change auto-refresh behavior.
+#
+# These oss-cluster tests all drive the same multi-shard probe query while the
+# topology changes underneath it, so they share the setup/validation/convergence
+# helpers below rather than each re-deriving them.
+# ---------------------------------------------------------------------------
+
+# The multi-shard probe query and its expected result shape.
+_MRANGE_COUNT_CMD = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
+
+# Transient errors that are expected (and retried) while an auto-refreshed
+# topology converges: a slot caught mid-migration, or a fan-out aborted because
+# the topology changed under it. Same strings as in libmr_commands.c.
+SLOT_RANGES_ERROR = "Query requires unavailable slots"
+TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
+
+
+def _data_sizes():
+    # Smaller dataset under valgrind/sanitizer so the suite stays within time budget.
+    return (1000 if not (VALGRIND or SANITIZER) else 100), 150
+
+
+def _mrange_count_validator(number_of_keys, samples_per_key):
+    """Return a validator for `_MRANGE_COUNT_CMD` asserting a complete, correct result."""
+    def validate(result):
+        ((filtered_by, withlabels, samples),) = result
+        assert filtered_by == "label1=17"
+        assert withlabels == []  # no WITHLABELS
+        assert len(samples) == samples_per_key
+        assert all(int(sample[1]) == number_of_keys for sample in samples)
+    return validate
+
+
+def _oss_cluster_topology_env(**env_kwargs):
+    """A 2-shard oss-cluster env for the topology tests, or skip when not applicable."""
+    env = Env(shardsCount=2, decodeResponses=True, noLog=False, **env_kwargs)
+    if env.env != "oss-cluster":
+        env.skip()
+    if RUNNER_LABEL == "macos-15-intel":
+        # slowest hosted runner; it can't reliably serve the fan-out within libmr's
+        # 5s max-idle during migration churn (MOD-14615 residual, not a product bug).
+        env.skip()
+    return env
+
+
+def _fill_and_validate_static(env):
+    """Fill the standard dataset and confirm the query is correct on the static cluster.
+    Returns (conn, validate)."""
+    number_of_keys, samples_per_key = _data_sizes()
+    fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
+    conn = env.getConnection(0)
+    validate = _mrange_count_validator(number_of_keys, samples_per_key)
+    validate(conn.execute_command(_MRANGE_COUNT_CMD))
+    return conn, validate
+
+
+def _my_slot_range(conn) -> SlotRange:
+    for line in conn.execute_command("cluster", "nodes").splitlines():
+        node = ClusterNode.from_str(line)
+        if "myself" in node.flags:
+            (slot_range,) = node.slots
+            return slot_range
+    raise ValueError("No node with 'myself' flag found")
+
+
+def _middle_third(slot_range: SlotRange) -> SlotRange:
+    third = (slot_range.end - slot_range.start) // 3
+    return SlotRange(slot_range.start + third, slot_range.end - third)
+
+
+def converge_query(conn, command, validate_result, deadline_secs):
+    """Poll `command`, tolerating the transient topology errors, until it validates
+    or times out."""
+    deadline = time.time() + deadline_secs
+    last_error = None
+    while time.time() < deadline:
+        try:
+            result = conn.execute_command(command)
+        except redis.exceptions.ResponseError as x:
+            last_error = str(x)
+            assert last_error in (SLOT_RANGES_ERROR, TOPOLOGY_CHANGED_ERROR), last_error
+            time.sleep(0.1)
+            continue
+        validate_result(result)
+        return
+    raise AssertionError(
+        f"query did not converge to a complete result within {deadline_secs}s "
+        f"(auto-refresh did not repair the cluster view); last transient: {last_error}"
+    )
+
+
+def _reshard_and_converge(env, conn, validate, refresh):
+    """Persistently move shard-0's middle third to shard-1 and then back, converging
+    the query after each move. `refresh` (or None for auto-refresh) is invoked after
+    each import to repair the view when the topology-change event is disabled."""
+    first_conn, second_conn = env.getConnection(0), env.getConnection(1)
+    deadline_secs = 60 if (VALGRIND or SANITIZER) else 15
+    moved = _middle_third(_my_slot_range(first_conn))
+    for src_conn, dst_conn in ((first_conn, second_conn), (second_conn, first_conn)):
+        import_slots(src_conn, dst_conn, moved)
+        if refresh is not None:
+            refresh(env)
+        converge_query(conn, _MRANGE_COUNT_CMD, validate, deadline_secs)
+
+
+def test_asm_with_data_and_queries_during_migrations_auto_notified():
+    # Auto-notified (MOD-16382) counterpart of the manual migration test in test_asm.py.
+    # With the topology-change event, the module auto-refreshes its cluster view
+    # mid-migration, so a multi-shard query keeps converging to complete results --
+    # tolerating, in addition to the transient "unavailable slots" error, a transient
+    # "topology has changed" abort (the auto-refresh reacting to the reshard), which the
+    # client simply retries past. The manual test expects ONLY the slot-ranges error.
+    env = _oss_cluster_topology_env()
+    conn, validate = _fill_and_validate_static(env)
+
+    done = threading.Event()
+
+    def validate_command_in_a_loop():
+        while not done.is_set():
+            try:
+                result = conn.execute_command(_MRANGE_COUNT_CMD)
+            except redis.exceptions.ResponseError as x:
+                # Both are expected transients while the auto-refreshed topology converges.
+                assert str(x) in (SLOT_RANGES_ERROR, TOPOLOGY_CHANGED_ERROR), str(x)
+                continue
+            validate(result)
+
+    def migrate_slots():
+        for _ in range(MIGRATION_CYCLES):
+            if done.is_set():
+                break
+            migrate_slots_back_and_forth(env)
+
+    with ThreadPoolExecutor() as executor:
+        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
+        try:
+            for future in as_completed(futures):
+                done.set()
+                future.result()
+        except TimeoutError as e:
+            # Under sanitizer the migration may get stuck in 'init-rdbchannel'
+            # (known, MOD-15307); treat as a pass and bail out.
+            if SANITIZER and "state is init-rdbchannel" in str(e):
+                print(f"Ignoring known sanitizer migration timeout: {e}")
+                done.set()
+                return
+            done.set()
+            raise
+
+    validate(conn.execute_command(_MRANGE_COUNT_CMD))
+
+
+def test_asm_auto_refresh_converges_after_persistent_reshard():
+    # MOD-16382: after a *lasting* slot move, the module's cluster view is repaired by the
+    # topology-change event alone -- with NO manual TIMESERIES.REFRESHCLUSTER -- so a
+    # multi-shard query converges to complete, correct results.
+    env = _oss_cluster_topology_env()
+    conn, validate = _fill_and_validate_static(env)
+    _reshard_and_converge(env, conn, validate, refresh=None)
+
+
+def test_manual_refreshcluster_after_persistent_reshard():
+    # Backwards-compat (MOD-16382): with auto-refresh disabled, a persistent reshard leaves
+    # the view stale until an explicit TIMESERIES.REFRESHCLUSTER repairs it (the mirror of
+    # the auto test above).
+    env = _oss_cluster_topology_env(moduleArgs="ts-topology-events no")
+    conn, validate = _fill_and_validate_static(env)
+    _reshard_and_converge(env, conn, validate, refresh=Refresh_Cluster)
