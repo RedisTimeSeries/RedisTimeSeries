@@ -1,93 +1,28 @@
-import time
-
 import redis
 
 from includes import Env, VALGRIND, SANITIZER
 
 
-# MOD-16951 regression test.
+# Cold-coordinator multi-shard fan-out guard (MOD-16951 area).
 #
 # Since MOD-16382 RedisTimeSeries configures LibMR's cluster view automatically
 # from Redis' ClusterTopologyChange notifications, instead of relying on an
-# explicit REFRESHCLUSTER/CLUSTERSET followed by FORCESHARDSCONNECTION.
+# explicit REFRESHCLUSTER/CLUSTERSET followed by FORCESHARDSCONNECTION. This test
+# skips the manual REFRESHCLUSTER (skipRefreshCluster) so the cluster is
+# configured *only* via those notifications, then asserts that a first
+# multi-shard command on a "cold" coordinator returns promptly with the correct
+# result instead of hanging until the client read timeout.
 #
-# The regression: the topology-notification path (MR_UpdateClusterTopologyIfNeeded)
-# installed the cluster topology but never established the inter-shard (libmr)
-# connections. Those connections were only created lazily on the first
-# multi-shard command. On a "cold" coordinator that first fan-out then depends on
-# the whole connect -> AUTH -> HELLO -> resend handshake (for every peer *and* the
-# self loopback) completing within libmr's ~5s max-idle window; the map requests
-# were logged as dropped ("message was not sent because status is not connected"),
-# and if the handshake did not finish in time the reduce step never received the
-# shard responses and the execution aborted with "execution max idle reached" --
-# so TS.MRANGE / TS.QUERYINDEX / TS.MGET / TS.MREVRANGE hung and returned nothing
-# to the client.
-#
-# The fix makes the topology-notification path eagerly connect to the shards
-# right after installing a topology (MR_UpdateClusterTopologyIfNeeded ->
-# MR_ClusterConnectToShards), so the connections are warm before any command
-# arrives instead of racing the first command's deadline.
-#
-# NOTE: the behavioral fix lives in the LibMR submodule (deps/LibMR
-# src/cluster.c). This test guards the RedisTimeSeries side and turns red until
-# the accompanying deps/LibMR bump lands.
-
-
-_CONNECT_TIMEOUT = 60 if (VALGRIND or SANITIZER) else 10
-
-
-def _node_connection_statuses(conn):
-    """Return the per-node libmr connection statuses reported by INFOCLUSTER."""
-    # On Redis 8.0+ INFOCLUSTER is an internal command; promote the client.
-    try:
-        conn.execute_command('debug', 'MARK-INTERNAL-CLIENT')
-    except Exception:
-        pass  # older Redis without the subcommand
-    res = conn.execute_command('timeseries.INFOCLUSTER')
-    nodes = res[4]
-    return [n[17] for n in nodes]
-
-
-def _wait_for_all_connected(conn, timeout_sec):
-    """Poll INFOCLUSTER until every node reports 'connected', or time out.
-
-    Returns the last observed statuses list."""
-    deadline = time.time() + timeout_sec
-    statuses = []
-    while time.time() < deadline:
-        statuses = _node_connection_statuses(conn)
-        # The local node reports 'connected'; a peer must have an established
-        # connection. 'uninitialized'/'disconnected' mean the inter-shard
-        # connection was never (re)established off the notification path.
-        if statuses and all(s == b'connected' for s in statuses):
-            return statuses
-        time.sleep(0.1)
-    return statuses
-
-
-def test_topology_notifications_establish_connections():
-    """The inter-shard connections must be established off the topology-change
-    notification path, without any prior multi-shard command (MOD-16951).
-
-    We skip the manual REFRESHCLUSTER so the cluster is configured *only* via
-    the ClusterTopologyChange notifications -- exactly the code path that
-    regressed. This is the deterministic check: before the fix the peer nodes
-    stay 'uninitialized'; after the fix they converge to 'connected' on their
-    own.
-    """
-    env = Env(shardsCount=3, decodeResponses=False, skipRefreshCluster=True)
-    if env.env != 'oss-cluster':
-        env.skip()
-
-    conn = env.getConnection(1)
-
-    statuses = _wait_for_all_connected(conn, _CONNECT_TIMEOUT)
-    env.assertTrue(len(statuses) >= 3, message="INFOCLUSTER did not report the cluster nodes")
-    for s in statuses:
-        env.assertEqual(
-            s, b'connected',
-            message="inter-shard connection not established off the topology-change "
-                    "notification (got statuses %r)" % (statuses,))
+# NOTE: the actual MOD-16951 production bug was an inter-shard TLS handshake sent
+# to a peer's *plaintext* port (checkTLS said TLS because tls-port was set while
+# tls-cluster was off, but the native cluster view hands back the plaintext
+# port), which deadlocks the peer's RESP parser so timeseries.HELLO never
+# completes and the fan-out reduce hits the ~5s max-idle. That is fixed in the
+# LibMR submodule (checkTLS now gates inter-shard TLS on tls-cluster=yes / an
+# explicit long-form CLUSTERSET). It only reproduces on a dual-TLS cluster
+# (tls-cluster no + tls-port + plaintext bus), which RLTest cannot model, so this
+# RLTest guard exercises the non-TLS cold-fan-out path rather than that bug
+# directly.
 
 
 def test_first_multishard_query_after_topology_setup():
