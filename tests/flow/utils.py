@@ -159,10 +159,10 @@ def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
             rc.execute_command(*command.split())
 
 
-def migrate_slots_back_and_forth(env, command=None, validate_result=None):
+def migrate_slots_back_and_forth(env, validate_result=None):
     """
     Migrates slots between the two shards. When done all slots are back to their original places.
-    Upon each migration, the command is executed and the result is validated (when not None).
+    After each migration validate_result(conn) is called per shard (when not None).
     """
 
     def cluster_node_of(conn) -> ClusterNode:
@@ -190,30 +190,30 @@ def migrate_slots_back_and_forth(env, command=None, validate_result=None):
     import_slots(second_conn, first_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
     assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
+    if validate_result is not None:
+        validate_result(first_conn)
+        validate_result(second_conn)
 
     import_slots(first_conn, second_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
+    if validate_result is not None:
+        validate_result(first_conn)
+        validate_result(second_conn)
 
     import_slots(first_conn, second_conn, middle_of_original_first)
     assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
     assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
+    if validate_result is not None:
+        validate_result(first_conn)
+        validate_result(second_conn)
 
     import_slots(second_conn, first_conn, middle_of_original_first)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
+    if validate_result is not None:
+        validate_result(first_conn)
+        validate_result(second_conn)
 
 
 def import_slots(source_conn, target_conn, slot_range: SlotRange):

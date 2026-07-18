@@ -82,7 +82,7 @@ def test_asm_with_data_and_queries_during_migrations():
         for _ in range(MIGRATION_CYCLES):
             if done.is_set():
                 break
-            migrate_slots_back_and_forth(env, command, validate_result)
+            migrate_slots_back_and_forth(env, lambda conn: validate_result(conn.execute_command(command)))
 
     with ThreadPoolExecutor() as executor:
         futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
