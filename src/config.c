@@ -614,11 +614,11 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
 
     RedisModule_Log(ctx,
                     "notice",
-                    "\t{ %-*s: %*d }",
+                    "\t{ %-*s: %*s }",
                     23,
                     "ts-topology-events",
                     12,
-                    TSGlobalConfig.topologyEvents);
+                    TSGlobalConfig.topologyEvents ? "true" : "false");
 
     RedisModule_Log(ctx, "notice", "]");
 
