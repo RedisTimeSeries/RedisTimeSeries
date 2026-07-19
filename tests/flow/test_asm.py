@@ -67,7 +67,6 @@ def test_asm_with_data_and_queries_during_migrations():
     samples_per_key = 150
     fill_ts_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
-    conn = env.getConnection(0)
     command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
     def validate_result(result):
@@ -76,6 +75,19 @@ def test_asm_with_data_and_queries_during_migrations():
         assert withlabels == []  # No WITHLABLES
         assert len(samples) == samples_per_key
         assert all(int(sample[1]) == number_of_keys for sample in samples)
+
+    validate_queries_during_migrations(env, command, validate_result)
+
+
+def validate_queries_during_migrations(env, command, validate_result):
+    """
+    Runs command from random shards in a loop while slots migrate back and forth, validating every result.
+
+    env: the cluster test environment.
+    command: the query to run repeatedly (as a single string).
+    validate_result: callback invoked with the command's reply to assert it is correct.
+    """
+    conn = env.getConnection(0)
 
     # First validate the result on the "static" cluster
     validate_result(conn.execute_command(command))
