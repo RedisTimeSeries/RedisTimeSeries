@@ -780,10 +780,27 @@ static void ReleaseCtxUser(RedisModuleCtx *ctx) {
 
 // Set the context user for ACL checks. Skips allocation if the context
 // already has the same user set, to avoid redundant alloc+free cycles.
+//
+// Setting the user only needs SetContextUser + GetModuleUserFromUserName. Gating the
+// whole function on the full API_USER_CONTEXT_SUPPORTED bundle — which also requires
+// GetContextUser + GetUserUsername, used only by the "already set to this user" skip
+// below — meant cores missing those two LibMR-only APIs (e.g. big-redis) never
+// attached the propagated originator identity here at all. Downstream ACL checks in
+// TS_INTERNAL_MGET/MRANGE/QUERYINDEX then ran against whatever user the ctx already
+// had (the internal LibMR connection's own identity, not the originator's), which can
+// spuriously deny keys the originator was actually allowed to touch. See the mirrored
+// split in GetUserFromContext (module.c) for the same class of fix.
+//
+// Trade-off on cores without GetContextUser: we can't fetch a previously-attached user
+// to free it (RM_SetContextUser is a bare pointer assignment — see redis/src/module.c),
+// so ReleaseCtxUser below is a no-op there and each call that attaches a *different*
+// user leaks the previous RedisModuleUser. That's strictly better than the alternative
+// (ACL enforcement silently running under the wrong identity), and matches what
+// e94083fb already accepted for the read side of this same gate.
 static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     RedisModuleString *currentName = NULL;
     User_Ctx_t currentUserCtx = { .user = NULL, .is_owned = false };
-    if (!API_USER_CONTEXT_SUPPORTED)
+    if (!RedisModule_SetContextUser || !RedisModule_GetModuleUserFromUserName)
         return;
 
     size_t len = 0;
@@ -792,14 +809,17 @@ static void ApplyCtxUser(RedisModuleCtx *ctx, RedisModuleString *userName) {
     RedisModule_StringPtrLen(userName, &len);
     RedisModule_Assert(len > 0);
 
-    // Check if the requested user is already set on the context.
-    currentUserCtx = GetUserFromContext(ctx);
-    if (currentUserCtx.user) {
-        currentName = RedisModule_GetUserUsername(ctx, currentUserCtx.user);
-        if (currentName && RedisModule_StringCompare(currentName, userName) == 0) {
-            goto _cleanup;
+    // Check if the requested user is already set on the context. Only possible when
+    // the core also exports GetContextUser + GetUserUsername.
+    if (RedisModule_GetContextUser && RedisModule_GetUserUsername) {
+        currentUserCtx = GetUserFromContext(ctx);
+        if (currentUserCtx.user) {
+            currentName = RedisModule_GetUserUsername(ctx, currentUserCtx.user);
+            if (currentName && RedisModule_StringCompare(currentName, userName) == 0) {
+                goto _cleanup;
+            }
+            ReleaseCtxUser(ctx);
         }
-        ReleaseCtxUser(ctx);
     }
 
     // Allocate and set the new user on the context
