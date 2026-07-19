@@ -99,6 +99,10 @@ def testRDBCompatibilityWithNaN():
     result = None
     ts = int(time.time())
     with env.getConnection() as r:
+        # Disable auto-save so Redis 8.x's default save policy can't fire a BGSAVE that races
+        # dumpAndReload()'s synchronous SAVE -> "Background save already in progress" (MOD-16265).
+        # Scoped to this test's own Env; no test relies on auto-save.
+        r.execute_command("CONFIG", "SET", "save", "")
         key = "rdb_nan_test"
         r.execute_command("ts.create", key)
         for _ in range(1, 1000):
