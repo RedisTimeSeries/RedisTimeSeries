@@ -245,6 +245,54 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
     wait_for_completion(source_conn)
 
 
+def _conn_reporter(conn):
+    kwargs = conn.connection_pool.connection_kwargs
+    return f"{kwargs.get('host')}:{kwargs.get('port')}"
+
+
+def dump_node_infocluster(conn):
+    conn.execute_command("debug", "MARK-INTERNAL-CLIENT")
+    reply = conn.execute_command("timeseries.INFOCLUSTER")
+    top = dict(zip(reply[::2], reply[1::2]))
+    print(f"{_conn_reporter(conn)}: MyId={top['MyId']} MyRunId={top['MyRunId']}")
+    for node in reply[4]:
+        n = {}
+        slot_ranges = []
+        for key, val in zip(node[::2], node[1::2]):
+            if key == "minHslot":
+                slot_ranges.append([val])
+            elif key == "maxHslot":
+                slot_ranges[-1].append(val)
+            else:
+                n[key] = val
+        runid = n["runid"] if n["runid"] else "-"
+        slots = ",".join(f"{lo}-{hi}" for lo, hi in slot_ranges)
+        print(
+            f"    node {n['id']} {n['ip']}:{n['port']} "
+            f"slots={slots} runid={runid} "
+            f"pending={n['pendingMessages']} status={n['status']}"
+        )
+
+
+def dump_infocluster(env):
+    print("\n===== INFOCLUSTER =====")
+    for shard in range(0, env.shardsCount):
+        dump_node_infocluster(env.getConnection(shard))
+
+
+def dump_node_cluster_info(conn):
+    info = conn.execute_command("CLUSTER", "INFO")
+    print(f"{_conn_reporter(conn)}:")
+    for line in str(info).splitlines():
+        print(f"    {line}")
+
+
+def dump_cluster_info(env):
+    print("\n===== CLUSTER INFO =====")
+    for shard in range(0, env.shardsCount):
+        dump_node_cluster_info(env.getConnection(shard))
+
+
 # A table of the shortest possible alphanumeric string that is mapped by redis' hslot (index in the table)
 # Shamelessly stolen from redis' crc16_slottable.h
 slot_table = [
