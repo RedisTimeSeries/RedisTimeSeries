@@ -8,6 +8,8 @@ import re
 import random
 
 
+NUMBER_OF_SLOTS = 2**14
+
 def Refresh_Cluster(env):
     for shard in range(0, env.shardsCount):
         con = env.getConnection(shard)
@@ -93,7 +95,7 @@ class SlotRange:
     @staticmethod
     def from_str(s: str):
         start, end = map(int, s.split("-"))
-        assert 0 <= start <= end < 2**14
+        assert 0 <= start <= end < NUMBER_OF_SLOTS
         return SlotRange(start, end)
 
 
@@ -140,12 +142,15 @@ class ClusterNode:
         )
 
 
-def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
-    # Callable label values are invoked with the per-key index; others used as-is.
+def fill_ts_data(env, number_of_keys: int, samples_per_key: int, **lables):
+    """
+    Create number_of_keys time series (one per hash slot, evenly spread) with samples_per_key
+    samples each. A label value that is callable is called with the key's index; others are used as-is.
+    """
     def generate_commands():
         start_timestamp, jump_timestamps = 1000000000, 100
         for i in range(number_of_keys):
-            hslot = i * (2**14 - 1) // (number_of_keys - 1)
+            hslot = i * (NUMBER_OF_SLOTS - 1) // (number_of_keys - 1)
             ts_key = f"ts:{{{slot_table[hslot]}}}"
             resolved = {k: (v(i) if callable(v) else v) for k, v in lables.items()}
             yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in resolved.items())}"
@@ -1342,4 +1347,4 @@ slot_table = [
     "430", "4bY", "0Yw", "zE", "Ti", "03S", "4Lu", "5I5", "60n", "4AE", "L8", "YY", "wu", "0TG", "4oi", "6ZJ",
 ]
 
-assert len(slot_table) == 2 ** 14
+assert len(slot_table) == NUMBER_OF_SLOTS

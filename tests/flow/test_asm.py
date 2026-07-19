@@ -8,7 +8,7 @@ from typing import Optional, Set
 import redis
 
 from includes import Env, VALGRIND, SANITIZER, RUNNER_LABEL
-from utils import migrate_slots_back_and_forth, fill_some_data
+from utils import migrate_slots_back_and_forth, fill_ts_data
 
 
 MIGRATION_CYCLES = 10
@@ -28,7 +28,7 @@ def test_asm_with_data():
     if env.env != "oss-cluster":
         env.skip()
 
-    fill_some_data(env, number_of_keys=100, samples_per_key=10, label="test")
+    fill_ts_data(env, number_of_keys=100, samples_per_key=10, label="test")
     for _ in range(MIGRATION_CYCLES):
         migrate_slots_back_and_forth(env)
 
@@ -47,7 +47,7 @@ def test_asm_with_data_and_queries_during_migrations():
 
     number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
     samples_per_key = 150
-    fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
+    fill_ts_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
     conn = env.getConnection(0)
     command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
@@ -117,7 +117,7 @@ def test_short_form_clusterset():
     samples_per_key = 10
     number_of_groups = 10
     keys_per_group = number_of_keys // number_of_groups
-    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key,
+    fill_ts_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key,
                    label="test", group=lambda i: f"g{i % number_of_groups}")
 
     conn = env.getConnection(0)
