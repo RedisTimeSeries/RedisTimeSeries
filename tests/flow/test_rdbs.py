@@ -118,6 +118,32 @@ def testRDBCompatibilityWithNaN():
         result_after = r.execute_command("ts.range", new_key, "-", "+")
         assert result == result_after
 
-        env.dumpAndReload()
+        if env.useSlaves:
+            # env.dumpAndReload() issues SAVE against the slave too. A brand
+            # new slave's first full sync is throttled by Redis's
+            # repl-diskless-sync-delay (default 5s), which this fast test can
+            # easily outrun. SAVE on a not-yet-synced slave is rejected by
+            # core Redis (isUnsyncedSlave()) with a bare, textless error, so
+            # wait for the slave to finish its initial sync first.
+            slave_conn = env.getSlaveConnection()
+            for _ in range(100):
+                if slave_conn.info('replication')['master_link_status'] == 'up':
+                    break
+                time.sleep(0.1)
+
+        # The slave's first full sync completion also triggers its own
+        # automatic BGSAVE (its "lastsave" bookkeeping never advanced while
+        # sync was pending), which can still be forking when SAVE below
+        # reaches it, so it may still transiently reply "Background save
+        # already in progress" right after the wait above. Retry briefly
+        # until that fork completes.
+        for attempt in range(50):
+            try:
+                env.dumpAndReload()
+                break
+            except redis.exceptions.ResponseError as e:
+                if attempt == 49 or str(e) != 'Background save already in progress':
+                    raise
+                time.sleep(0.1)
         result_after = r.execute_command("ts.range", key, "-", "+")
         assert result == result_after
