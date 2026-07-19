@@ -124,6 +124,8 @@ def testRDBCompatibilityWithNaN():
         deadline = time.time() + 2
         while r.info("persistence")["rdb_bgsave_in_progress"] and time.time() < deadline:
             time.sleep(0.1)
+        assert not r.info("persistence")["rdb_bgsave_in_progress"], \
+            "auto-BGSAVE did not finish within 2s -- possible stuck save, not a race"
         env.dumpAndReload()
         result_after = r.execute_command("ts.range", key, "-", "+")
         assert result == result_after
