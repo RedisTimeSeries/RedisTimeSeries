@@ -230,6 +230,24 @@ def migrate_slots_back_and_forth(env, validator=None):
     validate(title_for(middle_of_original_first, second_conn, first_conn))
 
 
+def validate_slots_in_cluster(env):
+    slot_ranges = []
+    for line in env.getConnection(0).execute_command("cluster", "nodes").splitlines():
+        slot_ranges.extend(ClusterNode.from_str(line).slots)
+
+    total = 0
+    min_start = NUMBER_OF_SLOTS
+    max_end = -1
+    for sr in slot_ranges:
+        total += sr.end - sr.start + 1
+        min_start = min(min_start, sr.start)
+        max_end = max(max_end, sr.end)
+
+    assert min_start == 0
+    assert max_end == NUMBER_OF_SLOTS - 1
+    assert total == NUMBER_OF_SLOTS
+
+
 def import_slots(source_conn, target_conn, slot_range: SlotRange):
     task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
 
