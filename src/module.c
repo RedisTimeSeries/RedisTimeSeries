@@ -132,22 +132,32 @@ static void FreeConfigAndStaticCtx(void) {
 User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx) {
     const User_Ctx_t empty = { .user = NULL, .is_owned = false };
 
-    if (!API_USER_CONTEXT_SUPPORTED)
-        return empty;
-
-    /* Fast path: ctx already has a user attached. Return it borrowed (is_owned=false): the ctx
-     * (or whoever attached it via SetContextUser) is responsible for its lifetime, so the caller
-     * MUST NOT free it. const is cast away to match the non-const RedisModuleUser* expected by
-     * the ACL/free APIs; this mirrors the existing pattern in libmr_integration.c. */
-    const RedisModuleUser *ctxUser = RedisModule_GetContextUser(ctx);
-    if (ctxUser) {
-        return (User_Ctx_t){ .user = (RedisModuleUser *)ctxUser, .is_owned = false };
+    /* Fast path: ctx already has a user attached (e.g. by LibMR to run under the job
+     * originator's identity via SetContextUser). Only attempted when the core exports
+     * GetContextUser — gated on that single API, not the full API_USER_CONTEXT_SUPPORTED
+     * bundle, so cores missing the LibMR-identity-propagation APIs (GetContextUser/
+     * GetUserUsername) still get basic per-key ACL enforcement via the slow path below.
+     * Return it borrowed (is_owned=false): the ctx (or whoever attached it) is responsible
+     * for its lifetime, so the caller MUST NOT free it. const is cast away to match the
+     * non-const RedisModuleUser* expected by the ACL/free APIs; this mirrors the existing
+     * pattern in libmr_integration.c. */
+    if (RedisModule_GetContextUser) {
+        const RedisModuleUser *ctxUser = RedisModule_GetContextUser(ctx);
+        if (ctxUser) {
+            return (User_Ctx_t){ .user = (RedisModuleUser *)ctxUser, .is_owned = false };
+        }
     }
 
-    /* Slow path: no user on the ctx. Look one up by current username. GetCurrentUserName returns
-     * a string registered on the ctx's auto-memory; we free it explicitly so it doesn't linger
-     * until the ctx is destroyed (effectively a slow leak on long-lived ctxs like rts_staticCtx).
-     * The resulting RedisModuleUser is freshly allocated and owned by the caller. */
+    /* Slow path: no user on the ctx (or the core doesn't support GetContextUser). Look one up
+     * by current username. Only needs GetCurrentUserName + GetModuleUserFromUserName, both
+     * baseline ACL APIs present on any core with per-key ACL support. GetCurrentUserName
+     * returns a string registered on the ctx's auto-memory; we free it explicitly so it
+     * doesn't linger until the ctx is destroyed (effectively a slow leak on long-lived ctxs
+     * like rts_staticCtx). The resulting RedisModuleUser is freshly allocated and owned by
+     * the caller. */
+    if (!RedisModule_GetCurrentUserName || !RedisModule_GetModuleUserFromUserName)
+        return empty;
+
     RedisModuleString *userName = RedisModule_GetCurrentUserName(ctx);
     if (!userName)
         return empty;
