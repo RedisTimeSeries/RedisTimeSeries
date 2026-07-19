@@ -95,15 +95,19 @@ static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, SlotRangeAccum
     return true;
 }
 
-// RedisModule_GetCurrentUserName allocates a copy but registers it on the context's auto-memory,
-// so it gets freed when the context ends. We re-copy with NULL ctx to detach from auto-memory,
+// RedisModule_GetCurrentUserName allocates a copy that's only auto-freed if the ctx has
+// RedisModule_AutoMemory(ctx) enabled — not guaranteed for every caller (e.g. TSDB_mget's
+// cluster-fanout branch returns before enabling it), so free it explicitly rather than
+// relying on that. We then re-copy with NULL ctx to detach from ctx's memory entirely,
 // since the string must survive serialization to other shards via LibMR.
 static RedisModuleString *CopyCurrentUserName(RedisModuleCtx *ctx) {
-    const RedisModuleString *userName = RedisModule_GetCurrentUserName(ctx);
+    RedisModuleString *userName = RedisModule_GetCurrentUserName(ctx);
     if (!userName)
         return NULL;
 
-    return RedisModule_CreateStringFromString(NULL, userName);
+    RedisModuleString *detached = RedisModule_CreateStringFromString(NULL, userName);
+    RedisModule_FreeString(ctx, userName);
+    return detached;
 }
 
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
