@@ -184,9 +184,20 @@ def migrate_slots_back_and_forth(env, validate_result=None, validate_all_nodes=F
     first_conn, second_conn = env.getConnection(0), env.getConnection(1)
     other_conns = [env.getConnection(i) for i in range(2, env.shardsCount)] if validate_all_nodes else []
 
-    def validate():
+    def host_of(conn):
+        return conn.connection_pool.connection_kwargs.get("host")
+
+    def port_of(conn):
+        return conn.connection_pool.connection_kwargs.get("port")
+
+    def title_for(migrated_slots, src, dst):
+        return (f"slots {migrated_slots.start}-{migrated_slots.end} "
+                f"migrated from {host_of(src)}:{port_of(src)} to {host_of(dst)}:{port_of(dst)}")
+
+    def validate(title):
         if validate_result is None:
             return
+        print(f"\n----- {title} -----")
         validate_result(first_conn)
         validate_result(second_conn)
         for conn in other_conns:
@@ -201,22 +212,22 @@ def migrate_slots_back_and_forth(env, validate_result=None, validate_all_nodes=F
     import_slots(second_conn, first_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
     assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
-    validate()
+    validate(title_for(middle_of_original_second, second_conn, first_conn))
 
     import_slots(first_conn, second_conn, middle_of_original_second)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
-    validate()
+    validate(title_for(middle_of_original_second, first_conn, second_conn))
 
     import_slots(first_conn, second_conn, middle_of_original_first)
     assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
     assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
-    validate()
+    validate(title_for(middle_of_original_first, first_conn, second_conn))
 
     import_slots(second_conn, first_conn, middle_of_original_first)
     assert cluster_node_of(first_conn).slots == {original_first_slot_range}
     assert cluster_node_of(second_conn).slots == {original_second_slot_range}
-    validate()
+    validate(title_for(middle_of_original_first, second_conn, first_conn))
 
 
 def import_slots(source_conn, target_conn, slot_range: SlotRange):
