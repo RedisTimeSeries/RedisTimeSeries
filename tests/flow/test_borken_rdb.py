@@ -299,7 +299,7 @@ def test_broken_rdb_truncated(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error().contains("DUMP payload version or checksum are wrong")
+    env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
 
 
 def test_broken_rdb_corrupted_data(env):

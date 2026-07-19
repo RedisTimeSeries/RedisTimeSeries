@@ -279,7 +279,8 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     if (args->groupByLabel) {
         RangeArgs rargs = coordArgs;
         rargs.latest = false; // we already handled the latest flag in the client side
-        streaming_rs = StreamingResultSet_Create(args->groupByLabel, &args->groupByReducerArgs, &rargs);
+        streaming_rs =
+            StreamingResultSet_Create(args->groupByLabel, &args->groupByReducerArgs, &rargs);
     } else {
         size_t totalLen = 0;
         array_foreach(nodesResults, record, {
@@ -531,7 +532,9 @@ __done:
 // (previously two separate functions), dispatched on protocol/reply-shape exactly like the
 // original queryArg->resp3 flag (recomputed via _ReplyMap(ctx), same expression used to set that
 // flag in TSDB_mget_MR).
-static void mget_done_gears_resp3(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModuleBlockedClient *bc) {
+static void mget_done_gears_resp3(ExecutionCtx *eCtx,
+                                  RedisModuleCtx *ctx,
+                                  RedisModuleBlockedClient *bc) {
     SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
     if (unlikely(check_and_reply_on_error(eCtx, ctx))) {

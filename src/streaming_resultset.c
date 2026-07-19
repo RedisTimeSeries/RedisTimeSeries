@@ -183,9 +183,11 @@ void StreamingResultSet_FeedSeries(TS_StreamingResultSet *r, Series *series) {
     while (iter->GetNext(iter, &sample) == CR_OK) {
         // Touch the entry so it exists at finalize time (matches the
         // iterator's behavior: NaN-only timestamps still produce a NaN
-        // sample in the output). Don't appendValue or mark has_value.
+        // sample in the output). Only feed values this aggregation
+        // considers valid (e.g. countnan/countall also want NaN inputs) —
+        // mirrors MultiSeriesAggDupSampleIterator_GetNext's is_valid check.
         TsCtxEntry *entry = get_or_create_ts_entry(group, r->aggClass, sample.timestamp);
-        if (isnan(sample.value))
+        if (!r->aggClass->isValueValid(sample.value))
             continue;
         r->aggClass->appendValue(entry->aggCtx, sample.value, sample.timestamp);
         entry->has_value = true;
@@ -245,9 +247,16 @@ static void emit_group_reply(RedisModuleCtx *ctx,
                 r->aggClass->finalizeEmpty(entry->aggCtx, &val);
             }
         } else {
-            // No non-NaN samples were fed at this timestamp. Output NaN
-            // (matches MultiSeriesAggDupSampleIterator_GetNext behavior).
-            val = NAN;
+            // No valid-for-this-aggregation samples were fed at this
+            // timestamp. Count-type reducers report 0; other reducers
+            // report NaN to signal "no data" (matches
+            // MultiSeriesAggDupSampleIterator_GetNext behavior).
+            TS_AGG_TYPES_T type = r->aggClass->type;
+            if (type == TS_AGG_COUNT || type == TS_AGG_COUNT_NAN || type == TS_AGG_COUNT_ALL) {
+                r->aggClass->finalizeEmpty(entry->aggCtx, &val);
+            } else {
+                val = NAN;
+            }
         }
         SeriesAddSample(reduced, ts, val);
         r->aggClass->freeContext(entry->aggCtx);
