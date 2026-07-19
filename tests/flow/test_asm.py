@@ -126,6 +126,12 @@ def test_short_form_clusterset():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     if env.env != "oss-cluster":
         env.skip()
+    if BIGREDIS_TESTS:
+        # Short-form CLUSTERSET needs RedisModule_GetClusterNodeSlotRanges, which
+        # big-redis doesn't export (deps/LibMR/src/cluster.c:SetClusterDataShortForm
+        # rejects with ERRCLUSTER rather than crash or silently no-op). Skip until
+        # the core adds that API.
+        env.skip()
 
     number_of_keys = 100
     samples_per_key = 10
