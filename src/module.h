@@ -40,6 +40,19 @@ typedef struct
 
 User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx);
 
+/* Shadow the ctx<->user attachment made by RM_SetContextUser, for cores that lack
+ * RM_GetContextUser (e.g. big-redis). On those cores there is no API that reflects
+ * SetContextUser back: RM_GetCurrentUserName unconditionally reads the client's own
+ * user and ignores any ctx override. Without this shadow, GetUserFromContext on an
+ * internal LibMR ctx would resolve to that internal connection's own identity instead
+ * of the originator's, silently defeating per-key ACL enforcement on shards. Callers
+ * that attach a user via SetContextUser on such cores must call SetCtxUserShadow right
+ * after, and ClearCtxUserShadow when detaching. */
+void SetCtxUserShadow(RedisModuleCtx *ctx, RedisModuleUser *user);
+
+/* Frees the shadowed user (if any) and clears the slot, iff it was attached to ctx. */
+void ClearCtxUserShadow(RedisModuleCtx *ctx);
+
 /* Release a User_Ctx_t: frees the underlying user only if owned, then clears
  * the wrapper so double-FreeUser is a no-op. */
 static inline void FreeUser(User_Ctx_t *userCtx) {

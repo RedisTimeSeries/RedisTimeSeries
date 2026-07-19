@@ -129,6 +129,28 @@ static void FreeConfigAndStaticCtx(void) {
     }
 }
 
+/* Thread-local shadow of the ctx<->user attachment made by SetCtxUserShadow, for cores
+ * that lack RM_GetContextUser. See the declaration comment in module.h. A single slot is
+ * enough: ApplyCtxUser/ReleaseCtxUser bracket each internal command execution on the
+ * thread that runs it, never nesting, so at most one attachment is live per thread. */
+static __thread RedisModuleCtx *g_ctxUserShadowCtx;
+static __thread RedisModuleUser *g_ctxUserShadowUser;
+
+void SetCtxUserShadow(RedisModuleCtx *ctx, RedisModuleUser *user) {
+    g_ctxUserShadowCtx = ctx;
+    g_ctxUserShadowUser = user;
+}
+
+void ClearCtxUserShadow(RedisModuleCtx *ctx) {
+    if (g_ctxUserShadowCtx == ctx) {
+        if (g_ctxUserShadowUser) {
+            RedisModule_FreeModuleUser(g_ctxUserShadowUser);
+        }
+        g_ctxUserShadowCtx = NULL;
+        g_ctxUserShadowUser = NULL;
+    }
+}
+
 User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx) {
     const User_Ctx_t empty = { .user = NULL, .is_owned = false };
 
@@ -146,6 +168,12 @@ User_Ctx_t GetUserFromContext(RedisModuleCtx *ctx) {
         if (ctxUser) {
             return (User_Ctx_t){ .user = (RedisModuleUser *)ctxUser, .is_owned = false };
         }
+    } else if (g_ctxUserShadowCtx == ctx && g_ctxUserShadowUser) {
+        /* No GetContextUser on this core: fall back to our own shadow of the attachment
+         * SetCtxUserShadow recorded. Without this, GetCurrentUserName below would read the
+         * ctx's own client user (the internal LibMR connection's identity), never the
+         * propagated originator, and ACL checks would silently run under the wrong user. */
+        return (User_Ctx_t){ .user = g_ctxUserShadowUser, .is_owned = false };
     }
 
     /* Slow path: no user on the ctx (or the core doesn't support GetContextUser). Look one up
