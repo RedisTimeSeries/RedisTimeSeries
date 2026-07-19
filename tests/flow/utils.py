@@ -164,11 +164,10 @@ def fill_ts_data(env, number_of_keys: int, samples_per_key: int, **lables):
             rc.execute_command(*command.split())
 
 
-def migrate_slots_back_and_forth(env, validate_result=None, validate_all_nodes=False):
+def migrate_slots_back_and_forth(env, validator=None):
     """
     Migrates slots between the two shards. When done all slots are back to their original places.
-    After each migration validate_result(conn) is called (when not None) on the two participating
-    nodes, then (when validate_all_nodes) on all other nodes.
+    After each migration validator(env) is called (when not None).
     """
 
     def cluster_node_of(conn) -> ClusterNode:
@@ -187,7 +186,6 @@ def migrate_slots_back_and_forth(env, validate_result=None, validate_all_nodes=F
         return {SlotRange(slot_range.start, middle.start - 1), SlotRange(middle.end + 1, slot_range.end)}
 
     first_conn, second_conn = env.getConnection(0), env.getConnection(1)
-    other_conns = [env.getConnection(i) for i in range(2, env.shardsCount)] if validate_all_nodes else []
 
     def host_of(conn):
         return conn.connection_pool.connection_kwargs.get("host")
@@ -200,13 +198,10 @@ def migrate_slots_back_and_forth(env, validate_result=None, validate_all_nodes=F
                 f"migrated from {host_of(src)}:{port_of(src)} to {host_of(dst)}:{port_of(dst)}")
 
     def validate(title):
-        if validate_result is None:
+        if validator is None:
             return
         print(f"\n----- {title} -----")
-        validate_result(first_conn)
-        validate_result(second_conn)
-        for conn in other_conns:
-            validate_result(conn)
+        validator(env)
 
     # Store some original values to be used throughout the test
     (original_first_slot_range,) = cluster_node_of(first_conn).slots
