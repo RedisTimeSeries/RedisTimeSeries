@@ -379,3 +379,53 @@ def test_manual_refreshcluster_after_persistent_reshard():
     env = _oss_cluster_topology_env(moduleArgs="ts-topology-events no")
     conn, validate = _fill_and_validate_static(env)
     _reshard_and_converge(env, conn, validate, refresh=Refresh_Cluster)
+
+
+# ---------------------------------------------------------------------------
+# MOD-16951: a first multi-shard query on a "cold" coordinator must return
+# promptly rather than hang until the client read timeout. The cluster is
+# configured only via ClusterTopologyChange notifications (skipRefreshCluster) --
+# the MOD-16382 auto-refresh path. (The production MOD-16951 bug was inter-shard
+# TLS opened against a peer's plaintext port; it only reproduces on a dual-TLS
+# cluster, which RLTest can't model, so this exercises the non-TLS cold-fan-out.)
+# ---------------------------------------------------------------------------
+
+
+def test_first_multishard_query_after_topology_setup():
+    """A first (cold-coordinator) multi-shard command must return promptly with
+    the correct result rather than hanging until the client read timeout.
+
+    The client uses an explicit socket timeout so the silent max-idle hang
+    ("execution max idle reached" with no reply) surfaces as a TimeoutError."""
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    if env.env != 'oss-cluster':
+        env.skip()
+
+    number_of_keys = 30
+    with env.getClusterConnectionIfNeeded() as rc:
+        for i in range(number_of_keys):
+            rc.execute_command('TS.CREATE', f'ts:{{key{i}}}', 'LABELS', 'kind', 'reg')
+
+    # Well above libmr's ~5s max-idle: a healthy fan-out replies in milliseconds,
+    # so this only trips when the command actually hangs.
+    socket_timeout = 30 if (VALGRIND or SANITIZER) else 8
+
+    for shard in range(env.shardsCount):
+        base = env.getConnection(shard)
+        kwargs = dict(base.connection_pool.connection_kwargs)
+        kwargs['socket_timeout'] = socket_timeout
+        conn = redis.Redis(**kwargs)
+        try:
+            res = conn.execute_command('TS.QUERYINDEX', 'kind=reg')
+        except redis.exceptions.TimeoutError:
+            env.assertTrue(
+                False,
+                message="coordinator shard %d hung on the first cross-shard "
+                        "TS.QUERYINDEX (MOD-16951 max-idle hang)" % shard)
+            continue
+        finally:
+            conn.close()
+        env.assertEqual(
+            len(res), number_of_keys,
+            message="coordinator shard %d returned %d/%d series -- multi-shard "
+                    "fan-out did not complete" % (shard, len(res), number_of_keys))
