@@ -261,6 +261,15 @@ def _conn_reporter(conn):
     return f"{kwargs.get('host')}:{kwargs.get('port')}"
 
 
+def shard_id_of(env, conn):
+    def addr_of(c):
+        kw = c.connection_pool.connection_kwargs
+        return (kw.get("host"), kw.get("port"))
+
+    target = addr_of(conn)
+    return next((i for i in range(env.shardsCount) if addr_of(env.getConnection(i)) == target), None)
+
+
 def dump_node_infocluster(conn):
     conn.execute_command("debug", "MARK-INTERNAL-CLIENT")
     reply = conn.execute_command("timeseries.INFOCLUSTER")
