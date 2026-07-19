@@ -24,22 +24,12 @@ from test_asm import (
 def _infocluster_nodes(conn):
     res = conn.execute_command('timeseries.INFOCLUSTER')
     # ['MyId', <id>, 'MyRunId', <runid>, [ <node flat-array>, ... ]]
+    # Each node array is flattened into a dict, which assumes a single
+    # minHslot/maxHslot pair per node -- true for the single-range CLUSTERSET
+    # topologies these tests build. A node with multiple slot ranges would
+    # collapse to the last pair, so this parser must be revisited if it is ever
+    # reused against a multi-range INFOCLUSTER reply.
     return [{a[i]: a[i + 1] for i in range(0, len(a), 2)} for a in res[4]]
-
-
-def _peer(nodes):
-    # the shard owning the upper half (SLOTRANGE 8192..16383)
-    return [n for n in nodes if int(n['minHslot']) == 8192][0]
-
-
-def _args(my_port, peer_ip, peer_port):
-    return [
-        'HASHFUNC', 'CRC16', 'NUMSLOTS', '16384', 'MYID', '1', 'RANGES', '2',
-        'SHARD', '1', 'SLOTRANGE', '0', '8191',
-        'ADDR', '@127.0.0.1:%d' % my_port, 'MASTER',
-        'SHARD', '2', 'SLOTRANGE', '8192', '16383',
-        'ADDR', '@%s:%d' % (peer_ip, peer_port), 'MASTER',
-    ]
 
 
 def _setup(env):
@@ -63,7 +53,13 @@ def _clusterset_args(shards, numslots=16384, myid='1'):
 
 
 def _node_by_min(nodes, min_hslot):
-    return [n for n in nodes if int(n['minHslot']) == min_hslot][0]
+    """Return the node owning the range starting at `min_hslot`, failing with a
+    clear message (rather than an opaque IndexError) if none matches."""
+    node = next((n for n in nodes if int(n['minHslot']) == min_hslot), None)
+    assert node is not None, \
+        "no node owns minHslot=%d; INFOCLUSTER min-slots: %r" % (
+            min_hslot, [n.get('minHslot') for n in nodes])
+    return node
 
 
 def test_clusterset_port_change_applied():
@@ -74,13 +70,15 @@ def test_clusterset_port_change_applied():
     env.skipOnSlave()
     conn, my_port = _setup(env)
 
-    env.assertEqual(conn.execute_command('timeseries.CLUSTERSET',
-                    *_args(my_port, '127.0.0.1', my_port + 1000)), 'OK')
-    env.assertEqual(int(_peer(_infocluster_nodes(conn))['port']), my_port + 1000)
+    env.assertEqual(conn.execute_command('timeseries.CLUSTERSET', *_clusterset_args([
+        (0, 8191, '127.0.0.1:%d' % my_port),
+        (8192, 16383, '127.0.0.1:%d' % (my_port + 1000))])), 'OK')
+    env.assertEqual(int(_node_by_min(_infocluster_nodes(conn), 8192)['port']), my_port + 1000)
 
-    env.assertEqual(conn.execute_command('timeseries.CLUSTERSET',
-                    *_args(my_port, '127.0.0.1', my_port + 2000)), 'OK')
-    env.assertEqual(int(_peer(_infocluster_nodes(conn))['port']), my_port + 2000)
+    env.assertEqual(conn.execute_command('timeseries.CLUSTERSET', *_clusterset_args([
+        (0, 8191, '127.0.0.1:%d' % my_port),
+        (8192, 16383, '127.0.0.1:%d' % (my_port + 2000))])), 'OK')
+    env.assertEqual(int(_node_by_min(_infocluster_nodes(conn), 8192)['port']), my_port + 2000)
 
 
 def test_clusterset_ip_change_applied():
@@ -91,13 +89,15 @@ def test_clusterset_ip_change_applied():
     env.skipOnSlave()
     conn, my_port = _setup(env)
 
-    env.assertEqual(conn.execute_command('timeseries.CLUSTERSET',
-                    *_args(my_port, '127.0.0.1', my_port + 1000)), 'OK')
-    env.assertEqual(_peer(_infocluster_nodes(conn))['ip'], '127.0.0.1')
+    env.assertEqual(conn.execute_command('timeseries.CLUSTERSET', *_clusterset_args([
+        (0, 8191, '127.0.0.1:%d' % my_port),
+        (8192, 16383, '127.0.0.1:%d' % (my_port + 1000))])), 'OK')
+    env.assertEqual(_node_by_min(_infocluster_nodes(conn), 8192)['ip'], '127.0.0.1')
 
-    env.assertEqual(conn.execute_command('timeseries.CLUSTERSET',
-                    *_args(my_port, '127.0.0.2', my_port + 1000)), 'OK')
-    env.assertEqual(_peer(_infocluster_nodes(conn))['ip'], '127.0.0.2')
+    env.assertEqual(conn.execute_command('timeseries.CLUSTERSET', *_clusterset_args([
+        (0, 8191, '127.0.0.1:%d' % my_port),
+        (8192, 16383, '127.0.0.2:%d' % (my_port + 1000))])), 'OK')
+    env.assertEqual(_node_by_min(_infocluster_nodes(conn), 8192)['ip'], '127.0.0.2')
 
 
 def test_clusterset_slot_range_change_applied():
@@ -399,6 +399,10 @@ def test_first_multishard_query_after_topology_setup():
     ("execution max idle reached" with no reply) surfaces as a TimeoutError."""
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     if env.env != 'oss-cluster':
+        env.skip()
+    if RUNNER_LABEL == "macos-15-intel":
+        # Slowest hosted runner; same skip as _oss_cluster_topology_env -- it
+        # can't reliably serve the cold fan-out within libmr's max-idle window.
         env.skip()
 
     number_of_keys = 30
