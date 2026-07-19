@@ -16,6 +16,30 @@ SAN_GETREDIS_VER=7
 
 cd $HERE
 
+# RLTest may live only in $ROOT/venv (bootstrap uses uv into the venv on EL8).
+# Otherwise prefer a versioned system python; override with RLTEST_PYTHON=.
+pick_rltest_python() {
+	local p
+	if [[ -n "${RLTEST_PYTHON:-}" ]]; then
+		echo "${RLTEST_PYTHON}"
+		return
+	fi
+	if [[ -x "$ROOT/venv/bin/python" ]] && "$ROOT/venv/bin/python" -c 'import RLTest' &>/dev/null; then
+		echo "$ROOT/venv/bin/python"
+		return
+	fi
+	for p in python3.12 python3.11 python3.10 python3.9 python3; do
+		if command -v "$p" &>/dev/null && "$p" -c 'import RLTest' &>/dev/null; then
+			command -v "$p"
+			return
+		fi
+	done
+	echo python3
+}
+# RLTEST_PY is computed lazily on first use (see run_tests) so callers can
+# still override RLTEST_PYTHON via env/CLI after this script's prelude runs.
+RLTEST_PY=""
+
 #----------------------------------------------------------------------------------------------
 
 help() {
@@ -31,6 +55,7 @@ help() {
 
 		RLTEST=path|'view'    Take RLTest from repo path or from local view
 		RLTEST_ARGS=...       Extra RLTest arguments
+		RLTEST_PYTHON=path    Python binary for `python -m RLTest` (default: first with RLTest)
 
 		GEN=0|1               General tests on standalone Redis (default)
 		AOF=0|1               AOF persistency tests on standalone Redis
@@ -161,6 +186,26 @@ setup_rltest() {
 		RLTEST_ARGS+=" -i"
 	fi
 	RLTEST_ARGS+=" --enable-debug-command --enable-protected-configs"
+
+	# Per-test wall-clock timeout: RLTest fails any test that runs longer than
+	# this, printing the stuck thread's traceback, instead of letting a hung or
+	# pathologically-slow test run into the multi-hour CI job timeout. It's a
+	# catch-all (deadlock, infinite loop, thread block, runaway-slow test).
+	# Override with TEST_TIMEOUT=<seconds> (0 disables).
+	if [[ -z $TEST_TIMEOUT ]]; then
+		if [[ $VG == 1 ]]; then
+			# Valgrind is ~20-30x slower. The exhaustive test_max_extensive issues
+			# ~1.6M ops and takes roughly an hour under Valgrind, so give a large
+			# ceiling that lets it complete instead of tripping the timeout, while
+			# still bounding a genuine hang far below the CI job limit.
+			TEST_TIMEOUT=10800
+		else
+			# normal + sanitizer (sanitizer is far less slow than Valgrind, and was
+			# already completing within this limit).
+			TEST_TIMEOUT=1800
+		fi
+	fi
+	RLTEST_ARGS+=" --test-timeout $TEST_TIMEOUT"
 }
 
 #----------------------------------------------------------------------------------------------
@@ -202,6 +247,8 @@ setup_valgrind() {
 		--leak-check=$VG_LEAK_CHECK \
 		--show-reachable=no \
 		--track-origins=yes \
+		--trace-children=no \
+		--child-silent-after-fork=yes \
 		--show-possibly-lost=no"
 
 	VALGRIND_SUPRESSIONS=$ROOT/tests/memcheck/redis_valgrind.sup
@@ -319,11 +366,13 @@ run_tests() {
 
 	[[ $RLEC == 1 ]] && export RLEC_CLUSTER=1
 
+	[[ -z "$RLTEST_PY" ]] && RLTEST_PY="$(pick_rltest_python)"
+
 	local E=0
 	if [[ $NOP != 1 ]]; then
-		{ $OP python3 -m RLTest @$rltest_config; (( E |= $? )); } || true
+		{ $OP "$RLTEST_PY" -m RLTest @$rltest_config; (( E |= $? )); } || true
 	else
-		$OP python3 -m RLTest @$rltest_config
+		$OP "$RLTEST_PY" -m RLTest @$rltest_config
 	fi
 
 	[[ $KEEP != 1 ]] && rm -f $rltest_config
@@ -403,6 +452,10 @@ PARALLEL=${PARALLEL:-1}
 
 # due to Python "Can't pickle local object" problem in RLTest
 [[ $OS == macos ]] && PARALLEL=0
+
+# run Valgrind serially: at --parallelism nproc the runner oversubscribes CPU
+# (redis-server is ~30x slower under Valgrind), starving shards past LibMR's max-idle
+[[ $VG == 1 ]] && PARALLEL=0
 
 [[ $EXT == 1 || $EXT == run || $BB == 1 || $GDB == 1 ]] && PARALLEL=0
 

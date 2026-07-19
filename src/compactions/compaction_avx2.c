@@ -5,7 +5,7 @@ void MaxAppendValuesAVX2(void *__restrict__ context,
                          double *__restrict__ values,
                          size_t si,
                          size_t ei) {
-    if ((ei - si + 1) < VECTOR_SIZE_AVX2 * 2) {
+    if ((ei - si + 1) < VECTOR_SIZE_AVX2 * 2 || hasNaN(values, si, ei)) {
         MaxAppendValuesVec(context, values, si, ei);
         return;
     }

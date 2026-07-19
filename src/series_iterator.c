@@ -129,7 +129,7 @@ _handle_latest:
         iter->enrichedChunk->rev = iter->reverse_chunk;
         iter->enrichedChunk->samples.num_samples = 1;
         *iter->enrichedChunk->samples.timestamps = sample.timestamp;
-        *iter->enrichedChunk->samples.values = sample.value;
+        Samples_value_at(&iter->enrichedChunk->samples, 0, 0) = sample.value;
     }
     iter->latest = false;
 

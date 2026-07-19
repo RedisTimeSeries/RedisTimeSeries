@@ -9,6 +9,7 @@ typedef struct MRangeData
 {
     RedisModuleBlockedClient *bc;
     MRangeArgs args;
+
 } MRangeData;
 
 typedef struct MData
@@ -18,8 +19,12 @@ typedef struct MData
     bool is_mget;
 } MData;
 
-int TSDB_mget_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
-int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries);
-int TSDB_mrange_RG(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse);
+int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries);
+int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool reverse);
+int TSDB_querylabels_MR(RedisModuleCtx *ctx,
+                        QueryLabelsSubtype subtype,
+                        RedisModuleString *label,
+                        QueryPredicateList *queries);
 
 #endif // REDIS_TIMESERIES_CLEAN_MR_COMMANDS_H

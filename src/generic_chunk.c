@@ -61,6 +61,10 @@ static const ChunkFuncs comprChunk = {
 // will contain the data that will be kept in the database.
 ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Sample *newSample) {
     bool has_NAN = isnan(oldSample.value) || isnan(newSample->value);
+    if ((isnan(oldSample.value) != isnan(newSample->value)) &&
+        (policy == DP_MIN || policy == DP_MAX || policy == DP_SUM)) {
+        return CR_ERR;
+    }
     if (has_NAN && policy != DP_BLOCK) {
         // take the valid sample regardless of policy
         if (isnan(newSample->value)) {

@@ -294,10 +294,8 @@ def test_module_config_api_is_used_on_recent_redis_versions():
 
         # Integer value options:
         conn.execute_command('CONFIG', 'GET', 'ts-num-threads')
-
-        # Can't set an immutable config value.
-        with pytest.raises(redis.exceptions.ResponseError):
-            conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '2')
+        conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '2')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'2')
 
         conn.execute_command('CONFIG', 'GET', 'ts-retention-policy')
         conn.execute_command('CONFIG', 'SET', 'ts-retention-policy', '1')
@@ -385,3 +383,41 @@ def test_module_config_takes_precedence_over_module_arguments():
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')[1], b'last')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')[1], b'max:1m:1d')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-encoding')[1], b'uncompressed')
+
+def test_ts_num_threads_module_arg():
+    '''
+    Tests that ts-num-threads is accepted as a module-load argument,
+    can be updated via CONFIG SET before LibMR runs, no deprecation
+    warning is emitted, and the configured number of LibMR worker
+    threads is actually spawned.
+
+    Requires cluster mode (worker threads are created lazily on the
+    first libmr execution, which only happens in cluster mode) and
+    Redis >= 7.0 (module config API).
+
+    Thread names are read from /proc on Linux or via ``sample`` on macOS.
+    '''
+    env = Env(moduleArgs="ts-num-threads 5", noLog=False)
+    if not env.isCluster():
+        env.skip()
+    if is_redis_version_lower_than(env, '7.0'):
+        env.skip()
+
+    conn = env.getConnection(1)
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
+    conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '6')
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'6')
+
+    # TS.MRANGE triggers libmr, which forces the lazy thread pool to start.
+    conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'name=ts')
+
+    names = get_worker_thread_names(conn)
+    if names is None:
+        assert False, "Failed to get worker thread names"
+    # Worker threads are named timeseries-0 … timeseries-[n-1];
+    env.assertEqual(len(names), 6,
+                        message="Expected 6 LibMR worker threads")
+
+    # Try set after pool already started.
+    with pytest.raises(Exception):
+        conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '8')

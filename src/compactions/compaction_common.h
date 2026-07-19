@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include "../consts.h"
 #include "compaction_avx512f.h"
-
+#include <math.h>
 #define CACHE_LINE_SIZE 64
 #define ALIGN_SIZE_AVX2 32
 #define VECTOR_SIZE (CACHE_LINE_SIZE/sizeof(double))
@@ -44,6 +44,15 @@ void MaxAppendValuesVec(void *__restrict__ context,
 static really_inline bool is_aligned(void *p, int N)
 {
     return (uintptr_t)p % N == 0;
+}
+
+static really_inline bool hasNaN(double *values, size_t si, size_t ei) {
+    for (size_t i = si; i <= ei; i++) {
+        if (isnan(values[i])) {
+            return true;
+        }
+    }
+    return false;
 }
 
 #endif

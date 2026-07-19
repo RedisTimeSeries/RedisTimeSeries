@@ -92,25 +92,31 @@ GetSeriesResult GetSeries(RedisModuleCtx *ctx,
     const char *currentKeyStr = RedisModule_StringPtrLen(keyName, &len);
 
     if (flags & GetSeriesFlags_CheckForAcls) {
-        if ((mode & REDISMODULE_READ) && !CheckKeyIsAllowedToRead(ctx, keyName)) {
+        // Resolve the user once for both Read and Write ACL checks below
+        // (previously each Check* call resolved + freed its own user).
+        User_Ctx_t userCtx = GetUserFromContext(ctx);
+
+        if ((mode & REDISMODULE_READ) && !CheckKeyIsAllowedToRead(userCtx.user, keyName)) {
+            FreeUser(&userCtx);
             if (!isSilent) {
                 RTS_ReplyPermissionError(ctx,
                                          "the current user doesn't have the read permission to "
                                          "one or more keys that match the specified filter");
             }
-
             return GetSeriesResult_PermissionError;
         }
 
-        if ((mode & REDISMODULE_WRITE) && !CheckKeyIsAllowedToWrite(ctx, keyName)) {
+        if ((mode & REDISMODULE_WRITE) && !CheckKeyIsAllowedToWrite(userCtx.user, keyName)) {
+            FreeUser(&userCtx);
             if (!isSilent) {
                 RTS_ReplyPermissionError(ctx,
                                          "the current user doesn't have the write permission "
                                          "to one or more keys that match the specified filter");
             }
-
             return GetSeriesResult_PermissionError;
         }
+
+        FreeUser(&userCtx);
     }
 
     RedisModuleKey *new_key = RedisModule_OpenKey(ctx, keyName, mode);
@@ -554,8 +560,9 @@ const char *SeriesGetCStringLabelValue(const Series *series, const char *labelKe
 
 size_t SeriesMemUsage(const void *value) {
     const Series *series = (const Series *)value;
-    return RedisModule_MallocSize((void *)series) + SeriesRulesSize(series) +
-           SeriesLabelsSize(series) + SeriesChunksSize(series);
+    size_t keyNameSize = series->keyName ? RedisModule_MallocSizeString(series->keyName) : 0;
+    return RedisModule_MallocSize((void *)series) + keyNameSize + SeriesRulesSize(series) +
+           SeriesLabelsSize(series) + SeriesChunksSize(series) + IndexMemUsage(series->keyName);
 }
 
 size_t SeriesGetNumSamples(const Series *series) {
@@ -588,6 +595,10 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
     } else {
         SeriesUpsertSample(destSeries, start, val, DP_LAST);
     }
+    // Wake any TS.READ waiters parked on the destination key, so a
+    // compaction-rule bucket landing here triggers them just like a direct
+    // write would.
+    RedisModule_SignalKeyAsReady(ctx, rule->destKey);
     RedisModule_CloseKey(key);
 
     return true;
@@ -1189,6 +1200,7 @@ CompactionRule *NewRule(RedisModuleString *destKey,
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
     rule->nextRule = NULL;
+    rule->validSamplesInBucket = false;
 
     return rule;
 }
@@ -1384,9 +1396,10 @@ AbstractIterator *SeriesQuery(Series *series,
             break;
     }
 
-    if (args->aggregationArgs.aggregationClass != NULL) {
+    if (args->aggregationArgs.numClasses > 0 && !args->skipAggregation) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
-                                                            args->aggregationArgs.aggregationClass,
+                                                            args->aggregationArgs.numClasses,
+                                                            args->aggregationArgs.classes,
                                                             args->aggregationArgs.timeDelta,
                                                             timestampAlignment,
                                                             reverse,
@@ -1394,7 +1407,9 @@ AbstractIterator *SeriesQuery(Series *series,
                                                             args->aggregationArgs.bucketTS,
                                                             series,
                                                             args->startTimestamp,
-                                                            args->endTimestamp);
+                                                            args->endTimestamp,
+                                                            args->filterByValueArgs,
+                                                            args->filterByTSArgs);
     }
 
     return chain;

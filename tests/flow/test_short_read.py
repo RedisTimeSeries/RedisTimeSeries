@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import zipfile
 from RLTest import Defaults
-from RLTest import Env
+from includes import Env
 import shutil
 import platform
 from test_helper_classes import SAMPLE_SIZE, _get_ts_info, TSInfo

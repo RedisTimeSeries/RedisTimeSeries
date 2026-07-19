@@ -28,6 +28,11 @@ typedef union
     uint64_t u;
 } union64bits;
 
+// Canonical quiet NaN bit pattern for compression normalization.
+// All NaN values are normalized to this pattern before Gorilla encoding
+// to avoid high-entropy XOR results from varying NaN payloads across different architectures.
+#define CANONICAL_NAN_BITS 0x7ff8000000000000ULL
+
 typedef struct CompressedChunk
 {
     uint64_t size;

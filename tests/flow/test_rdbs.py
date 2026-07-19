@@ -1,6 +1,6 @@
 import os
 
-from RLTest import Env
+from includes import Env
 from create_test_rdb_file import load_into_redis
 from test_helper_classes import _get_ts_info, TSInfo
 from includes import *
@@ -93,3 +93,57 @@ def testRDBCompatibility():
             assert normalized_info[b"duplicatePolicy"] is None
             normalized_info[b"duplicatePolicy"] = TSINFO_RESULTS[key][b"duplicatePolicy"]
             assert normalized_info == TSINFO_RESULTS[key]
+
+def testRDBCompatibilityWithNaN():
+    env = Env()
+    result = None
+    ts = int(time.time())
+    with env.getConnection() as r:
+        key = "rdb_nan_test"
+        r.execute_command("ts.create", key)
+        for _ in range(1, 1000):
+            import random
+            if ts % 10 == 0:
+                val = 'nan'
+            else:
+                val = random.uniform(10.0, 100.0)
+            r.execute_command("ts.add", key, ts, val)
+            ts += 1
+            result = r.execute_command("ts.range", key, "-", "+")
+            info = r.execute_command("ts.info", key)
+        
+        new_key = "rdb_nan_test_new"
+        dump = r.execute_command("dump", key)
+        r.execute_command("restore", new_key, 0, dump)
+        result_after = r.execute_command("ts.range", new_key, "-", "+")
+        assert result == result_after
+
+        if env.useSlaves:
+            # env.dumpAndReload() issues SAVE against the slave too. A brand
+            # new slave's first full sync is throttled by Redis's
+            # repl-diskless-sync-delay (default 5s), which this fast test can
+            # easily outrun. SAVE on a not-yet-synced slave is rejected by
+            # core Redis (isUnsyncedSlave()) with a bare, textless error, so
+            # wait for the slave to finish its initial sync first.
+            slave_conn = env.getSlaveConnection()
+            for _ in range(100):
+                if slave_conn.info('replication')['master_link_status'] == 'up':
+                    break
+                time.sleep(0.1)
+
+        # The slave's first full sync completion also triggers its own
+        # automatic BGSAVE (its "lastsave" bookkeeping never advanced while
+        # sync was pending), which can still be forking when SAVE below
+        # reaches it, so it may still transiently reply "Background save
+        # already in progress" right after the wait above. Retry briefly
+        # until that fork completes.
+        for attempt in range(50):
+            try:
+                env.dumpAndReload()
+                break
+            except redis.exceptions.ResponseError as e:
+                if attempt == 49 or str(e) != 'Background save already in progress':
+                    raise
+                time.sleep(0.1)
+        result_after = r.execute_command("ts.range", key, "-", "+")
+        assert result == result_after

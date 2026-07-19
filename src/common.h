@@ -1,15 +1,5 @@
 #pragma once
 
-struct RedisModuleUser;
-struct RedisModuleCtx;
-struct RedisModuleString;
-struct RedisModuleUser *(*RedisModule_GetModuleUserFromUserName)(struct RedisModuleString *name);
-struct RedisModuleString *(*RedisModule_GetCurrentUserName)(struct RedisModuleCtx *ctx);
-void (*RedisModule_FreeString)(struct RedisModuleCtx *ctx, struct RedisModuleString *str);
-int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
-                                                struct RedisModuleString *prefix,
-                                                int flags);
-
 #include <stdlib.h>
 #include <string.h>
 #include "RedisModulesSDK/redismodule.h"
@@ -31,20 +21,6 @@ int (*RedisModule_ACLCheckKeyPrefixPermissions)(struct RedisModuleUser *user,
     RTS_ReplyPermissionError(ctx,                                                                  \
                              "TSDB: current user doesn't have read permission to one or more "     \
                              "keys that match the specified filter")
-
-// Returns the current user of the context.
-static inline struct RedisModuleUser *GetCurrentUser(struct RedisModuleCtx *ctx) {
-    struct RedisModuleString *username = RedisModule_GetCurrentUserName(ctx);
-
-    if (!username) {
-        return NULL;
-    }
-
-    struct RedisModuleUser *user = RedisModule_GetModuleUserFromUserName(username);
-    RedisModule_FreeString(ctx, username);
-
-    return user;
-}
 
 static inline int stringEqualsC(const RedisModuleString *s1, const char *s2) {
     size_t len;
@@ -87,7 +63,7 @@ static inline void lazyModuleInitialize(RedisModuleCtx *ctx) {
     if (!lazy_initialized) {
         RedisModule_SubscribeToKeyspaceEvents(
             ctx,
-            REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_SET | REDISMODULE_NOTIFY_STRING |
+            REDISMODULE_NOTIFY_GENERIC | REDISMODULE_NOTIFY_TYPE_CHANGED |
                 REDISMODULE_NOTIFY_EVICTED | REDISMODULE_NOTIFY_EXPIRED |
                 REDISMODULE_NOTIFY_LOADED | REDISMODULE_NOTIFY_KEY_TRIMMED |
                 REDISMODULE_NOTIFY_TRIMMED, // Only during redis enterprise sharding

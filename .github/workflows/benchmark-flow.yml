@@ -9,6 +9,12 @@ on:
       module_path:
         type: string
         default: bin/linux-x64-release/redistimeseries.so
+      module_ref:
+        # Git ref (branch, tag or commit SHA) of RedisTimeSeries to check out and
+        # benchmark. Empty keeps the default checkout (the ref that triggered the
+        # workflow), so existing callers are unaffected.
+        type: string
+        default: ""
       profile_env:
         type: number # for default of 0
       cluster_env:
@@ -36,29 +42,55 @@ on:
 
 jobs:
   benchmark-steps:
-    runs-on: ubuntu-latest
-    container: ${{ inputs.container }}
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          # Empty ref => default checkout (the ref that triggered the workflow).
+          ref: ${{ inputs.module_ref }}
       - run: |
           git init
           git config --global --add safe.directory '*'
           git submodule update --init --recursive
 
+      - name: Resolve benchmarked ref
+        id: bench_ref
+        env:
+          MODULE_REF: ${{ inputs.module_ref }}
+          DEFAULT_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          # Tag results with the ref actually benchmarked, not the workflow ref.
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ -n "$MODULE_REF" ]; then
+            echo "branch=$MODULE_REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=$DEFAULT_BRANCH" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.PERFORMANCE_EC2_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.PERFORMANCE_EC2_SECRET_KEY }}
+          aws-region: ${{ secrets.PERFORMANCE_EC2_REGION }}
+
+      - name: Ensure perf key exists and has correct permissions
+        run: |
+          # Ensure perf key exists and has correct permissions
+          PEM_FILE="/tmp/benchmarks.redislabs.pem"
+          if [ ! -f "$PEM_FILE" ]; then
+            echo "Private key not found, retrieving from AWS Secrets Manager..."
+            aws secretsmanager get-secret-value \
+              --secret-id perf-cto-us-east-2 \
+              --query SecretString \
+              --output text > "$PEM_FILE"
+          fi
+          chmod 400 "$PEM_FILE"
+          ls -la "$PEM_FILE"
+
       - name: System setup
         run: ./sbin/system-setup.py
-
-      - name: Get Redis
-        uses: actions/checkout@v4
-        with:
-          repository: redis/redis
-          ref: '7.2'
-          path: redis
-
-      - name: Build Redis
-        working-directory: redis
-        run: make install
 
       - name: Build RedisTimeseries
         run: |
@@ -83,7 +115,6 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.PERFORMANCE_EC2_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.PERFORMANCE_EC2_SECRET_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.PERFORMANCE_EC2_REGION }}
-          EC2_PRIVATE_PEM: ${{ secrets.PERFORMANCE_EC2_PRIVATE_PEM }}
           # Inputs
           PROFILE: ${{ inputs.profile_env }}
           BENCHMARK_GLOB: ${{ inputs.benchmark_glob }}
@@ -95,8 +126,8 @@ jobs:
               --github_repo ${{ github.event.repository.name }}
               --github_org ${{ github.repository_owner }}
               --required-module ${{ inputs.required_module }}
-              --github_sha ${{ github.sha }}
-              --github_branch ${{ github.head_ref || github.ref_name }}
+              --github_sha ${{ steps.bench_ref.outputs.sha }}
+              --github_branch ${{ steps.bench_ref.outputs.branch }}
               --upload_results_s3
               --triggering_env ${{ inputs.triggering_env }}
               --allowed-envs ${{ inputs.allowed_envs }}
@@ -108,6 +139,7 @@ jobs:
 
       - name: Generate Pull Request Performance info
         if: github.event.number
+        continue-on-error: true
         env:
           PERFORMANCE_GH_TOKEN: ${{ secrets.PERFORMANCE_GH_TOKEN }}
           PERFORMANCE_WH_TOKEN: ${{ secrets.PERFORMANCE_WH_TOKEN }}
