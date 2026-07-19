@@ -69,6 +69,7 @@ def test_asm_with_data_and_queries_during_migrations():
         # Note: should be the same as in libmr_commands.c
         SLOT_RANGES_ERROR = "Query requires unavailable slots"
         while not done.is_set():
+            conn = env.getConnection(random.randrange(env.shardsCount))
             try:
                 result = conn.execute_command(command)
             except redis.exceptions.ResponseError as x:
