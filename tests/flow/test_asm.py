@@ -8,10 +8,28 @@ from typing import Optional, Set
 import redis
 
 from includes import Env, VALGRIND, SANITIZER, RUNNER_LABEL
-from utils import migrate_slots_back_and_forth, fill_ts_data
+from utils import migrate_slots_back_and_forth, fill_ts_data, ClusterNode, NUMBER_OF_SLOTS
 
 
 MIGRATION_CYCLES = 10
+
+
+def validate_slots_in_cluster(env):
+    slot_ranges = []
+    for line in env.getConnection(0).execute_command("cluster", "nodes").splitlines():
+        slot_ranges.extend(ClusterNode.from_str(line).slots)
+
+    total = 0
+    min_start = NUMBER_OF_SLOTS
+    max_end = -1
+    for sr in slot_ranges:
+        total += sr.end - sr.start + 1
+        min_start = min(min_start, sr.start)
+        max_end = max(max_end, sr.end)
+
+    assert min_start == 0
+    assert max_end == NUMBER_OF_SLOTS - 1
+    assert total == NUMBER_OF_SLOTS
 
 
 def test_asm_without_data():
@@ -20,7 +38,7 @@ def test_asm_without_data():
         env.skip()
 
     for _ in range(MIGRATION_CYCLES):
-        migrate_slots_back_and_forth(env)
+        migrate_slots_back_and_forth(env, validate_slots_in_cluster)
 
 
 def test_asm_with_data():
@@ -30,7 +48,7 @@ def test_asm_with_data():
 
     fill_ts_data(env, number_of_keys=100, samples_per_key=10, label="test")
     for _ in range(MIGRATION_CYCLES):
-        migrate_slots_back_and_forth(env)
+        migrate_slots_back_and_forth(env, validate_slots_in_cluster)
 
 
 def test_asm_with_data_and_queries_during_migrations():
@@ -83,7 +101,7 @@ def test_asm_with_data_and_queries_during_migrations():
         for _ in range(MIGRATION_CYCLES):
             if done.is_set():
                 break
-            migrate_slots_back_and_forth(env, lambda conn: validate_result(conn.execute_command(command)))
+            migrate_slots_back_and_forth(env, validate_slots_in_cluster)
 
     with ThreadPoolExecutor() as executor:
         futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
