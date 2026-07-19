@@ -191,6 +191,16 @@ static void mrange_emit_ungrouped_one(RedisModuleCtx *ctx, MRangeAsyncCtx *m, si
         GetSeries(ctx, m->keys[i], &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation);
     if (status != GetSeriesResult_Success)
         return;
+
+    EnrichedChunk *first_chunk = NULL;
+    AbstractIterator *probe = NULL;
+    if (m->args.excludeEmpty) {
+        probe = SeriesQueryIfNonEmpty(series, &m->args.rangeArgs, m->args.reverse, &first_chunk);
+        if (!probe) {
+            RedisModule_CloseKey(key);
+            return;
+        }
+    }
     ReplySeriesArrayPos(ctx,
                         series,
                         m->args.withLabels,
@@ -199,8 +209,8 @@ static void mrange_emit_ungrouped_one(RedisModuleCtx *ctx, MRangeAsyncCtx *m, si
                         &m->args.rangeArgs,
                         m->args.reverse,
                         false,
-                        NULL,
-                        NULL);
+                        probe,
+                        first_chunk);
     m->replylen++;
     RedisModule_CloseKey(key);
 }
