@@ -87,33 +87,45 @@ def validate_queries_during_migrations(env, command, validate_result):
     command: the query to run repeatedly (as a single string).
     validate_result: callback invoked with the command's reply to assert it is correct.
     """
-    conn = env.getConnection(0)
+    SLOT_RANGES_ERROR = "Query requires unavailable slots"  # same as in libmr_commands.c
+
+    # Two flavors of the same query check, both hitting a random shard:
+    # - strict: used when the topology is settled (baseline + right after each migration
+    #   completes) -> the query must succeed and be correct; no transient error tolerated.
+    # - tolerable: used in the background loop while slots may be mid-migration -> an occasional
+    #   SLOT_RANGES_ERROR is expected and skipped, otherwise the result is validated.
+    def strict_validation(env):
+        conn = env.getConnection(random.randrange(env.shardsCount))
+        validate_result(conn.execute_command(command))
+
+    def tolerable_validation(env):
+        conn = env.getConnection(random.randrange(env.shardsCount))
+        try:
+            result = conn.execute_command(command)
+        except redis.exceptions.ResponseError as x:
+            assert str(x) == SLOT_RANGES_ERROR, str(x)
+            return
+        validate_result(result)
+
+    def validate_after_migration(env):
+        validate_slots_in_cluster(env)
+        strict_validation(env)
 
     # First validate the result on the "static" cluster
-    validate_result(conn.execute_command(command))
+    strict_validation(env)
 
     # Now validate the command's result in a loop during the back and forth migrations
     done = threading.Event()
 
     def validate_command_in_a_loop():
-        # Note: should be the same as in libmr_commands.c
-        SLOT_RANGES_ERROR = "Query requires unavailable slots"
         while not done.is_set():
-            conn = env.getConnection(random.randrange(env.shardsCount))
-            try:
-                result = conn.execute_command(command)
-            except redis.exceptions.ResponseError as x:
-                error_message = str(x)
-                # An occasional SLOT_RANGES_ERROR is expected
-                assert error_message == SLOT_RANGES_ERROR, error_message
-                continue
-            validate_result(result)
+            tolerable_validation(env)
 
     def migrate_slots():
         for _ in range(MIGRATION_CYCLES):
             if done.is_set():
                 break
-            migrate_slots_back_and_forth(env, validate_slots_in_cluster)
+            migrate_slots_back_and_forth(env, validate_after_migration)
 
     with ThreadPoolExecutor() as executor:
         futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
@@ -134,7 +146,7 @@ def validate_queries_during_migrations(env, command, validate_result):
             raise
 
     # Validate that all is fine after the migrations
-    validate_result(conn.execute_command(command))
+    strict_validation(env)
 
 
 def test_short_form_clusterset():
