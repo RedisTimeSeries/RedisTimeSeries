@@ -230,22 +230,57 @@ def migrate_slots_back_and_forth(env, validator=None):
     validate(title_for(middle_of_original_first, second_conn, first_conn))
 
 
-def validate_slots_in_cluster(env):
+def validate_cluster(conn):
+    """
+    Read the cluster topology as seen by conn (using CLUSTER NODES).
+    Return a dict of ClusterNode.id -> ClusterNode if it passes some validations
+    and None otherwise.
+    """
+    nodes = {}
     slot_ranges = []
-    for line in env.getConnection(0).execute_command("cluster", "nodes").splitlines():
-        slot_ranges.extend(ClusterNode.from_str(line).slots)
+    for line in conn.execute_command("CLUSTER", "NODES").splitlines():
+        node = ClusterNode.from_str(line)
+        nodes[node.id] = node
+        slot_ranges.extend(node.slots)
 
-    total = 0
+    total_slots = 0
     min_start = NUMBER_OF_SLOTS
     max_end = -1
     for sr in slot_ranges:
-        total += sr.end - sr.start + 1
+        total_slots += sr.end - sr.start + 1
         min_start = min(min_start, sr.start)
         max_end = max(max_end, sr.end)
 
-    assert min_start == 0
-    assert max_end == NUMBER_OF_SLOTS - 1
-    assert total == NUMBER_OF_SLOTS
+    if min_start != 0 or max_end != NUMBER_OF_SLOTS - 1 or total_slots != NUMBER_OF_SLOTS:
+        return None
+    return nodes
+
+
+def compare_clusters(cluster1, cluster2):
+    """Compare two validate_cluster() dicts, per node only by id, ip, port, flags and slots."""
+    # 'myself' and other flags like 'handshake'/'fail?' are transient, so they depend on which node we asked
+    # only these flags are invariant across views:
+    invariant_flags = {"master", "slave"}
+    if cluster1.keys() != cluster2.keys():
+        return False
+    for node_id in cluster1:
+        n1, n2 = cluster1[node_id], cluster2[node_id]
+        if (n1.id, n1.ip, n1.port, n1.flags & invariant_flags, n1.slots) != \
+           (n2.id, n2.ip, n2.port, n2.flags & invariant_flags, n2.slots):
+            return False
+    return True
+
+
+def wait_for_valid_cluster(env):
+    """Wait until every node reports a valid cluster and all nodes agree on the topology."""
+    timeout = 60 if (VALGRIND or SANITIZER) else 5
+    deadline = time.time() + timeout
+    while True:
+        clusters = [validate_cluster(env.getConnection(i)) for i in range(env.shardsCount)]
+        if all(c is not None for c in clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
+            return
+        assert time.time() < deadline, "cluster did not reach a valid, agreed state in time"
+        time.sleep(0.2)
 
 
 def import_slots(source_conn, target_conn, slot_range: SlotRange):

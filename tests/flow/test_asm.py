@@ -1,14 +1,11 @@
 import time
 import random
-from dataclasses import dataclass
-import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Set
 import redis
 
 from includes import Env, VALGRIND, SANITIZER, RUNNER_LABEL
-from utils import migrate_slots_back_and_forth, fill_ts_data, validate_slots_in_cluster
+from utils import migrate_slots_back_and_forth, fill_ts_data, wait_for_valid_cluster
 
 
 MIGRATION_CYCLES = 10
@@ -20,7 +17,7 @@ def test_asm_without_data():
         env.skip()
 
     for _ in range(MIGRATION_CYCLES):
-        migrate_slots_back_and_forth(env, validate_slots_in_cluster)
+        migrate_slots_back_and_forth(env, wait_for_valid_cluster)
 
 
 def test_asm_with_data():
@@ -30,7 +27,7 @@ def test_asm_with_data():
 
     fill_ts_data(env, number_of_keys=100, samples_per_key=10, label="test")
     for _ in range(MIGRATION_CYCLES):
-        migrate_slots_back_and_forth(env, validate_slots_in_cluster)
+        migrate_slots_back_and_forth(env, wait_for_valid_cluster)
 
 
 def test_asm_with_data_and_queries_during_migrations():
@@ -90,7 +87,7 @@ def validate_queries_during_migrations(env, command, validate_result):
         validate_result(result)
 
     def validate_after_migration(env):
-        validate_slots_in_cluster(env)
+        wait_for_valid_cluster(env)
         strict_validation(env)
 
     # First validate the result on the "static" cluster
