@@ -381,6 +381,113 @@ def test_manual_refreshcluster_after_persistent_reshard():
     _reshard_and_converge(env, conn, validate, refresh=Refresh_Cluster)
 
 
+def test_query_storm_during_refresh_reproduces_execution_abort_leak():
+    """Stress variant of test_asm_with_data_and_queries_during_migrations_auto_notified,
+    built to *deterministically* surface the LibMR Execution-abort memory leak that
+    RTS#2116 only hit intermittently (fixed by RedisGears/LibMR#108).
+
+    A single query racing one topology change rarely lands an abort in the narrow
+    window where an execution has *just* completed -- its done callback already fired
+    (nulled) and its MR_DisposeExecution is queued but not yet run. Here many query
+    threads hammer the multi-shard fan-out while timeseries.REFRESHCLUSTER is fired
+    continuously (each -> MR_ClusterFree -> MR_AbortRunningExecutions), so that window
+    is hit on essentially every run: the abort handler returns without freeing and the
+    stranded dispose never runs, leaking the whole initiator Execution plus its parsed
+    result records (MR_ExecutionAlloc <- MR_CreateExecution <- TSDB_mrange_MR).
+
+    The command flow itself is correct: while REFRESHCLUSTER is rebuilding the view a
+    fan-out may abort, time out, or briefly return against a partial view, but once the
+    churn stops the query converges back to a complete result (asserted at the end). The
+    only hard failure is the LeakSanitizer report at process exit on the oss_cluster leg
+    -- so this is EXPECTED red until #108 lands, and is a do-not-merge demonstration.
+    """
+    env = _oss_cluster_topology_env()
+    conn, validate = _fill_and_validate_static(env)
+
+    duration_secs = 15 if (VALGRIND or SANITIZER) else 8
+    # Every connection (queries AND refreshes) is bounded, so a command that blocks
+    # under the churn can't wedge a worker thread past done.set() -- otherwise the join
+    # below (and the process exit ASAN needs) would hang until the RLTest test timeout.
+    socket_timeout = 15 if (VALGRIND or SANITIZER) else 8
+    # Deliberately moderate load: a few query threads and a ~30ms refresh cadence.
+    # It still hits the abort-after-completion window thousands of times, but does NOT
+    # push the server event loop into a state where it stops answering new connections
+    # (a heavier storm did, which then hung RLTest's post-test flushall in teardown).
+    n_query_threads = 3
+    done = threading.Event()
+
+    # Build the per-shard connection kwargs on the main thread (env.getConnection
+    # hands back a cached, non-thread-safe client), then give each query thread its
+    # own redis.Redis -- the same pattern as test_first_multishard_query_after_topology_setup.
+    shard_kwargs = {}
+    for shard in range(env.shardsCount):
+        kwargs = dict(env.getConnection(shard).connection_pool.connection_kwargs)
+        kwargs["socket_timeout"] = socket_timeout
+        shard_kwargs[shard] = kwargs
+
+    def query_loop(shard):
+        # A load generator, not an assertion site. While REFRESHCLUSTER is tearing
+        # down and rebuilding the cluster view, a fan-out may abort (topology
+        # changed), time out, or briefly return against a partial view -- all
+        # expected transients here. Correctness is asserted once at the end, on a
+        # settled cluster; the storm only needs to keep executions in flight.
+        c = redis.Redis(**shard_kwargs[shard])
+        try:
+            while not done.is_set():
+                try:
+                    c.execute_command(_MRANGE_COUNT_CMD)
+                except redis.exceptions.RedisError:
+                    pass
+        finally:
+            c.close()
+
+    def refresh_loop():
+        # Fire timeseries.REFRESHCLUSTER on every shard (what Refresh_Cluster does), each
+        # -> MR_ClusterFree -> MR_AbortRunningExecutions, aborting the in-flight fan-outs
+        # the query threads are issuing. Done on our own bounded connections rather than
+        # via Refresh_Cluster() because that uses env.getConnection clients, which have no
+        # socket timeout and can hang the thread (and the whole test) under heavy churn.
+        refresh_conns = [redis.Redis(**shard_kwargs[s]) for s in range(env.shardsCount)]
+        try:
+            while not done.is_set():
+                for c in refresh_conns:
+                    try:
+                        c.execute_command("timeseries.REFRESHCLUSTER")
+                    except redis.exceptions.RedisError:
+                        pass
+                time.sleep(0.03)
+        finally:
+            for c in refresh_conns:
+                c.close()
+
+    with ThreadPoolExecutor(max_workers=n_query_threads + 1) as executor:
+        futures = [executor.submit(query_loop, i % env.shardsCount) for i in range(n_query_threads)]
+        futures.append(executor.submit(refresh_loop))
+        time.sleep(duration_secs)
+        done.set()
+        for future in futures:
+            future.result()
+
+    # This test's sole arbiter is LeakSanitizer at process exit; functional correctness
+    # during churn is inherently racy and is covered strictly by the test_asm_* tests
+    # above. Give the fan-out a bounded, best-effort chance to converge so the run ends
+    # tidily -- but assert nothing here and, crucially, never issue an *unbounded* call:
+    # under sanitizer the post-storm fan-out can stay wedged, and an unbounded recv would
+    # hang the whole test past the RLTest timeout so the process never exits and ASAN
+    # never runs (which is exactly how earlier revisions masked the leak).
+    settle_conn = redis.Redis(**shard_kwargs[0])
+    settle_deadline = time.time() + (30 if (VALGRIND or SANITIZER) else 10)
+    try:
+        while time.time() < settle_deadline:
+            try:
+                validate(settle_conn.execute_command(_MRANGE_COUNT_CMD))
+                break
+            except (redis.exceptions.RedisError, AssertionError):
+                time.sleep(0.2)
+    finally:
+        settle_conn.close()
+
+
 # ---------------------------------------------------------------------------
 # MOD-16951: a first multi-shard query on a "cold" coordinator must return
 # promptly rather than hang until the client read timeout. The cluster is
