@@ -70,7 +70,14 @@ def validate_queries_during_migrations(env, post_migration, command, validate_re
     command: the query to run repeatedly (as a single string).
     validate_result: callback invoked with the command's reply to assert it is correct.
     """
-    SLOT_RANGES_ERROR = "Query requires unavailable slots"  # same as in libmr_commands.c
+    # Two transient errors can surface while slots migrate; both are expected and tolerated (strings
+    # must match libmr_commands.c):
+    # - SLOT_RANGES_ERROR: a race between nodes propagating ownership of slots and a parallel multi-node
+    #   command might lead to response on same slots from multiple nodes (or the opposite: missed slots).
+    # - TOPOLOGY_CHANGED_ERROR: a topology change is seen mid-command (across the fan-out to all nodes)
+    #   so in-flight executions are killed early and this is returned.
+    SLOT_RANGES_ERROR = "Query requires unavailable slots"
+    TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
 
     # Two flavors of the same query check, both hitting a random shard:
     # - strict: used when the topology is settled (baseline + right after each migration
@@ -86,7 +93,7 @@ def validate_queries_during_migrations(env, post_migration, command, validate_re
         try:
             result = conn.execute_command(command)
         except redis.exceptions.ResponseError as x:
-            assert str(x) == SLOT_RANGES_ERROR, str(x)
+            assert str(x) in (SLOT_RANGES_ERROR, TOPOLOGY_CHANGED_ERROR), str(x)
             return
         validate_result(result)
 

@@ -104,15 +104,16 @@ class ClusterNode:
     id: str
     ip: str
     port: int
-    cport: int  # cluster bus port
-    hostname: Optional[str]
     flags: Set[str]
-    master: str  # Either this node's primary replica or '-'
-    ping_sent: int
-    pong_recv: int
-    config_epoch: int
-    link_state: bool  # True: connected, False: disconnected
     slots: Set[SlotRange]
+    # Fields below are absent from timeseries.INFOCLUSTER (only CLUSTER NODES has them), so they default.
+    cport: Optional[int] = None  # cluster bus port
+    hostname: Optional[str] = None
+    master: str = "-"  # Either this node's primary replica or '-'
+    ping_sent: int = 0
+    pong_recv: int = 0
+    config_epoch: int = 0
+    link_state: bool = False  # True: connected, False: disconnected
 
     @staticmethod
     def from_str(s: str):
@@ -309,7 +310,7 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
     wait_for_completion(source_conn)
 
 
-def _conn_reporter(conn):
+def get_node_address(conn):
     kwargs = conn.connection_pool.connection_kwargs
     return f"{kwargs.get('host')}:{kwargs.get('port')}"
 
@@ -327,7 +328,7 @@ def dump_node_infocluster(conn):
     conn.execute_command("debug", "MARK-INTERNAL-CLIENT")
     reply = conn.execute_command("timeseries.INFOCLUSTER")
     top = dict(zip(reply[::2], reply[1::2]))
-    print(f"{_conn_reporter(conn)}: MyId={top['MyId']} MyRunId={top['MyRunId']}")
+    print(f"{get_node_address(conn)}: MyId={top['MyId']} MyRunId={top['MyRunId']}")
     for node in reply[4]:
         n = {}
         slot_ranges = []
@@ -355,7 +356,7 @@ def dump_infocluster(env):
 
 def dump_node_cluster_info(conn):
     info = conn.execute_command("CLUSTER", "INFO")
-    print(f"{_conn_reporter(conn)}:")
+    print(f"{get_node_address(conn)}:")
     for line in str(info).splitlines():
         print(f"    {line}")
 
