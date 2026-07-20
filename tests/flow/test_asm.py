@@ -55,14 +55,18 @@ def test_asm_with_data_and_queries_during_migrations():
         assert len(samples) == samples_per_key
         assert all(int(sample[1]) == number_of_keys for sample in samples)
 
-    validate_queries_during_migrations(env, command, validate_result)
+    validate_queries_during_migrations(
+        env, post_migration=wait_for_valid_cluster, command=command, validate_result=validate_result
+    )
 
 
-def validate_queries_during_migrations(env, command, validate_result):
+def validate_queries_during_migrations(env, post_migration, command, validate_result):
     """
     Runs command from random shards in a loop while slots migrate back and forth, validating every result.
 
     env: the cluster test environment.
+    post_migration: callback invoked with env after each migration completes (e.g. wait_for_valid_cluster
+    to wait for a consistent view of the cluster amongst all nodes, before continuing to other migrations)
     command: the query to run repeatedly (as a single string).
     validate_result: callback invoked with the command's reply to assert it is correct.
     """
@@ -87,7 +91,7 @@ def validate_queries_during_migrations(env, command, validate_result):
         validate_result(result)
 
     def validate_after_migration(env):
-        wait_for_valid_cluster(env)
+        post_migration(env)
         strict_validation(env)
 
     # First validate the result on the "static" cluster
