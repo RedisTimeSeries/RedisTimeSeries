@@ -23,6 +23,12 @@ fi
 : "${ROOT:?setup-python.sh: ROOT not set (must be sourced by install_script.sh)}"
 : "${HERE:?setup-python.sh: HERE not set (must be sourced by install_script.sh)}"
 
+# check-deps mode: record uv presence like any other dep, install nothing.
+if [ "${CHECK_DEPS:-0}" = 1 ]; then
+    if command -v uv >/dev/null 2>&1; then DEPS_OK="$DEPS_OK uv"; else DEPS_MISSING="$DEPS_MISSING uv"; fi
+    return 0 2>/dev/null || exit 0
+fi
+
 if ! command -v uv >/dev/null 2>&1; then
     echo "==> [redistimeseries] installing uv"
     curl -LsSf https://astral.sh/uv/install.sh | sh
