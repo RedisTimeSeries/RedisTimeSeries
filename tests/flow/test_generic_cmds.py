@@ -48,7 +48,7 @@ def test_flush():
         r1 = init(env, r)
         assert r.execute_command('FLUSHDB')
         res = r1.execute_command('TS.QUERYINDEX', 'name=(mush,zavi,rex)')
-        env.assertEqual(res, [])
+        env.assertEqual(sorted(res), sorted([b't{1}', b't{2}', b't{1}_agg']))
 
 def test_set():
     env = Env()
