@@ -7,6 +7,25 @@
 # Sourced by os/<osnick>.sh after lib/pm.sh. All variables here are plain
 # space-separated strings so callers can splat them with `apt_install $SET`.
 
+# OPTIONAL_PKGS: still listed in the *_BASE sets and installed by bootstrap as
+# usual — this ONLY tells `make bootstrap list` to report them in a
+# separate "optional" section and NOT fail the check when they're missing.
+# They're needed for tests/coverage/debugging, not to build or run the module.
+# Matched by package name across package managers. Be conservative: a dep
+# wrongly listed here lets list pass even when it's genuinely absent.
+# Optional = installed by bootstrap but NOT in the README's minimal build-dep
+# list (README.md "Install required dependencies"): tests/coverage/debug and
+# feature libs the core build/run doesn't need.
+OPTIONAL_PKGS="valgrind gdb lcov tcl jq clang-format py3-numpy python3-numpy py3-psutil python3-psutil py3-cryptography python3-cryptography openssh xsimd openblas-dev curl tar uv zlib1g-dev zlib-dev zlib-devel libbz2-dev bzip2-dev bzip2-devel libblocksruntime-dev libev-dev libev-devel libevent-dev libevent-devel"
+
+# MIN_VERSIONS: sparse "pkg:minversion" list — only deps with a real floor a
+# package-manager install can actually satisfy. Everything else is presence-only.
+# (cmake is intentionally NOT here: its >= 3.25 requirement is provisioned by
+# install_cmake.sh during a real `make bootstrap`, not by the distro package, so
+# a version floor here would be unsatisfiable by the apt/dnf `cmake` and would
+# only make `list`/`dry-run` disagree.)
+MIN_VERSIONS=""
+
 # Install AWS CLI v2 from the official installer (arch-aware). Skips if
 # already present — handles pre-installed AMIs without failing.
 install_aws_cli() {

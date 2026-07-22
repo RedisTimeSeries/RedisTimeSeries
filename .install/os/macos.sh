@@ -27,8 +27,7 @@ fi
 brew_default_install
 
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "==> [redistimeseries] python3 not on PATH; installing brew python@3.11"
-    HOMEBREW_NO_AUTO_UPDATE=1 brew install python@3.11
+    HOMEBREW_NO_AUTO_UPDATE=1 _run brew install python@3.11
 fi
 
 LLVM_VERSION="18"
@@ -47,6 +46,9 @@ update_profile() {
     fi
 }
 
-[ -f "$HOME/.bash_profile" ] && update_profile "$HOME/.bash_profile"
-[ -f "$HOME/.zshrc" ]        && update_profile "$HOME/.zshrc"
+# PATH munging writes to shell profiles — a mutation. Skip it in list/dry-run.
+if [ "${CHECK_DEPS:-0}" != 1 ] && [ "${DRY_RUN:-0}" != 1 ]; then
+    [ -f "$HOME/.bash_profile" ] && update_profile "$HOME/.bash_profile"
+    [ -f "$HOME/.zshrc" ]        && update_profile "$HOME/.zshrc"
+fi
 true

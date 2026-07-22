@@ -35,6 +35,110 @@ else
 fi
 
 # ----------------------------------------------------------------------------
+# list mode: when CHECK_DEPS=1 the install primitives below do NOT
+# install — they query whether each package is already present and record it
+# into DEPS_OK / DEPS_MISSING (printed as a summary by install_script.sh).
+# SUDO is neutralised to a no-op so stray privileged side-commands
+# (groupinstall, repo enables, ln/cp/update-alternatives) can't mutate the
+# system during a check.
+# ----------------------------------------------------------------------------
+CHECK_DEPS="${CHECK_DEPS:-0}"
+DEPS_OK=""
+DEPS_MISSING=""
+DEPS_OPT_OK=""
+DEPS_OPT_MISSING=""
+
+# Optional deps are marked in lib/packages.sh (OPTIONAL_PKGS); default empty
+# here so a check works even before packages.sh is sourced. They are still
+# installed normally — this only splits them into a separate list bucket.
+OPTIONAL_PKGS="${OPTIONAL_PKGS:-}"
+_is_optional() { case " $OPTIONAL_PKGS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+# MIN_VERSIONS (lib/packages.sh): sparse "pkg:minversion" list — only deps that
+# have a real floor. Everything else is presence-only. Default empty.
+MIN_VERSIONS="${MIN_VERSIONS:-}"
+_min_for() { for _e in $MIN_VERSIONS; do case "$_e" in "$1:"*) echo "${_e#*:}"; return ;; esac; done; }
+
+# Read a tool's installed version from the tool itself (not the package DB —
+# e.g. cmake is overlaid into /usr/local by install_cmake.sh, so dpkg would
+# report the stale apt version).
+_get_installed_version() {
+    case "$1" in
+        gcc|g++) "$1" -dumpversion 2>/dev/null ;;
+        *)       "$1" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 ;;
+    esac
+}
+
+# version_ge HAVE WANT -> 0 if HAVE >= WANT (strips -rev/+build suffixes).
+version_ge() {
+    _have="${1%%[-+]*}"; _want="${2%%[-+]*}"
+    _s=sort; sort -V </dev/null >/dev/null 2>&1 || { command -v gsort >/dev/null 2>&1 && _s=gsort; }
+    [ "$(printf '%s\n%s\n' "$_want" "$_have" | "$_s" -V | head -1)" = "$_want" ]
+}
+
+# DRY_RUN=1: run the bootstrap flow but install nothing — for each MISSING
+# package, print the exact install command that WOULD run (the same single
+# line the primitive executes normally, via _run — no duplicated command).
+DRY_RUN="${DRY_RUN:-0}"
+
+if [ "$CHECK_DEPS" = 1 ] || [ "$DRY_RUN" = 1 ]; then
+    _SUDO_DISPLAY="$SUDO"   # remember the real sudo prefix for dry-run printing
+    SUDO=":"                # neutralize privileged side-commands (no mutation)
+fi
+
+# dry-run colors (on a real terminal; plain when piped, e.g. CI logs):
+#   commands  -> blue     headlines (==> lines) -> cyan, so they're distinct.
+if [ "$DRY_RUN" = 1 ] && [ -t 1 ]; then
+    _DRY_C="$(printf '\033[0;34m')"; _DRY_H="$(printf '\033[1;36m')"; _DRY_R="$(printf '\033[0m')"
+else _DRY_C=""; _DRY_H=""; _DRY_R=""; fi
+_dry_line() { printf '%s%s%s\n' "$_DRY_C" "$*" "$_DRY_R"; }   # a command  (blue)
+_dry_head() { printf '%s%s%s\n' "$_DRY_H" "$*" "$_DRY_R"; }   # a headline (cyan)
+
+# _run CMD... — install: execute (real sudo prefix); dry-run: print each
+# package on its own line (blue); list: skip. Callers pre-filter to missing.
+_run() {
+    if [ "$CHECK_DEPS" = 1 ]; then return 0
+    elif [ "$DRY_RUN" = 1 ]; then _dry_line "${_SUDO_DISPLAY:+$_SUDO_DISPLAY }$*"
+    else ${_SUDO_DISPLAY:-$SUDO} "$@"; fi
+}
+
+# Echo (space-separated) only the packages from "$@" that are NOT installed.
+_missing_only() { for _p in "$@"; do _pkg_installed "$_p" || printf '%s ' "$_p"; done; }
+
+# Read-only "is this package installed?" probe, per package manager.
+_pkg_installed() {
+    case "$PM" in
+        apt)          dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'ok installed' ;;
+        dnf|yum|tdnf) rpm -q "$1" >/dev/null 2>&1 ;;
+        apk)          apk info -e "$1" >/dev/null 2>&1 ;;
+        # Judge by stdout, not exit code: brew often prints unrelated
+        # warnings to stderr and returns non-zero even when the formula is
+        # installed. A non-empty "<name> <version>" line means installed.
+        brew)         [ -n "$(brew list --versions "$1" 2>/dev/null)" ] ;;
+        *)            return 1 ;;
+    esac
+}
+
+_check_pkgs() {
+    for _p in "$@"; do
+        if _is_optional "$_p"; then
+            if _pkg_installed "$_p"; then DEPS_OPT_OK="$DEPS_OPT_OK $_p"; else DEPS_OPT_MISSING="$DEPS_OPT_MISSING $_p"; fi
+        else
+            _min=$(_min_for "$_p")
+            if ! _pkg_installed "$_p"; then
+                # absent — carry the required version (if any) so it's shown.
+                if [ -n "$_min" ]; then DEPS_MISSING="$DEPS_MISSING $_p:$_min"; else DEPS_MISSING="$DEPS_MISSING $_p"; fi
+            elif [ -n "$_min" ] && _have=$(_get_installed_version "$_p") && [ -n "$_have" ] && ! version_ge "$_have" "$_min"; then
+                # present but below the required minimum — count as missing.
+                DEPS_MISSING="$DEPS_MISSING $_p:$_min"
+            else
+                DEPS_OK="$DEPS_OK $_p"
+            fi
+        fi
+    done
+}
+
+# ----------------------------------------------------------------------------
 # Per-PM install primitives
 # ----------------------------------------------------------------------------
 
@@ -43,32 +147,38 @@ fi
 _pm_apt_updated=0
 apt_install() {
     [ "$#" -gt 0 ] || return 0
+    if [ "$CHECK_DEPS" = 1 ]; then _check_pkgs "$@"; return 0; fi
+    if [ "$DRY_RUN" = 1 ]; then set -- $(_missing_only "$@"); [ "$#" -gt 0 ] || return 0; fi
     # Acquire::Retries: ports.ubuntu.com (arm64 mirror) intermittently drops
     # connections mid-build; without retries a single dropped fetch fails the
     # whole docker build (exit 100). Retry each download before giving up.
     local apt_retry="-o Acquire::Retries=5"
-    if [ "$_pm_apt_updated" = 0 ]; then
+    if [ "$DRY_RUN" != 1 ] && [ "$_pm_apt_updated" = 0 ]; then
         export DEBIAN_FRONTEND=noninteractive
         $SUDO apt-get update -qq $apt_retry
         _pm_apt_updated=1
     fi
-    # env goes THROUGH $SUDO: sudo's env_reset strips exported variables, so a
+    # env goes THROUGH sudo: sudo's env_reset strips exported variables, so a
     # plain export upstream never reaches dpkg — debconf (e.g. tzdata on focal,
     # which the base image doesn't preinstall) then blocks on an interactive
     # prompt and the bootstrap hangs.
-    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -yqq --no-install-recommends $apt_retry "$@"
+    _run env DEBIAN_FRONTEND=noninteractive apt-get install -yqq --no-install-recommends $apt_retry "$@"
 }
 
 # `--allowerasing` lets dnf pick our `curl` over the slimmer `curl-minimal`
 # preinstalled on amazon linux 2023 / EL10 base images.
 dnf_install() {
     [ "$#" -gt 0 ] || return 0
-    $SUDO dnf -y install --allowerasing --skip-broken "$@"
+    if [ "$CHECK_DEPS" = 1 ]; then _check_pkgs "$@"; return 0; fi
+    if [ "$DRY_RUN" = 1 ]; then set -- $(_missing_only "$@"); [ "$#" -gt 0 ] || return 0; fi
+    _run dnf -y install --allowerasing --skip-broken "$@"
 }
 
 yum_install() {
     [ "$#" -gt 0 ] || return 0
-    $SUDO yum -y install --skip-broken "$@"
+    if [ "$CHECK_DEPS" = 1 ]; then _check_pkgs "$@"; return 0; fi
+    if [ "$DRY_RUN" = 1 ]; then set -- $(_missing_only "$@"); [ "$#" -gt 0 ] || return 0; fi
+    _run yum -y install --skip-broken "$@"
 }
 
 # tdnf has no --skip-broken and aborts the whole transaction if any single
@@ -77,8 +187,11 @@ yum_install() {
 # becomes a warning rather than a build failure.
 tdnf_install() {
     [ "$#" -gt 0 ] || return 0
+    if [ "$CHECK_DEPS" = 1 ]; then _check_pkgs "$@"; return 0; fi
+    if [ "$DRY_RUN" = 1 ]; then set -- $(_missing_only "$@"); fi
     local pkg
     for pkg in "$@"; do
+        if [ "$DRY_RUN" = 1 ]; then _run tdnf -y install "$pkg"; continue; fi
         if ! $SUDO tdnf -y install "$pkg" >/dev/null 2>&1; then
             echo "pm.sh: tdnf skipped unavailable package '$pkg'"
         fi
@@ -87,7 +200,9 @@ tdnf_install() {
 
 apk_install() {
     [ "$#" -gt 0 ] || return 0
-    $SUDO apk add --no-cache "$@"
+    if [ "$CHECK_DEPS" = 1 ]; then _check_pkgs "$@"; return 0; fi
+    if [ "$DRY_RUN" = 1 ]; then set -- $(_missing_only "$@"); [ "$#" -gt 0 ] || return 0; fi
+    _run apk add --no-cache "$@"
 }
 
 # brew exits non-zero when a formula is already installed/linked. We tolerate
@@ -95,6 +210,8 @@ apk_install() {
 # checks (compiler probes, `command -v`, ...).
 brew_install() {
     [ "$#" -gt 0 ] || return 0
+    if [ "$CHECK_DEPS" = 1 ]; then _check_pkgs "$@"; return 0; fi
+    if [ "$DRY_RUN" = 1 ]; then set -- $(_missing_only "$@"); [ "$#" -gt 0 ] || return 0; _run brew install "$@"; return 0; fi
     if ! command -v brew >/dev/null 2>&1; then
         echo "pm.sh: brew not installed; install from https://brew.sh" >&2
         exit 1

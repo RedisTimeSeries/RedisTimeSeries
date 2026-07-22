@@ -23,6 +23,29 @@ fi
 : "${ROOT:?setup-python.sh: ROOT not set (must be sourced by install_script.sh)}"
 : "${HERE:?setup-python.sh: HERE not set (must be sourced by install_script.sh)}"
 
+# list mode: record uv presence like any other dep, install nothing.
+# uv installs to ~/.local/bin (or ~/.cargo/bin), which is not on PATH in the
+# non-login bootstrap subshell — detect it there too, not just via PATH.
+_have_uv() { command -v uv >/dev/null 2>&1 || [ -x "$HOME/.local/bin/uv" ] || [ -x "$HOME/.cargo/bin/uv" ]; }
+
+if [ "${CHECK_DEPS:-0}" = 1 ]; then
+    # uv presence, routed through OPTIONAL_PKGS like any other dep.
+    if _have_uv; then _uv=ok; else _uv=missing; fi
+    if _is_optional uv; then
+        [ "$_uv" = ok ] && DEPS_OPT_OK="$DEPS_OPT_OK uv" || DEPS_OPT_MISSING="$DEPS_OPT_MISSING uv"
+    else
+        [ "$_uv" = ok ] && DEPS_OK="$DEPS_OK uv" || DEPS_MISSING="$DEPS_MISSING uv"
+    fi
+    return 0 2>/dev/null || exit 0
+fi
+
+# dry-run: print the uv install command only if uv is missing; never touch the
+# venv/pip (that's not a system dep and creating it would be a real mutation).
+if [ "${DRY_RUN:-0}" = 1 ]; then
+    _have_uv || _dry_line "curl -LsSf https://astral.sh/uv/install.sh | sh   # uv (then: uv venv + uv pip install -r ...)"
+    return 0 2>/dev/null || exit 0
+fi
+
 if ! command -v uv >/dev/null 2>&1; then
     echo "==> [redistimeseries] installing uv"
     curl -LsSf https://astral.sh/uv/install.sh | sh
