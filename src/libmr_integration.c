@@ -1369,7 +1369,7 @@ int LibMR_ResizeExecutionThreadPoolIfUnstarted(long long numThreads) {
 }
 
 int register_mr(RedisModuleCtx *ctx, long long numThreads) {
-    if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
+    if (MR_Init(ctx, numThreads, TSGlobalConfig.password, TSGlobalConfig.topologyEvents) != REDISMODULE_OK) {
         RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
         return REDISMODULE_ERR;
     }
