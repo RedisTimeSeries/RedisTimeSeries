@@ -31,3 +31,4 @@ compile_commands.json
 redis/
 temp-redis-config*
 .prepared
+/tests/flow/tls/

@@ -59,7 +59,7 @@ RHEL_BASE="
 TDNF_BASE="
     ca-certificates wget curl git
     build-essential gcc g++ make cmake autoconf automake libtool clang
-    openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel
+    openssl openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel
     python3 python3-pip python3-devel
     unzip jq tar which
 "
