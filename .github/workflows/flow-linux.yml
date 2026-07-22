@@ -152,7 +152,7 @@ jobs:
           read -r -a OS_LIST <<< "$OS"
           if [ "$QUICK" != "true" ] && { [ "$RUN_VALGRIND" == "true" ] || [ "$RUN_SANITIZER" == "true" ] || [ "$SHARD_TOPOLOGIES" == "true" ]; }; then
             for os in "${OS_LIST[@]}"; do
-              for topo in gen slaves aof aof_slaves oss_cluster; do
+              for topo in gen slaves aof aof_slaves oss_cluster tls_cluster; do
                 MATRIX="${MATRIX}{\"os\": \"${os}\", \"topo\": \"${topo}\"},"
               done
             done
@@ -255,6 +255,7 @@ jobs:
             aof)         TOPO_ARGS="GEN=0 SLAVES=0 AOF=1 AOF_SLAVES=0 OSS_CLUSTER=0" ;;
             aof_slaves)  TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=1 OSS_CLUSTER=0" ;;
             oss_cluster) TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=1" ;;
+            tls_cluster) TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0 TLS_CLUSTER=1" ;;
           esac
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \

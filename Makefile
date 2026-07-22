@@ -93,6 +93,7 @@ make flow_tests    # run tests
   SLAVES=1         # run replication tests on standalone Redis topology
   AOF_SLAVES=1     # run AND and replication tests on standalone Redis topology
   OSS_CLUSTER=1    # run general tests on an OSS Cluster topology
+  TLS_CLUSTER=1    # run general tests on an OSS Cluster topology with TLS (tls-cluster yes)
   SHARDS=num       # run OSS cluster with `num` shards (default: 3)
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
@@ -431,12 +432,17 @@ export AOF_SLAVES ?= 1
 export OSS_CLUSTER ?= 1
 endif
 
+# TLS_CLUSTER is opt-in only (needs a TLS-capable redis-server build + certs),
+# so it stays out of the QUICK/default variant set above.
+export TLS_CLUSTER ?= 0
+
 ifneq ($(RLEC),1)
 
 flow_tests: #$(TARGET)
 	$(SHOW)\
 	MODULE=$(realpath $(TARGET)) \
 	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) AOF_SLAVES=$(AOF_SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
+	TLS_CLUSTER=$(TLS_CLUSTER) \
 	VALGRIND=$(VALGRIND) \
 	TEST=$(TEST) \
 	$(ROOT)/tests/flow/tests.sh
