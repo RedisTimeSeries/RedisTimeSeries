@@ -27,8 +27,23 @@ if [ "${CHECK_DEPS:-0}" = 1 ]; then
 fi
 
 if [ "${DRY_RUN:-0}" = 1 ]; then
-    # print the uv install command only if uv is missing; never touch venv/pip.
-    _have_uv || _dry_line "curl -LsSf https://astral.sh/uv/install.sh | sh   # uv (then: uv venv + uv pip install -r ...)"
+    # Print the exact uv + venv + pip sequence bootstrap would run (nothing is
+    # executed) so dry-run output is a copy-pasteable script. Guarded on what's
+    # already present so a provisioned host prints only the gaps: uv install
+    # only if uv is missing; venv + pip only if the venv doesn't exist yet
+    # (mirrors the real `[ ! -d venv ]` guard below).
+    if [ ! -d "$ROOT/venv" ]; then
+        _have_uv || _dry_line "curl -LsSf https://astral.sh/uv/install.sh | sh"
+        # uv installs to ~/.local/bin (or ~/.cargo/bin), which may not be on
+        # PATH — export it so the uv commands below resolve when pasted, exactly
+        # as bootstrap does after installing uv.
+        _dry_line 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"'
+        _dry_line "uv venv \"$ROOT/venv\" --python \"${SETUP_PYTHON_VERSION:-3.12}\""
+        _dry_line "uv pip install --python \"$ROOT/venv/bin/python\" --upgrade pip wheel \"setuptools<81\""
+        _dry_line "uv pip install --python \"$ROOT/venv/bin/python\" -r \"$HERE/build_package_requirements.txt\""
+        [ -f "$ROOT/tests/flow/requirements.txt" ] && _dry_line "uv pip install --python \"$ROOT/venv/bin/python\" -r \"$ROOT/tests/flow/requirements.txt\""
+        _dry_line "uv pip install --python \"$ROOT/venv/bin/python\" gevent"
+    fi
     return 0 2>/dev/null || exit 0
 fi
 
