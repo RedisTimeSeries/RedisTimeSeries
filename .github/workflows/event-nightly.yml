@@ -184,6 +184,9 @@ jobs:
 
       - name: Build job results JSON
         id: build-results
+        env:
+          COVERAGE_ENABLED: ${{ vars.ENABLE_CODE_COVERAGE != 'false' }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
         run: |
           # Build JSON object with job results
           JOB_RESULTS=$(cat <<'EOF'
@@ -194,11 +197,15 @@ jobs:
             "macos": "${{ needs.macos.result }}",
             "linux-valgrind": "${{ needs.linux-valgrind.result }}",
             "linux-sanitizer": "${{ needs.linux-sanitizer.result }}",
-            "random-traffic": "${{ needs.random-traffic.result }}",
-            "coverage": "${{ needs.coverage.result }}"
+            "random-traffic": "${{ needs.random-traffic.result }}"
           }
           EOF
           )
+          # A deliberately disabled coverage job is skipped, not failed. Omit it
+          # from the summary so it does not turn a successful nightly "skipped".
+          if [[ "$COVERAGE_ENABLED" == "true" ]]; then
+            JOB_RESULTS=$(echo "$JOB_RESULTS" | jq --arg result "$COVERAGE_RESULT" '. + {coverage: $result}')
+          fi
           # Output as single line for GitHub Actions
           echo "job_results=$(echo "$JOB_RESULTS" | jq -c .)" >> $GITHUB_OUTPUT
 
