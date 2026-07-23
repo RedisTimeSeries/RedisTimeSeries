@@ -1,8 +1,15 @@
 from includes import *
 from packaging import version
+from dataclasses import dataclass
+from typing import Optional, Set
 import time
 import inspect
+import re
+import random
+import contextlib
 
+
+NUMBER_OF_SLOTS = 2**14
 
 def Refresh_Cluster(env):
     for shard in range(0, env.shardsCount):
@@ -20,7 +27,7 @@ def set_hertz(env):
         return
     for shard in range(0, env.shardsCount):
         # Lower hz value to make it more likely that mrange triggers key expiration
-        assert env.getConnection(shard).execute_command('config set hz 1') == b'OK'
+        assert env.getConnection(shard).execute_command('CONFIG SET hz 1') in ('OK', b'OK')
 
 class Colors(object):
     @staticmethod
@@ -77,6 +84,413 @@ def is_resp3_possible(env):
         return False
     else:
         return True
+
+# Helper structs and functions for slot-range-related tests
+
+
+@dataclass(frozen=True)
+class SlotRange:
+    start: int
+    end: int
+
+    @staticmethod
+    def from_str(s: str):
+        start, end = map(int, s.split("-"))
+        assert 0 <= start <= end < NUMBER_OF_SLOTS
+        return SlotRange(start, end)
+
+
+@dataclass
+class ClusterNode:
+    id: str
+    ip: str
+    port: int
+    flags: Set[str]
+    slots: Set[SlotRange]
+    # Fields below are absent from timeseries.INFOCLUSTER (only CLUSTER NODES has them), so they default.
+    cport: Optional[int] = None  # cluster bus port
+    hostname: Optional[str] = None
+    master: str = "-"  # Either this node's primary replica or '-'
+    ping_sent: int = 0
+    pong_recv: int = 0
+    config_epoch: int = 0
+    link_state: bool = False  # True: connected, False: disconnected
+
+    @staticmethod
+    def from_str(s: str):
+        # <id> <ip:port @cport[,hostname]> <flags> <master> <ping-sent> <pong-recv> <config-epoch> <link-state> <slot-range> [<slot-range>> ...]
+        # e.g. a5e5068caceb2adabed3ed657b21b627deadbfaa 127.0.0.1:6379 @16379 master - 0 1760353421847 1 connected 1000-2000 10000-15000
+        parts = s.split()
+        node_id, addr, flags, master, ping_sent, pong_recv, config_epoch, link_state, *slots = parts
+        match = re.match(r"^(?P<ip>[^:]+):(?P<port>\d+)@(?P<cport>\d+)(?:,(?P<hostname>.+))?$", addr)
+        ip = match.group("ip")
+        port = int(match.group("port"))
+        cport = int(match.group("cport"))
+        hostname = match.group("hostname")
+
+        return ClusterNode(
+            id=node_id,
+            ip=ip,
+            port=port,
+            cport=cport,
+            hostname=hostname,
+            flags=set(flags.split(",")),
+            master=master,
+            ping_sent=int(ping_sent),
+            pong_recv=int(pong_recv),
+            config_epoch=int(config_epoch),
+            link_state=link_state == "connected",
+            slots={SlotRange.from_str(s) for s in slots},
+        )
+
+
+def fill_ts_data(env, number_of_keys: int, samples_per_key: int, **lables):
+    """
+    Create number_of_keys time series (one per hash slot, evenly spread) with samples_per_key
+    samples each. A label value that is callable is called with the key's index; others are used as-is.
+    """
+    def generate_commands():
+        start_timestamp, jump_timestamps = 1000000000, 100
+        for i in range(number_of_keys):
+            hslot = i * (NUMBER_OF_SLOTS - 1) // (number_of_keys - 1)
+            ts_key = f"ts:{{{slot_table[hslot]}}}"
+            resolved = {k: (v(i) if callable(v) else v) for k, v in lables.items()}
+            yield f"TS.CREATE {ts_key} LABELS {' '.join(f'{k} {v}' for k, v in resolved.items())}"
+            yield "TS.MADD " + " ".join(
+                f"{ts_key} {start_timestamp + j * jump_timestamps} {random.uniform(0, 100)}"
+                for j in range(samples_per_key)
+            )
+
+    with env.getClusterConnectionIfNeeded() as rc:
+        for command in generate_commands():
+            rc.execute_command(*command.split())
+
+
+def migrate_slots_back_and_forth(env, validator=None):
+    """
+    Migrates slots between the two shards. When done all slots are back to their original places.
+    After each migration validator(env) is called (when not None).
+    """
+
+    def cluster_node_of(conn) -> ClusterNode:
+        for line in conn.execute_command("CLUSTER", "NODES").splitlines():
+            cluster_node = ClusterNode.from_str(line)
+            if "myself" in cluster_node.flags:
+                return cluster_node
+        raise ValueError("No node with 'myself' flag found")
+
+    def middle_slot_range(slot_range: SlotRange) -> SlotRange:
+        third = (slot_range.end - slot_range.start) // 3
+        return SlotRange(slot_range.start + third, slot_range.end - third)
+
+    def cantorized_slot_set(slot_range: SlotRange) -> Set[SlotRange]:  # https://en.wikipedia.org/wiki/Cantor_set ;)
+        middle = middle_slot_range(slot_range)
+        return {SlotRange(slot_range.start, middle.start - 1), SlotRange(middle.end + 1, slot_range.end)}
+
+    first_conn, second_conn = env.getConnection(0), env.getConnection(1)
+
+    def host_of(conn):
+        return conn.connection_pool.connection_kwargs.get("host")
+
+    def port_of(conn):
+        return conn.connection_pool.connection_kwargs.get("port")
+
+    def title_for(migrated_slots, src, dst):
+        return (f"slots {migrated_slots.start}-{migrated_slots.end} "
+                f"migrated from {host_of(src)}:{port_of(src)} to {host_of(dst)}:{port_of(dst)}")
+
+    def validate(title):
+        if validator is None:
+            return
+        print(f"\n----- {title} -----")
+        validator(env)
+
+    # Store some original values to be used throughout the test
+    (original_first_slot_range,) = cluster_node_of(first_conn).slots
+    (original_second_slot_range,) = cluster_node_of(second_conn).slots
+    middle_of_original_first = middle_slot_range(original_first_slot_range)
+    middle_of_original_second = middle_slot_range(original_second_slot_range)
+
+    import_slots(second_conn, first_conn, middle_of_original_second)
+    assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
+    assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
+    validate(title_for(middle_of_original_second, second_conn, first_conn))
+
+    import_slots(first_conn, second_conn, middle_of_original_second)
+    assert cluster_node_of(first_conn).slots == {original_first_slot_range}
+    assert cluster_node_of(second_conn).slots == {original_second_slot_range}
+    validate(title_for(middle_of_original_second, first_conn, second_conn))
+
+    import_slots(first_conn, second_conn, middle_of_original_first)
+    assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
+    assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
+    validate(title_for(middle_of_original_first, first_conn, second_conn))
+
+    import_slots(second_conn, first_conn, middle_of_original_first)
+    assert cluster_node_of(first_conn).slots == {original_first_slot_range}
+    assert cluster_node_of(second_conn).slots == {original_second_slot_range}
+    validate(title_for(middle_of_original_first, second_conn, first_conn))
+
+
+def validate_cluster(conn):
+    """
+    Read the cluster topology as seen by conn (using CLUSTER NODES).
+    Return a dict of ClusterNode.id -> ClusterNode if it passes some validations
+    and None otherwise.
+    """
+    nodes = {}
+    slot_ranges = []
+    for line in conn.execute_command("CLUSTER", "NODES").splitlines():
+        node = ClusterNode.from_str(line)
+        nodes[node.id] = node
+        slot_ranges.extend(node.slots)
+
+    total_slots = 0
+    min_start = NUMBER_OF_SLOTS
+    max_end = -1
+    for sr in slot_ranges:
+        total_slots += sr.end - sr.start + 1
+        min_start = min(min_start, sr.start)
+        max_end = max(max_end, sr.end)
+
+    if min_start != 0 or max_end != NUMBER_OF_SLOTS - 1 or total_slots != NUMBER_OF_SLOTS:
+        return None
+    return nodes
+
+
+def compare_clusters(cluster1, cluster2):
+    """Compare two validate_cluster() dicts, per node only by id, ip, port, flags and slots."""
+    # 'myself' and other flags like 'handshake'/'fail?' are transient, so they depend on which node we asked
+    # only these flags are invariant across views:
+    invariant_flags = {"master", "slave"}
+    if cluster1.keys() != cluster2.keys():
+        return False
+    for node_id in cluster1:
+        n1, n2 = cluster1[node_id], cluster2[node_id]
+        if (n1.id, n1.ip, n1.port, n1.flags & invariant_flags, n1.slots) != \
+           (n2.id, n2.ip, n2.port, n2.flags & invariant_flags, n2.slots):
+            return False
+    return True
+
+
+def wait_for_valid_cluster(env):
+    """Wait until every node reports a valid cluster and all nodes agree on the topology."""
+    timeout = 60 if (VALGRIND or SANITIZER) else 5
+    deadline = time.time() + timeout
+    while True:
+        clusters = [validate_cluster(env.getConnection(i)) for i in range(env.shardsCount)]
+        if all(c is not None for c in clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
+            return
+        assert time.time() < deadline, "cluster did not reach a valid, agreed state in time"
+        time.sleep(0.2)
+
+
+def import_slots(source_conn, target_conn, slot_range: SlotRange):
+    task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
+
+    def wait_for_completion(conn):
+        start_time = time.time()
+        # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
+        # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
+        repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
+        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+        while time.time() - start_time < timeout:
+            (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
+            migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
+            if migration_status["state"] == "completed":
+                break
+            time.sleep(0.1)
+        else:
+            raise TimeoutError(
+                f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}"
+            )
+
+    wait_for_completion(target_conn)
+    # The oss cluster's status data is not CP, but we should rather rely on eventual consistency,
+    # so let's wait for the source as well:
+    wait_for_completion(source_conn)
+
+
+@contextlib.contextmanager
+def add_slaves_to_cluster(env):
+    # RLTest's OSS-cluster with useSlaves starts each replica as a plain `--slaveof` process
+    # with cluster-enabled=no, so it never joins the cluster (absent from CLUSTER NODES).
+    # So instead, for a masters-only env, this function joins
+    # real cluster-node replica per master via MEET + REPLICATE.
+    # Context manager: the replicas it spawns are not managed by RLTest, so it tears them down
+    # (and removes their config files) on exit, whether the test passes, fails, or is interrupted.
+    def cluster_nodes(conn):
+        return {node.id: node for node in map(ClusterNode.from_str, conn.execute_command("CLUSTER", "NODES").splitlines())}
+
+    master_id_of_port = {node.port: node.id for node in cluster_nodes(env.getConnection(0)).values() if "master" in node.flags}
+
+    master_id_of_replica_port = {}
+    spawned = []  # (process, replica_port, cluster_config_file) for teardown
+    try:
+        for shard in env.envRunner.shards:
+            master_id = master_id_of_port[shard.getMasterPort()]
+            replica_port = shard.getMasterPort() + 1  # RLTest spaces master ports by 2, even for masters-only env
+            master_id_of_replica_port[replica_port] = master_id
+
+            # Kill any replica orphaned on this port by a previous aborted run, else our server can't bind.
+            try:
+                redis.Redis(port=replica_port).shutdown(nosave=True)
+            except redis.RedisError:
+                pass
+            while True:
+                try:
+                    redis.Redis(port=replica_port).ping()
+                    time.sleep(0.1)
+                except redis.ConnectionError:
+                    break
+
+            # Unique per-run name: redis reloads the cluster-config-file on boot, and a stale one from a
+            # previous run (dead nodes, conflicting epochs) breaks the failover election. A timestamped
+            # name can never be stale, so correctness doesn't depend on the previous run cleaning up.
+            cluster_config_file = f"/tmp/replica-{replica_port}-{time.time_ns()}.conf"
+
+            cmd = [shard.redisBinaryPath, "--port", str(replica_port),
+                   "--cluster-enabled", "yes",
+                   "--cluster-config-file", cluster_config_file,
+                   "--cluster-node-timeout", "60000",
+                   "--dir", shard.dbDirPath,
+                   "--dbfilename", f"replica-{replica_port}.rdb",
+                   "--logfile", f"replica-{replica_port}.log"]
+            for module in (shard.modulePath or []):
+                cmd += ["--loadmodule", module]
+            spawned.append((subprocess.Popen(cmd), replica_port, cluster_config_file))
+
+            replica_conn = redis.Redis(port=replica_port, decode_responses=True)
+            while True:
+                try:
+                    replica_conn.ping()
+                    break
+                except redis.ConnectionError:
+                    time.sleep(0.1)
+            replica_conn.execute_command("cluster", "meet", "127.0.0.1", shard.getMasterPort())
+            while master_id not in replica_conn.execute_command("cluster", "nodes"):
+                time.sleep(0.1)
+            replica_conn.execute_command("CLUSTER", "REPLICATE", master_id)
+            # Wait for the initial sync to finish; CLUSTER FAILOVER times out on a not-yet-caught-up replica.
+            # The master waits repl-diskless-sync-delay seconds before forking the sync child, so add it.
+            repl_diskless_sync_delay = float(shard.getConnection().config_get("repl-diskless-sync-delay")["repl-diskless-sync-delay"])
+            timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+            start_time = time.time()
+            while replica_conn.info("replication")["master_link_status"] != "up":
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(
+                        f"Replica on port {replica_port} did not sync in {timeout}s, "
+                        f"replication info: {replica_conn.info('replication')}"
+                    )
+                time.sleep(0.1)
+
+        # Verify the cluster now looks as expected: each replica we added is a slave of its master.
+        # Poll, since a master's global view catches up to the newest replica only via gossip.
+        def expected(nodes):
+            id_by_port = {node.port: node.id for node in nodes.values()}
+            return all(
+                replica_port in id_by_port
+                and "slave" in nodes[id_by_port[replica_port]].flags
+                and nodes[id_by_port[replica_port]].master == master_id
+                for replica_port, master_id in master_id_of_replica_port.items()
+            )
+
+        timeout = 5 if not (VALGRIND or SANITIZER) else 60
+        start_time = time.time()
+        while not expected(nodes := cluster_nodes(env.getConnection(0))):
+            if time.time() - start_time > timeout:
+                raise AssertionError(f"cluster topology not as expected after {timeout}s, CLUSTER NODES: {nodes}")
+            time.sleep(0.1)
+
+        yield master_id_of_replica_port
+    finally:
+        for process, replica_port, cluster_config_file in spawned:
+            try:
+                redis.Redis(port=replica_port).shutdown(nosave=True)
+            except redis.RedisError:
+                pass
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            if os.path.exists(cluster_config_file):
+                os.remove(cluster_config_file)
+
+
+def failover_node(replica_conn):
+    role, *rest = replica_conn.execute_command("ROLE")
+    assert role == "slave", "failover_node expects a replica connection"
+    master_ip, master_port = rest[0], rest[1]
+    master_conn = redis.Redis(host=master_ip, port=master_port, decode_responses=True)
+
+    replica_conn.execute_command("CLUSTER", "FAILOVER")
+
+    timeout = 5 if not (VALGRIND or SANITIZER) else 60
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if replica_conn.execute_command("ROLE")[0] == "master" and master_conn.execute_command("ROLE")[0] == "slave":
+            break
+        time.sleep(0.2)
+    else:
+        raise TimeoutError(f"Failover did not complete in {timeout} seconds")
+
+
+def get_node_address(conn):
+    kwargs = conn.connection_pool.connection_kwargs
+    return f"{kwargs.get('host')}:{kwargs.get('port')}"
+
+
+def shard_id_of(env, conn):
+    def addr_of(c):
+        kw = c.connection_pool.connection_kwargs
+        return (kw.get("host"), kw.get("port"))
+
+    target = addr_of(conn)
+    return next((i for i in range(env.shardsCount) if addr_of(env.getConnection(i)) == target), None)
+
+
+def dump_node_infocluster(conn):
+    conn.execute_command("DEBUG", "MARK-INTERNAL-CLIENT")
+    reply = conn.execute_command("timeseries.INFOCLUSTER")
+    top = dict(zip(reply[::2], reply[1::2]))
+    print(f"{get_node_address(conn)}: MyId={top['MyId']} MyRunId={top['MyRunId']}")
+    for node in reply[4]:
+        n = {}
+        slot_ranges = []
+        for key, val in zip(node[::2], node[1::2]):
+            if key == "minHslot":
+                slot_ranges.append([val])
+            elif key == "maxHslot":
+                slot_ranges[-1].append(val)
+            else:
+                n[key] = val
+        runid = n["runid"] if n["runid"] else "-"
+        slots = ",".join(f"{lo}-{hi}" for lo, hi in slot_ranges)
+        print(
+            f"    node {n['id']} {n['ip']}:{n['port']} "
+            f"slots={slots} runid={runid} "
+            f"pending={n['pendingMessages']} status={n['status']}"
+        )
+
+
+def dump_infocluster(env):
+    print("\n===== INFOCLUSTER =====")
+    for shard in range(0, env.shardsCount):
+        dump_node_infocluster(env.getConnection(shard))
+
+
+def dump_node_cluster_info(conn):
+    info = conn.execute_command("CLUSTER", "INFO")
+    print(f"{get_node_address(conn)}:")
+    for line in str(info).splitlines():
+        print(f"    {line}")
+
+
+def dump_cluster_info(env):
+    print("\n===== CLUSTER INFO =====")
+    for shard in range(0, env.shardsCount):
+        dump_node_cluster_info(env.getConnection(shard))
+
 
 # A table of the shortest possible alphanumeric string that is mapped by redis' hslot (index in the table)
 # Shamelessly stolen from redis' crc16_slottable.h
@@ -1107,4 +1521,4 @@ slot_table = [
     "430", "4bY", "0Yw", "zE", "Ti", "03S", "4Lu", "5I5", "60n", "4AE", "L8", "YY", "wu", "0TG", "4oi", "6ZJ",
 ]
 
-assert len(slot_table) == 2 ** 14
+assert len(slot_table) == NUMBER_OF_SLOTS
