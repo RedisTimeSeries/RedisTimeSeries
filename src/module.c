@@ -336,6 +336,134 @@ int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+static int ParseQueryLabelsSubtype(RedisModuleCtx *ctx,
+                                   RedisModuleString *token,
+                                   QueryLabelsSubtype *out) {
+    static const struct
+    {
+        const char *name;
+        QueryLabelsSubtype value;
+    } subtypes[] = {
+        { "LABELS", QueryLabelsSubtype_Labels },
+        { "VALUES", QueryLabelsSubtype_Values },
+    };
+    const char *str = RedisModule_StringPtrLen(token, NULL);
+    for (size_t i = 0; i < sizeof(subtypes) / sizeof(subtypes[0]); i++) {
+        if (strcasecmp(str, subtypes[i].name) == 0) {
+            *out = subtypes[i].value;
+            return REDISMODULE_OK;
+        }
+    }
+    RTS_ReplyGeneralError(ctx, "TSDB: unknown subtype, must be one of LABELS|VALUES");
+    return REDISMODULE_ERR;
+}
+
+static void QueryLabelsEmitToDict(void *userData, const char *buf, size_t len) {
+    RedisModule_DictSetC((RedisModuleDict *)userData, (void *)buf, len, NULL);
+}
+
+// ACL: skips candidates the caller can't read. Shared by the local and cluster-fanout paths.
+void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
+                                        QueryLabelsSubtype subtype,
+                                        RedisModuleString *labelFilter,
+                                        RedisModuleDict *candidates,
+                                        RedisModuleDict *agg) {
+    RedisModuleString *prefix = QueryLabelsBuildPrefix(subtype, labelFilter);
+    size_t prefixLen;
+    const char *prefixBuf = RedisModule_StringPtrLen(prefix, &prefixLen);
+
+    User_Ctx_t userCtx = GetUserFromContext(ctx);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(candidates, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        if (!CheckKeyIsAllowedToReadC(ctx, userCtx.user, currentKey, currentKeyLen)) {
+            continue;
+        }
+        QueryLabelsFromIndex(
+            currentKey, currentKeyLen, subtype, prefixBuf, prefixLen, QueryLabelsEmitToDict, agg);
+    }
+    RedisModule_DictIteratorStop(iter);
+    FreeUser(&userCtx);
+
+    RedisModule_FreeString(NULL, prefix);
+}
+
+static void _TSDB_querylabels_impl(RedisModuleCtx *ctx,
+                                   QueryLabelsSubtype subtype,
+                                   RedisModuleString *label,
+                                   QueryPredicateList *queries) {
+    RedisModuleDict *candidates = queries != NULL
+                                      ? QueryIndex(ctx, queries->list, queries->count, NULL)
+                                      : GetAllIndexedSeriesKeys(ctx);
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    QueryLabelsAggregateFromCandidates(ctx, subtype, label, candidates, agg);
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+    RedisModule_FreeDict(ctx, candidates);
+}
+
+int TSDB_querylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+
+    if (argc < 2) {
+        return RedisModule_WrongArity(ctx);
+    }
+
+    QueryLabelsSubtype subtype;
+    if (ParseQueryLabelsSubtype(ctx, argv[1], &subtype) != REDISMODULE_OK) {
+        return REDISMODULE_ERR;
+    }
+
+    RedisModuleString *label = NULL;
+    int filter_start = 2;
+    if (subtype == QueryLabelsSubtype_Values) {
+        if (argc < 3) {
+            return RedisModule_WrongArity(ctx);
+        }
+        label = argv[2];
+        filter_start = 3;
+    }
+
+    QueryPredicateList *queries = NULL;
+    if (argc > filter_start) {
+        if (!RMUtil_StringEqualsCaseC(argv[filter_start], "FILTER")) {
+            return RTS_ReplyGeneralError(ctx, "TSDB: unknown argument, expected FILTER");
+        }
+        const int query_count = argc - 1 - filter_start;
+        if (query_count <= 0) {
+            return RTS_ReplyGeneralError(ctx, "TSDB: FILTER given with no filter expressions");
+        }
+        if (parseFilter(ctx, argv, argc, filter_start, query_count, &queries) != REDISMODULE_OK) {
+            return REDISMODULE_ERR;
+        }
+    }
+
+    if (IsMRCluster()) {
+        int ctxFlags = RedisModule_GetContextFlags(ctx);
+
+        if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
+                        REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+            RedisModule_ReplyWithError(ctx,
+                                       "Can not run multi sharded command inside a multi exec, "
+                                       "lua, or when blocking is not allowed");
+            if (queries != NULL) {
+                QueryPredicateList_Free(queries);
+            }
+            return REDISMODULE_OK;
+        }
+        TSDB_querylabels_MR(ctx, subtype, label, queries);
+    } else {
+        _TSDB_querylabels_impl(ctx, subtype, label, queries);
+    }
+
+    if (queries != NULL) {
+        QueryPredicateList_Free(queries);
+    }
+    return REDISMODULE_OK;
+}
+
 // multi-series groupby logic
 static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                                   TS_ResultSet *resultset,
@@ -1361,7 +1489,9 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
-    if (timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
+    const bool useLocalTimestamp =
+        timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*");
+    if (useLocalTimestamp) {
         currentUpdatedTime = RedisModule_Milliseconds();
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
@@ -1399,7 +1529,32 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST, true);
-    RedisModule_ReplicateVerbatim(ctx);
+
+    if (useLocalTimestamp) {
+        const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
+        if (timestampLoc == -1) {
+            const size_t replArgc = argc - 1;
+            RedisModule_Replicate(
+                ctx, replCmd, "vcl", argv + 1, replArgc, "TIMESTAMP", currentUpdatedTime);
+        } else {
+            // number of args, until the TIMESTAMP argument (included)
+            const size_t preArgc = timestampLoc;
+            // number of args, after the TIMESTAMP argument
+            const size_t postArgc = argc - timestampLoc - 2;
+            RedisModule_Replicate(
+                ctx,
+                replCmd,
+                "vlv",
+                argv + 1, // start after the command name
+                preArgc,
+                currentUpdatedTime, // the timestamp value
+                argv + timestampLoc +
+                    2, // start after the TIMESTAMP argument, rest of the arguments
+                postArgc);
+        }
+    } else {
+        RedisModule_ReplicateVerbatim(ctx);
+    }
     RedisModule_CloseKey(key);
 
     RedisModule_NotifyKeyspaceEvent(
@@ -2376,6 +2531,31 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
     }
 }
 
+static void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
+                                          RedisModuleEvent eid,
+                                          uint64_t subevent,
+                                          void *data) {
+    REDISMODULE_NOT_USED(subevent);
+    if (eid.id != REDISMODULE_EVENT_CLUSTER_TOPOLOGY_CHANGE) {
+        RedisModule_Log(
+            ctx, "warning", "Bad topology event given (id=%" PRIu64 "), ignored.", eid.id);
+        return;
+    }
+
+    RedisModuleClusterTopologyChangeInfo *info = data;
+    uint64_t flags = info->change_flags;
+    RedisModule_Log(ctx,
+                    "notice",
+                    "Cluster topology change: flags=0x%" PRIx64 "%s%s%s%s",
+                    flags,
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_SLOT) ? " SLOT" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_ROLE) ? " ROLE" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_STATE) ? " STATE" : "",
+                    (flags & REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_NODE) ? " NODE" : "");
+
+    MR_UpdateClusterTopology();
+}
+
 void ReplicaBackupCallback(RedisModuleCtx *ctx,
                            RedisModuleEvent eid,
                            uint64_t subevent,
@@ -2599,6 +2779,15 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     SetCommandAcls(ctx, "ts.queryindex", "read");
 
+    if (RedisModule_CreateCommand(ctx, "ts.querylabels", TSDB_querylabels, "readonly", 0, 0, -1) ==
+        REDISMODULE_ERR) {
+        FreeConfigAndStaticCtx();
+
+        return REDISMODULE_ERR;
+    }
+
+    SetCommandAcls(ctx, "ts.querylabels", "read");
+
     RegisterCommandWithModesAndAcls(ctx, "ts.info", TSDB_info, "readonly", "read fast");
     RegisterCommandWithModesAndAcls(ctx, "ts.get", TSDB_get, "readonly", "read fast");
     // TS.READ may block on the key; intentionally NOT flagged "fast".
@@ -2681,6 +2870,12 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                 ctx, RedisModuleEvent_ClusterSlotMigration, ClusterAsmCallback);
             RedisModule_SubscribeToServerEvent(
                 ctx, RedisModuleEvent_ClusterSlotMigrationTrim, ClusterAsmTrimCallback);
+        }
+
+        if (TSGlobalConfig.topologyEvents) {
+            RedisModule_Log(ctx, "notice", "%s", "Subscribe to topology changes events");
+            RedisModule_SubscribeToServerEvent(
+                ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
         }
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_FlushDB, FlushEventCallback);
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_SwapDB, swapDbEventCallback);

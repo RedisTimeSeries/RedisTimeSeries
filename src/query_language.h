@@ -160,6 +160,13 @@ int parseLabelQuery(RedisModuleCtx *ctx,
                     RedisModuleString **limitLabels,
                     unsigned short *limitLabelsSize);
 
+int parseFilter(RedisModuleCtx *ctx,
+                RedisModuleString **argv,
+                int argc,
+                int filter_location,
+                int query_count,
+                QueryPredicateList **out);
+
 int parseAggregationArgs(RedisModuleCtx *ctx,
                          RedisModuleString **argv,
                          int argc,

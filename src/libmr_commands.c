@@ -5,6 +5,7 @@
 #include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "libmr_integration.h"
+#include "module.h"
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
@@ -627,7 +628,11 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
     queryArg->latest = args.rangeArgs.latest;
-    args.queryPredicates->ref++;
+    // Atomic even though this call site is main-thread-only: LibMR's own Duplicate/ObjectFree
+    // step-arg callbacks (QueryPredicates_Duplicate/QueryPredicates_ObjectFree) touch this same
+    // ref from their own execution threads over the object's life, so every mutation site has
+    // to stay atomic for the count to be consistent (see QueryPredicateList_Free in indexer.c).
+    __atomic_add_fetch(&args.queryPredicates->ref, 1, __ATOMIC_RELAXED);
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
     queryArg->limitLabelsSize = args.numLimitLabels;
@@ -706,7 +711,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
-    queries->ref++;
+    __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
     queryArg->predicates = queries;
     queryArg->withLabels = false;
     queryArg->limitLabelsSize = 0;
@@ -744,6 +749,130 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
+
+    MR_Run(exec);
+    MR_FreeExecution(exec);
+    MR_FreeExecutionBuilder(builder);
+    return REDISMODULE_OK;
+}
+
+static void querylabels_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    for (size_t i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            StringRecord *sr =
+                (StringRecord *)ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            RedisModule_DictSetC(agg, sr->str, sr->len, NULL);
+        }
+    }
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
+static void querylabels_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
+    if (!nodesResults) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    array_foreach(nodesResults, stringList, {
+        array_foreach(stringList, s, { RedisModule_DictSet(agg, s, NULL); });
+    });
+    array_free(nodesResults);
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
+static void querylabels_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            querylabels_done_gears(eCtx, ctx);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            querylabels_done_internal(eCtx, ctx);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
+
+    RTS_UnblockClient(bc, ctx);
+}
+
+int TSDB_querylabels_MR(RedisModuleCtx *ctx,
+                        QueryLabelsSubtype subtype,
+                        RedisModuleString *label,
+                        QueryPredicateList *queries) {
+    QueryLabelsArg *queryArg = calloc(1, sizeof(QueryLabelsArg));
+    queryArg->shouldReturnNull = false;
+    queryArg->refCount = 1;
+    queryArg->subtype = subtype;
+    queryArg->userName = CopyCurrentUserName(ctx);
+    if (label != NULL) {
+        queryArg->label = RedisModule_CreateStringFromString(NULL, label);
+    }
+    if (queries != NULL) {
+        __atomic_add_fetch(
+            &queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
+        queryArg->predicates = queries;
+        queryArg->hasFilter = true;
+    }
+
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardQuerylabelsMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYLABELS", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
+
+    MRError *err = NULL;
+    Execution *exec = MR_CreateExecution(builder, &err);
+    if (err) {
+        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        // MR_CreateExecution always allocates and returns exec, even on error (it copies
+        // and dups every step's args before checking the error) - free it or exec plus its
+        // duplicated QueryLabelsArg reference leak on every failed call. That only drops
+        // the execution's dup'd reference though - also drop our own original reference
+        // (which in turn releases the extra QueryPredicateList ref taken above for FILTER).
+        MR_FreeExecution(exec);
+        QueryLabelsArg_ObjectFree(queryArg);
+        MR_FreeExecutionBuilder(builder);
+        return REDISMODULE_OK;
+    }
+
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
+    MR_ExecutionSetOnDoneHandler(exec, querylabels_done, bc);
 
     MR_Run(exec);
     MR_FreeExecution(exec);
