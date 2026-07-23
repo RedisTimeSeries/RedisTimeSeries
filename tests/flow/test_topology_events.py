@@ -8,19 +8,15 @@ from utils import (
     ClusterNode,
     SlotRange,
     NUMBER_OF_SLOTS,
+    failover_node,
+    add_slaves_to_cluster,
 )
 from test_asm import validate_queries_during_migrations
 
 
 def test_asm():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
-    if not env.isCluster():
-        env.skip()
-
-    # macos-15-intel is the slowest hosted runner and can't reliably serve the multi-shard
-    # query within LibMR's 5s max-idle during migration churn (MOD-14615 residual).
-    if RUNNER_LABEL == "macos-15-intel":
-        env.skip()
+    skip_if_needed(env)
 
     def post_migration(env):
         wait_for_valid_cluster(env)
@@ -29,6 +25,18 @@ def test_asm():
     fill_some_data(env)
     validate_queries_during_migrations(env, post_migration, COMMAND, validate_result)
 
+def test_failover():
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    skip_if_needed(env)
+
+
+    with add_slaves_to_cluster(env):
+        fill_some_data(env)
+
+        replica_port = env.envRunner.shards[0].getMasterPort() + 1
+        replica_conn = redis.Redis(port=replica_port, decode_responses=True)
+        failover_node(replica_conn)
+
 
 # Helpers:
 
@@ -36,6 +44,15 @@ NUMBER_OF_KEYS = 1000 if not (VALGRIND or SANITIZER) else 100
 SAMPLES_PER_KEY = 150
 COMMAND = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
+
+def skip_if_needed(env):
+    if not env.isCluster():
+        env.skip()
+
+    # macos-15-intel is the slowest hosted runner and can't reliably serve the multi-shard
+    # query within LibMR's 5s max-idle during migration churn (MOD-14615 residual).
+    if RUNNER_LABEL == "macos-15-intel":
+        env.skip()
 
 def fill_some_data(env):
     fill_ts_data(env, NUMBER_OF_KEYS, SAMPLES_PER_KEY, label1=17, label2=19)

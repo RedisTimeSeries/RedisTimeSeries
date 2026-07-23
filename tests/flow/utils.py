@@ -6,6 +6,7 @@ import time
 import inspect
 import re
 import random
+import contextlib
 
 
 NUMBER_OF_SLOTS = 2**14
@@ -26,7 +27,7 @@ def set_hertz(env):
         return
     for shard in range(0, env.shardsCount):
         # Lower hz value to make it more likely that mrange triggers key expiration
-        assert env.getConnection(shard).execute_command('config set hz 1') == b'OK'
+        assert env.getConnection(shard).execute_command('CONFIG SET hz 1') in ('OK', b'OK')
 
 class Colors(object):
     @staticmethod
@@ -172,7 +173,7 @@ def migrate_slots_back_and_forth(env, validator=None):
     """
 
     def cluster_node_of(conn) -> ClusterNode:
-        for line in conn.execute_command("cluster", "nodes").splitlines():
+        for line in conn.execute_command("CLUSTER", "NODES").splitlines():
             cluster_node = ClusterNode.from_str(line)
             if "myself" in cluster_node.flags:
                 return cluster_node
@@ -310,6 +311,130 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
     wait_for_completion(source_conn)
 
 
+@contextlib.contextmanager
+def add_slaves_to_cluster(env):
+    # RLTest's OSS-cluster with useSlaves starts each replica as a plain `--slaveof` process
+    # with cluster-enabled=no, so it never joins the cluster (absent from CLUSTER NODES).
+    # So instead, for a masters-only env, this function joins
+    # real cluster-node replica per master via MEET + REPLICATE.
+    # Context manager: the replicas it spawns are not managed by RLTest, so it tears them down
+    # (and removes their config files) on exit, whether the test passes, fails, or is interrupted.
+    def cluster_nodes(conn):
+        return {node.id: node for node in map(ClusterNode.from_str, conn.execute_command("CLUSTER", "NODES").splitlines())}
+
+    master_id_of_port = {node.port: node.id for node in cluster_nodes(env.getConnection(0)).values() if "master" in node.flags}
+
+    master_id_of_replica_port = {}
+    spawned = []  # (process, replica_port, cluster_config_file) for teardown
+    try:
+        for shard in env.envRunner.shards:
+            master_id = master_id_of_port[shard.getMasterPort()]
+            replica_port = shard.getMasterPort() + 1  # RLTest spaces master ports by 2, even for masters-only env
+            master_id_of_replica_port[replica_port] = master_id
+
+            # Kill any replica orphaned on this port by a previous aborted run, else our server can't bind.
+            try:
+                redis.Redis(port=replica_port).shutdown(nosave=True)
+            except redis.RedisError:
+                pass
+            while True:
+                try:
+                    redis.Redis(port=replica_port).ping()
+                    time.sleep(0.1)
+                except redis.ConnectionError:
+                    break
+
+            # Unique per-run name: redis reloads the cluster-config-file on boot, and a stale one from a
+            # previous run (dead nodes, conflicting epochs) breaks the failover election. A timestamped
+            # name can never be stale, so correctness doesn't depend on the previous run cleaning up.
+            cluster_config_file = f"/tmp/replica-{replica_port}-{time.time_ns()}.conf"
+
+            cmd = [shard.redisBinaryPath, "--port", str(replica_port),
+                   "--cluster-enabled", "yes",
+                   "--cluster-config-file", cluster_config_file,
+                   "--cluster-node-timeout", "60000",
+                   "--dir", shard.dbDirPath,
+                   "--dbfilename", f"replica-{replica_port}.rdb",
+                   "--logfile", f"replica-{replica_port}.log"]
+            for module in (shard.modulePath or []):
+                cmd += ["--loadmodule", module]
+            spawned.append((subprocess.Popen(cmd), replica_port, cluster_config_file))
+
+            replica_conn = redis.Redis(port=replica_port, decode_responses=True)
+            while True:
+                try:
+                    replica_conn.ping()
+                    break
+                except redis.ConnectionError:
+                    time.sleep(0.1)
+            replica_conn.execute_command("cluster", "meet", "127.0.0.1", shard.getMasterPort())
+            while master_id not in replica_conn.execute_command("cluster", "nodes"):
+                time.sleep(0.1)
+            replica_conn.execute_command("CLUSTER", "REPLICATE", master_id)
+            # Wait for the initial sync to finish; CLUSTER FAILOVER times out on a not-yet-caught-up replica.
+            # The master waits repl-diskless-sync-delay seconds before forking the sync child, so add it.
+            repl_diskless_sync_delay = float(shard.getConnection().config_get("repl-diskless-sync-delay")["repl-diskless-sync-delay"])
+            timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+            start_time = time.time()
+            while replica_conn.info("replication")["master_link_status"] != "up":
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(
+                        f"Replica on port {replica_port} did not sync in {timeout}s, "
+                        f"replication info: {replica_conn.info('replication')}"
+                    )
+                time.sleep(0.1)
+
+        # Verify the cluster now looks as expected: each replica we added is a slave of its master.
+        # Poll, since a master's global view catches up to the newest replica only via gossip.
+        def expected(nodes):
+            id_by_port = {node.port: node.id for node in nodes.values()}
+            return all(
+                replica_port in id_by_port
+                and "slave" in nodes[id_by_port[replica_port]].flags
+                and nodes[id_by_port[replica_port]].master == master_id
+                for replica_port, master_id in master_id_of_replica_port.items()
+            )
+
+        timeout = 5 if not (VALGRIND or SANITIZER) else 60
+        start_time = time.time()
+        while not expected(nodes := cluster_nodes(env.getConnection(0))):
+            if time.time() - start_time > timeout:
+                raise AssertionError(f"cluster topology not as expected after {timeout}s, CLUSTER NODES: {nodes}")
+            time.sleep(0.1)
+
+        yield master_id_of_replica_port
+    finally:
+        for process, replica_port, cluster_config_file in spawned:
+            try:
+                redis.Redis(port=replica_port).shutdown(nosave=True)
+            except redis.RedisError:
+                pass
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            if os.path.exists(cluster_config_file):
+                os.remove(cluster_config_file)
+
+
+def failover_node(replica_conn):
+    role, *rest = replica_conn.execute_command("ROLE")
+    assert role == "slave", "failover_node expects a replica connection"
+    master_ip, master_port = rest[0], rest[1]
+    master_conn = redis.Redis(host=master_ip, port=master_port, decode_responses=True)
+
+    replica_conn.execute_command("CLUSTER", "FAILOVER")
+
+    timeout = 5 if not (VALGRIND or SANITIZER) else 60
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if replica_conn.execute_command("ROLE")[0] == "master" and master_conn.execute_command("ROLE")[0] == "slave":
+            break
+        time.sleep(0.2)
+    else:
+        raise TimeoutError(f"Failover did not complete in {timeout} seconds")
+
+
 def get_node_address(conn):
     kwargs = conn.connection_pool.connection_kwargs
     return f"{kwargs.get('host')}:{kwargs.get('port')}"
@@ -325,7 +450,7 @@ def shard_id_of(env, conn):
 
 
 def dump_node_infocluster(conn):
-    conn.execute_command("debug", "MARK-INTERNAL-CLIENT")
+    conn.execute_command("DEBUG", "MARK-INTERNAL-CLIENT")
     reply = conn.execute_command("timeseries.INFOCLUSTER")
     top = dict(zip(reply[::2], reply[1::2]))
     print(f"{get_node_address(conn)}: MyId={top['MyId']} MyRunId={top['MyRunId']}")
