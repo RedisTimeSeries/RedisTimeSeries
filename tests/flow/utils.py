@@ -312,7 +312,7 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
 
 
 @contextlib.contextmanager
-def add_slaves_to_cluster(env):
+def added_slaves_to_cluster(env):
     # RLTest's OSS-cluster with useSlaves starts each replica as a plain `--slaveof` process
     # with cluster-enabled=no, so it never joins the cluster (absent from CLUSTER NODES).
     # So instead, for a masters-only env, this function joins

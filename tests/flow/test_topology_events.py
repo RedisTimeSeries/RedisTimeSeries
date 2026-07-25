@@ -1,7 +1,6 @@
 import time
 from includes import *
 from utils import (
-    dump_infocluster,
     fill_ts_data,
     wait_for_valid_cluster,
     compare_clusters,
@@ -9,7 +8,7 @@ from utils import (
     SlotRange,
     NUMBER_OF_SLOTS,
     failover_node,
-    add_slaves_to_cluster,
+    added_slaves_to_cluster,
 )
 from test_asm import validate_queries_during_migrations
 
@@ -30,7 +29,7 @@ def test_failover():
     skip_if_needed(env)
 
 
-    with add_slaves_to_cluster(env):
+    with added_slaves_to_cluster(env):
         fill_some_data(env)
 
         replica_port = env.envRunner.shards[0].getMasterPort() + 1
@@ -47,6 +46,7 @@ COMMAND = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
 def skip_if_needed(env):
     if not env.isCluster():
+    if env.env != "oss-cluster":
         env.skip()
 
     # macos-15-intel is the slowest hosted runner and can't reliably serve the multi-shard
