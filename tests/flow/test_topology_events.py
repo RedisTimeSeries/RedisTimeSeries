@@ -45,7 +45,6 @@ COMMAND = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
 
 def skip_if_needed(env):
-    if not env.isCluster():
     if env.env != "oss-cluster":
         env.skip()
 
