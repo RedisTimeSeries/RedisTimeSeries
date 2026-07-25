@@ -48,7 +48,7 @@ void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_DEFAULT;
     TSGlobalConfig.password = NULL;
-    TSGlobalConfig.topologyEvents = true;
+    TSGlobalConfig.topologyEvents = !RTS_IsEnterprise();
 
     if (getConfigStringCache) {
         RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
