@@ -62,6 +62,7 @@ help() {
 		SLAVES=0|1            Replication tests on standalone Redis
 		AOF_SLAVES=0|1        AOF together SLAVES persistency tests on standalone Redis
 		OSS_CLUSTER=0|1       General tests on Redis OSS Cluster
+		TLS_CLUSTER=0|1       General tests on Redis OSS Cluster with TLS (tls-cluster yes)
 		SHARDS=n              Number of shards (default: 3)
 
 		QUICK=1               Perform only one test variant
@@ -540,12 +541,14 @@ if [[ $QUICK != 1 ]]; then
 	AOF=${AOF:-1}
 	AOF_SLAVES=${AOF_SLAVES:-1}
 	OSS_CLUSTER=${OSS_CLUSTER:-1}
+	TLS_CLUSTER=${TLS_CLUSTER:-1}
 else
 	GEN=1
 	SLAVES=0
 	AOF=0
 	AOF_SLAVES=0
 	OSS_CLUSTER=0
+	TLS_CLUSTER=0
 fi
 
 if [[ $RLEC == 1 ]]; then
@@ -554,6 +557,7 @@ if [[ $RLEC == 1 ]]; then
 	AOF=0
 	AOF_SLAVES=0
 	OSS_CLUSTER=0
+	TLS_CLUSTER=0
 fi
 
 #-------------------------------------------------------------------------------- Running tests
@@ -580,6 +584,17 @@ if [[ $OSS_CLUSTER == 1 ]]; then
 		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
 		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
 	fi
+fi
+
+if [[ $TLS_CLUSTER == 1 ]]; then
+	TLS_DIR=$HERE/tls
+	if [[ ! -f $TLS_DIR/redis.crt ]]; then
+		bash $HERE/generate_tls_certs.sh
+	fi
+	{ (RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000 --env oss-cluster --shards-count $SHARDS \
+			--tls --tls-cert-file $TLS_DIR/redis.crt --tls-key-file $TLS_DIR/redis.key \
+			--tls-ca-cert-file $TLS_DIR/ca.crt --tls-passphrase foobar" \
+		run_tests "tests on OSS cluster with TLS"); (( E |= $? )); } || true
 fi
 
 if [[ $RLEC == 1 ]]; then
