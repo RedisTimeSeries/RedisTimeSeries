@@ -349,15 +349,24 @@ def added_slaves_to_cluster(env):
             # name can never be stale, so correctness doesn't depend on the previous run cleaning up.
             cluster_config_file = f"/tmp/replica-{replica_port}-{time.time_ns()}.conf"
 
+            cluster_node_timeout = shard.getConnection().config_get("cluster-node-timeout")["cluster-node-timeout"]
+            enable_debug_command = "no" if shard.enableDebugCommand is False else "yes"
             cmd = [shard.redisBinaryPath, "--port", str(replica_port),
                    "--cluster-enabled", "yes",
                    "--cluster-config-file", cluster_config_file,
-                   "--cluster-node-timeout", "60000",
+                   "--cluster-node-timeout", cluster_node_timeout,
+                   "--enable-debug-command", enable_debug_command,
                    "--dir", shard.dbDirPath,
                    "--dbfilename", f"replica-{replica_port}.rdb",
                    "--logfile", f"replica-{replica_port}.log"]
-            for module in (shard.modulePath or []):
+            for pos, module in enumerate(shard.modulePath or []):
                 cmd += ["--loadmodule", module]
+                module_args = shard.moduleArgs[pos] if shard.moduleArgs else None
+                if module_args:
+                    for arg in module_args:
+                        if arg.strip():
+                            cmd += arg.split(" ")
+            # Not mirrored from the masters yet: tls-*, masterauth/requirepass, appendonly, etc.
             spawned.append((subprocess.Popen(cmd), replica_port, cluster_config_file))
 
             replica_conn = redis.Redis(port=replica_port, decode_responses=True)
