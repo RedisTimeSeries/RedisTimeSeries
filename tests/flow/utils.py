@@ -423,6 +423,16 @@ def failover_node(replica_conn):
     master_ip, master_port = rest[0], rest[1]
     master_conn = redis.Redis(host=master_ip, port=master_port, decode_responses=True)
 
+    repl_diskless_sync_delay = float(master_conn.config_get("repl-diskless-sync-delay")["repl-diskless-sync-delay"])
+    sync_timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+    start_time = time.time()
+    while replica_conn.info("replication")["master_link_status"] != "up":
+        if time.time() - start_time > sync_timeout:
+            raise TimeoutError(
+                f"Replica did not sync with master {master_ip}:{master_port} in {sync_timeout}s before failover"
+            )
+        time.sleep(0.1)
+
     replica_conn.execute_command("CLUSTER", "FAILOVER")
 
     timeout = 5 if not (VALGRIND or SANITIZER) else 60
