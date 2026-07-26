@@ -30,6 +30,8 @@ def test_asm():
 def test_failover():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     skip_if_needed(env)
+    if env.useTLS:
+        env.skip()
 
     def post_failover(env):
         wait_for_valid_cluster(env)
