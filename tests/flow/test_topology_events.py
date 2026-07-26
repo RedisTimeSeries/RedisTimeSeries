@@ -1,4 +1,7 @@
 import time
+import random
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from includes import *
 from utils import (
     fill_ts_data,
@@ -28,13 +31,13 @@ def test_failover():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     skip_if_needed(env)
 
+    def post_failover(env):
+        wait_for_valid_cluster(env)
+        wait_for_valid_ts_infocluster(env)
 
     with added_slaves_to_cluster(env):
         fill_some_data(env)
-
-        replica_port = env.envRunner.shards[0].getMasterPort() + 1
-        replica_conn = redis.Redis(port=replica_port, decode_responses=True)
-        failover_node(replica_conn)
+        validate_queries_during_failovers(env, post_failover, COMMAND, validate_result)
 
 
 # Helpers:
@@ -63,6 +66,85 @@ def validate_result(result):
     assert withlabels == []  # No WITHLABLES
     assert len(samples) == SAMPLES_PER_KEY
     assert all(int(sample[1]) == NUMBER_OF_KEYS for sample in samples)
+
+
+def validate_queries_during_failovers(env, post_failover, command, validate_result):
+    TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
+    # Clients of multi-shard commands are blocked. If a node that serves such a command is demoted
+    # while the client is still blocked we expect the following error:
+    UNBLOCKED_ERROR = "UNBLOCKED force unblock from blocking operation, instance state changed (master -> replica?)"
+    # During a failover there is a brief period when the cluster state is set to fail
+    # with cluster-allow-reads-when-down off it then rejects reads until it recovers (sub-second)
+    # during which time we expect the following error:
+    CLUSTERDOWN_ERROR = "CLUSTERDOWN The cluster is down"
+    # A multi-shard fan-out can race slot-ownership propagation during a failover (the owning node's
+    # id changes) and momentarily see a slot as unavailable, so we also expect this:
+    SLOT_RANGES_ERROR = "Query requires unavailable slots"
+
+    master_conns = {}
+
+    def random_master_conn():
+        masters = [
+            node
+            for node in map(ClusterNode.from_str, env.getConnection(0).execute_command("CLUSTER", "NODES").splitlines())
+            if "master" in node.flags
+        ]
+        node = random.choice(masters)
+        return master_conns.setdefault(
+            (node.ip, node.port), redis.Redis(host=node.ip, port=node.port, decode_responses=True)
+        )
+
+    def strict_validation(env):
+        validate_result(random_master_conn().execute_command(command))
+
+    def tolerable_validation(env):
+        try:
+            result = random_master_conn().execute_command(command)
+        except redis.exceptions.ResponseError as x:
+            assert str(x) in (TOPOLOGY_CHANGED_ERROR, UNBLOCKED_ERROR, CLUSTERDOWN_ERROR, SLOT_RANGES_ERROR), str(x)
+            return
+        validate_result(result)
+
+    def validate_after_failover(env):
+        post_failover(env)
+        strict_validation(env)
+
+    strict_validation(env)
+
+    done = threading.Event()
+
+    def validate_command_in_a_loop():
+        while not done.is_set():
+            tolerable_validation(env)
+
+    def failover_back_and_forth():
+        failover_all_slaves(env, validate_after_failover)
+        failover_all_slaves(env, validate_after_failover)
+
+    with ThreadPoolExecutor() as executor:
+        # Just one round-robin and back, unfortunately. We can't loop this since redis rate-limits
+        # failover votes to once per 2*cluster-node-timeout per demoted primary, so a second cycle
+        # would have to wait out that cooldown period before it could failover the same nodes again.
+        # This will make the test too long.
+        futures = map(executor.submit, [validate_command_in_a_loop, failover_back_and_forth])
+        for future in as_completed(futures):
+            done.set()
+            future.result()
+
+    strict_validation(env)
+
+
+def failover_all_slaves(env, validator=None):
+    nodes = {
+        node.id: node
+        for node in map(ClusterNode.from_str, env.getConnection(0).execute_command("CLUSTER", "NODES").splitlines())
+    }
+    for replica in [node for node in nodes.values() if "slave" in node.flags]:
+        master = nodes[replica.master]
+        failover_node(redis.Redis(host=replica.ip, port=replica.port, decode_responses=True))
+        if validator is not None:
+            print(f"\n----- master {master.ip}:{master.port} failed over to replica {replica.ip}:{replica.port} -----")
+            validator(env)
 
 
 def ts_cluster_from_conn(conn):
