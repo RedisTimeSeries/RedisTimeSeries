@@ -352,6 +352,10 @@ static int setModernBoolConfigValue(const char *name,
                                     int value,
                                     void *data,
                                     RedisModuleString **err) {
+    // Needed even though ts-topology-events is REDISMODULE_CONFIG_IMMUTABLE:
+    // RedisModule_LoadConfigs() applies startup values (e.g. redis.conf) through
+    // this setter. IMMUTABLE only rejects runtime CONFIG SET, not startup apply.
+    // (Module-load args are handled separately in ReadConfig.)
     if (!strcasecmp("ts-topology-events", name)) {
         TSGlobalConfig.topologyEvents = value;
 
@@ -604,7 +608,7 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
     if (RedisModule_RegisterBoolConfig(ctx,
                                        "ts-topology-events",
                                        TSGlobalConfig.topologyEvents,
-                                       REDISMODULE_CONFIG_UNPREFIXED,
+                                       REDISMODULE_CONFIG_UNPREFIXED | REDISMODULE_CONFIG_IMMUTABLE,
                                        getModernBoolConfigValue,
                                        setModernBoolConfigValue,
                                        NULL,
@@ -614,11 +618,11 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
 
     RedisModule_Log(ctx,
                     "notice",
-                    "\t{ %-*s: %*d }",
+                    "\t{ %-*s: %*s }",
                     23,
                     "ts-topology-events",
                     12,
-                    TSGlobalConfig.topologyEvents);
+                    TSGlobalConfig.topologyEvents ? "true" : "false");
 
     RedisModule_Log(ctx, "notice", "]");
 
