@@ -1,7 +1,12 @@
-import time
 import random
+import subprocess
+import tempfile
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
+from pathlib import Path
+
 from includes import *
 from utils import (
     fill_ts_data,
@@ -14,6 +19,223 @@ from utils import (
     added_slaves_to_cluster,
 )
 from test_asm import validate_queries_during_migrations
+
+
+def _create_test_certificate(directory):
+    cert = Path(directory) / "redis.crt"
+    key = Path(directory) / "redis.key"
+    subprocess.run(
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-sha256",
+            "-nodes",
+            "-keyout",
+            str(key),
+            "-out",
+            str(cert),
+            "-days",
+            "1",
+            "-subj",
+            "/CN=localhost",
+            "-addext",
+            "basicConstraints=critical,CA:TRUE",
+            "-addext",
+            "keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign",
+            "-addext",
+            "extendedKeyUsage=serverAuth,clientAuth",
+            "-addext",
+            "subjectAltName=DNS:localhost,IP:127.0.0.1",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return cert, key
+
+
+@contextmanager
+def _endpoint_test_env(use_tls=False):
+    kwargs = {
+        "shardsCount": 1,
+        "decodeResponses": True,
+        "skipRefreshCluster": True,
+        "noLog": False,
+    }
+
+    if not use_tls:
+        env = Env(**kwargs)
+        if env.env != "oss-cluster":
+            env.skip()
+        yield env
+        return
+
+    with tempfile.TemporaryDirectory() as cert_dir:
+        cert, key = _create_test_certificate(cert_dir)
+        env = Env(
+            **kwargs,
+            useTLS=True,
+            dualTLS=True,
+            tlsCertFile=str(cert),
+            tlsKeyFile=str(key),
+            tlsCaCertFile=str(cert),
+        )
+        if env.env != "oss-cluster":
+            env.skip()
+        yield env
+
+
+def _wait_for_cached_endpoint(conn, expected_ip=None, expected_port=None, timeout=5):
+    deadline = time.time() + timeout
+    last_node = None
+    while time.time() < deadline:
+        cluster = ts_cluster_from_conn(conn)
+        if cluster is not None and len(cluster) == 1:
+            last_node = next(iter(cluster.values()))
+            ip_matches = expected_ip is None or last_node.ip == expected_ip
+            port_matches = expected_port is None or last_node.port == expected_port
+            if ip_matches and port_matches:
+                return
+        time.sleep(0.05)
+    raise AssertionError(
+        f"cached topology endpoint stayed {last_node}; "
+        f"expected ip={expected_ip}, port={expected_port}"
+    )
+
+
+def _node_topology_event_count(env):
+    logfile = env.getConnection(0).execute_command("CONFIG", "GET", "logfile")[1]
+    logfile = logfile.decode() if isinstance(logfile, bytes) else logfile
+    path = Path(logfile)
+    if not path.is_absolute():
+        path = Path(env.logDir) / path
+    with path.open(errors="replace") as server_log:
+        return sum(
+            "Cluster topology change:" in line and " NODE" in line
+            for line in server_log
+        )
+
+
+def _wait_for_node_topology_event(env, previous_count, timeout=5):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        current_count = _node_topology_event_count(env)
+        if current_count > previous_count:
+            return
+        time.sleep(0.05)
+    raise AssertionError(
+        f"NODE topology event count stayed {previous_count}"
+    )
+
+
+def _set_endpoint_config(
+    env,
+    conn,
+    config,
+    value,
+    expected_ip=None,
+    expected_port=None,
+):
+    previous_count = _node_topology_event_count(env)
+    assert conn.execute_command("CONFIG", "SET", config, value) == "OK"
+    _wait_for_node_topology_event(env, previous_count)
+    if expected_ip is not None or expected_port is not None:
+        _wait_for_cached_endpoint(conn, expected_ip, expected_port)
+
+
+def test_tls_cluster_change_refreshes_cached_topology():
+    with _endpoint_test_env(use_tls=True) as env:
+        conn = env.getConnection(0)
+        tls_port = int(conn.execute_command("CONFIG", "GET", "tls-port")[1])
+        tcp_port = int(conn.execute_command("CONFIG", "GET", "port")[1])
+        assert tls_port != tcp_port
+
+        _wait_for_cached_endpoint(conn, expected_port=tls_port)
+        _set_endpoint_config(env, conn, "tls-cluster", "no", expected_port=tcp_port)
+        _set_endpoint_config(env, conn, "tls-cluster", "yes", expected_port=tls_port)
+
+
+def test_cluster_announce_ip_change_refreshes_cached_topology():
+    with _endpoint_test_env() as env:
+        conn = env.getConnection(0)
+
+        _set_endpoint_config(
+            env,
+            conn,
+            "cluster-announce-ip",
+            "127.0.0.2",
+            expected_ip="127.0.0.2",
+        )
+        _set_endpoint_config(
+            env,
+            conn,
+            "cluster-announce-ip",
+            "",
+            expected_ip="",
+        )
+
+
+def test_cluster_announce_hostname_change_refreshes_cached_topology():
+    with _endpoint_test_env() as env:
+        conn = env.getConnection(0)
+
+        _set_endpoint_config(
+            env,
+            conn,
+            "cluster-announce-hostname",
+            "node.example.test",
+        )
+        assert ",node.example.test " in conn.execute_command("CLUSTER", "NODES")
+
+        _set_endpoint_config(env, conn, "cluster-announce-hostname", "")
+        assert ",node.example.test " not in conn.execute_command("CLUSTER", "NODES")
+
+
+def test_cluster_announce_port_change_refreshes_cached_topology():
+    with _endpoint_test_env() as env:
+        conn = env.getConnection(0)
+        initial_port = int(conn.execute_command("CONFIG", "GET", "port")[1])
+
+        _wait_for_cached_endpoint(conn, expected_port=initial_port)
+        _set_endpoint_config(
+            env,
+            conn,
+            "cluster-announce-port",
+            32001,
+            expected_port=32001,
+        )
+        _set_endpoint_config(
+            env,
+            conn,
+            "cluster-announce-port",
+            0,
+            expected_port=initial_port,
+        )
+
+
+def test_cluster_announce_tls_port_change_refreshes_cached_topology():
+    with _endpoint_test_env(use_tls=True) as env:
+        conn = env.getConnection(0)
+        initial_tls_port = int(conn.execute_command("CONFIG", "GET", "tls-port")[1])
+
+        _wait_for_cached_endpoint(conn, expected_port=initial_tls_port)
+        _set_endpoint_config(
+            env,
+            conn,
+            "cluster-announce-tls-port",
+            32002,
+            expected_port=32002,
+        )
+        _set_endpoint_config(
+            env,
+            conn,
+            "cluster-announce-tls-port",
+            0,
+            expected_port=initial_tls_port,
+        )
 
 
 def test_asm():
