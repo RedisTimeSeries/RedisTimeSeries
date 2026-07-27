@@ -193,7 +193,8 @@ jobs:
       - name: Set Docker Image
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          image_tag="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
+          redis_ref="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
+          image_tag="$(printf '%s' "$redis_ref" | sed -E 's/[^A-Za-z0-9_.-]+/-/g')"
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
@@ -222,7 +223,7 @@ jobs:
           fi
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
-            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
+            --build-arg REDIS_REF="${REDIS_REF}" \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
             --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
             -t "${DOCKER_IMAGE}" \

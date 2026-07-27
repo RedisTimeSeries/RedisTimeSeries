@@ -25,7 +25,9 @@ jobs:
       - name: set env
         id: set-env
         run: |
-          echo "redis-ref=$(.install/get-redis-ref.sh)" >> "$GITHUB_OUTPUT"
+          # This regression PR depends on the topology notifications in
+          # redis/redis#15518. Restore get-redis-ref.sh after that PR merges.
+          echo "redis-ref=refs/pull/15518/head" >> "$GITHUB_OUTPUT"
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit

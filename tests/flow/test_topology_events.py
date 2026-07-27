@@ -1,8 +1,8 @@
 import random
-import subprocess
-import tempfile
+import socket
 import threading
 import time
+import unittest
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from pathlib import Path
@@ -21,71 +21,27 @@ from utils import (
 from test_asm import validate_queries_during_migrations
 
 
-def _create_test_certificate(directory):
-    cert = Path(directory) / "redis.crt"
-    key = Path(directory) / "redis.key"
-    subprocess.run(
-        [
-            "openssl",
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:2048",
-            "-sha256",
-            "-nodes",
-            "-keyout",
-            str(key),
-            "-out",
-            str(cert),
-            "-days",
-            "1",
-            "-subj",
-            "/CN=localhost",
-            "-addext",
-            "basicConstraints=critical,CA:TRUE",
-            "-addext",
-            "keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign",
-            "-addext",
-            "extendedKeyUsage=serverAuth,clientAuth",
-            "-addext",
-            "subjectAltName=DNS:localhost,IP:127.0.0.1",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return cert, key
-
-
 @contextmanager
 def _endpoint_test_env(use_tls=False):
+    if use_tls != Defaults.use_TLS:
+        raise unittest.SkipTest()
+
     kwargs = {
         "shardsCount": 1,
         "decodeResponses": True,
         "skipRefreshCluster": True,
         "noLog": False,
     }
+    env = Env(**kwargs)
+    if env.env != "oss-cluster":
+        env.skip()
+    yield env
 
-    if not use_tls:
-        env = Env(**kwargs)
-        if env.env != "oss-cluster":
-            env.skip()
-        yield env
-        return
 
-    with tempfile.TemporaryDirectory() as cert_dir:
-        cert, key = _create_test_certificate(cert_dir)
-        env = Env(
-            **kwargs,
-            useTLS=True,
-            dualTLS=True,
-            tlsCertFile=str(cert),
-            tlsKeyFile=str(key),
-            tlsCaCertFile=str(cert),
-        )
-        if env.env != "oss-cluster":
-            env.skip()
-        yield env
+def _find_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
 
 
 def _wait_for_cached_endpoint(conn, expected_ip=None, expected_port=None, timeout=5):
@@ -150,7 +106,8 @@ def test_tls_cluster_change_refreshes_cached_topology():
     with _endpoint_test_env(use_tls=True) as env:
         conn = env.getConnection(0)
         tls_port = int(conn.execute_command("CONFIG", "GET", "tls-port")[1])
-        tcp_port = int(conn.execute_command("CONFIG", "GET", "port")[1])
+        tcp_port = _find_free_port()
+        assert conn.execute_command("CONFIG", "SET", "port", tcp_port) == "OK"
         assert tls_port != tcp_port
 
         _wait_for_cached_endpoint(conn, expected_port=tls_port)
