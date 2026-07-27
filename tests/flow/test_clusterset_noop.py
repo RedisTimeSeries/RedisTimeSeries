@@ -33,7 +33,9 @@ def test_identical_long_form_clusterset_is_noop():
     assert conn.execute_command("timeseries.CLUSTERSET", *initial) == "OK"
     run_id = _run_id(conn)
 
-    # A DMC no-op re-broadcast must preserve the existing LibMR cluster.
+    # LibMR generates a run ID when it builds the cluster, so preserving that
+    # externally visible ID proves the DMC re-broadcast did not rebuild it
+    # (and therefore did not drop connections or abort in-flight executions).
     assert conn.execute_command("timeseries.CLUSTERSET", *initial) == "OK"
     assert _run_id(conn) == run_id
 
