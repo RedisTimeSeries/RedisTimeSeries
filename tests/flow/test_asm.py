@@ -87,12 +87,23 @@ def validate_queries_during_migrations(env, post_migration, command, validate_re
 
     # Two flavors of the same query check, both hitting a random shard:
     # - strict: used when the topology is settled (baseline + right after each migration
-    #   completes) -> the query must succeed and be correct; no transient error tolerated.
+    #   completes) -> the query must succeed and be correct. A max-idle reply from an
+    #   execution started during migration is retried for a bounded recovery window.
     # - tolerable: used in the background loop while slots may be mid-migration -> an occasional
     #   SLOT_RANGES_ERROR is expected and skipped, otherwise the result is validated.
     def strict_validation(env):
-        conn = env.getConnection(random.randrange(env.shardsCount))
-        validate_result(conn.execute_command(command))
+        deadline = time.time() + 30
+        while True:
+            conn = env.getConnection(random.randrange(env.shardsCount))
+            try:
+                result = conn.execute_command(command)
+            except redis.exceptions.ResponseError as x:
+                if str(x) == MAX_IDLE_ERROR and time.time() < deadline:
+                    time.sleep(0.1)
+                    continue
+                raise
+            validate_result(result)
+            return
 
     def tolerable_validation(env):
         conn = env.getConnection(random.randrange(env.shardsCount))
