@@ -42,6 +42,24 @@ def test_failover():
         validate_queries_during_failovers(env, post_failover, COMMAND, validate_result)
 
 
+def test_clusterset_after_topology_event_keeps_current_topology():
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    skip_if_needed(env)
+
+    wait_for_valid_cluster(env)
+    wait_for_valid_ts_infocluster(env)
+
+    conn = env.getConnection(0)
+    expected = ts_cluster_from_conn(conn)
+
+    # CLUSTERSET is obsolete after topology events take over, so it should be
+    # ignored without freeing the topology that was installed by the event.
+    assert conn.execute_command("timeseries.CLUSTERSET") == "OK"
+    actual = ts_cluster_from_conn(conn)
+    assert actual is not None, "CLUSTERSET discarded the topology installed by the event"
+    assert compare_clusters(expected, actual)
+
+
 # Helpers:
 
 NUMBER_OF_KEYS = 1000 if not (VALGRIND or SANITIZER) else 100
@@ -154,6 +172,8 @@ def ts_cluster_from_conn(conn):
     or None if its slots don't fully and uniquely cover the keyspace."""
     conn.execute_command("debug", "MARK-INTERNAL-CLIENT")
     reply = conn.execute_command("timeseries.INFOCLUSTER")
+    if reply == "no cluster mode":
+        return None
     nodes = {}
     total = 0
     min_start = NUMBER_OF_SLOTS
