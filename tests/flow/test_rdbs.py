@@ -118,6 +118,14 @@ def testRDBCompatibilityWithNaN():
         result_after = r.execute_command("ts.range", new_key, "-", "+")
         assert result == result_after
 
+        # Wait out any auto-BGSAVE (Redis 8.x default save policy) before dumpAndReload()'s
+        # synchronous SAVE, else they race -> "Background save already in progress" (MOD-16265).
+        # Keeps auto-save enabled; only closes the timing window.
+        deadline = time.time() + 2
+        while r.info("persistence")["rdb_bgsave_in_progress"] and time.time() < deadline:
+            time.sleep(0.1)
+        assert not r.info("persistence")["rdb_bgsave_in_progress"], \
+            "auto-BGSAVE did not finish within 2s -- possible stuck save, not a race"
         env.dumpAndReload()
         result_after = r.execute_command("ts.range", key, "-", "+")
         assert result == result_after
