@@ -21,6 +21,7 @@
 #include <float.h>
 #include <math.h> // sqrt
 #include <string.h>
+#include <strings.h> // strncasecmp
 #include <assert.h>
 
 #if defined(_DEBUG) && defined(_VALGRIND)
@@ -1008,48 +1009,46 @@ int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
 }
 
 int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
-    char agg_type_lower[len];
-    for (int i = 0; i < len; i++) {
-        agg_type_lower[i] = tolower(agg_type[i]);
-    }
-
+    // Compare case-insensitively against the literals instead of lowercasing a copy:
+    // each case already knows the exact length, so no buffer is needed and a
+    // caller-controlled `len` never sizes an allocation.
     switch (len) {
         case 3:
-            if (strncmp(agg_type_lower, "min", len) == 0)
+            if (strncasecmp(agg_type, "min", len) == 0)
                 return TS_AGG_MIN;
-            if (strncmp(agg_type_lower, "max", len) == 0)
+            if (strncasecmp(agg_type, "max", len) == 0)
                 return TS_AGG_MAX;
-            if (strncmp(agg_type_lower, "sum", len) == 0)
+            if (strncasecmp(agg_type, "sum", len) == 0)
                 return TS_AGG_SUM;
-            if (strncmp(agg_type_lower, "avg", len) == 0)
+            if (strncasecmp(agg_type, "avg", len) == 0)
                 return TS_AGG_AVG;
-            if (strncmp(agg_type_lower, "twa", len) == 0)
+            if (strncasecmp(agg_type, "twa", len) == 0)
                 return TS_AGG_TWA;
             break;
         case 4:
-            if (strncmp(agg_type_lower, "last", len) == 0)
+            if (strncasecmp(agg_type, "last", len) == 0)
                 return TS_AGG_LAST;
             break;
         case 5:
-            if (strncmp(agg_type_lower, "count", len) == 0)
+            if (strncasecmp(agg_type, "count", len) == 0)
                 return TS_AGG_COUNT;
-            if (strncmp(agg_type_lower, "range", len) == 0)
+            if (strncasecmp(agg_type, "range", len) == 0)
                 return TS_AGG_RANGE;
-            if (strncmp(agg_type_lower, "first", len) == 0)
+            if (strncasecmp(agg_type, "first", len) == 0)
                 return TS_AGG_FIRST;
-            if (strncmp(agg_type_lower, "std.p", len) == 0)
+            if (strncasecmp(agg_type, "std.p", len) == 0)
                 return TS_AGG_STD_P;
-            if (strncmp(agg_type_lower, "std.s", len) == 0)
+            if (strncasecmp(agg_type, "std.s", len) == 0)
                 return TS_AGG_STD_S;
-            if (strncmp(agg_type_lower, "var.p", len) == 0)
+            if (strncasecmp(agg_type, "var.p", len) == 0)
                 return TS_AGG_VAR_P;
-            if (strncmp(agg_type_lower, "var.s", len) == 0)
+            if (strncasecmp(agg_type, "var.s", len) == 0)
                 return TS_AGG_VAR_S;
             break;
         case 8:
-            if (strncmp(agg_type_lower, "countnan", len) == 0)
+            if (strncasecmp(agg_type, "countnan", len) == 0)
                 return TS_AGG_COUNT_NAN;
-            if (strncmp(agg_type_lower, "countall", len) == 0)
+            if (strncasecmp(agg_type, "countall", len) == 0)
                 return TS_AGG_COUNT_ALL;
             break;
     }
