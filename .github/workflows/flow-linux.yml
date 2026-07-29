@@ -193,8 +193,7 @@ jobs:
       - name: Set Docker Image
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          redis_ref="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
-          image_tag="$(printf '%s' "$redis_ref" | sed -E 's/[^A-Za-z0-9_.-]+/-/g')"
+          image_tag="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
           echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
@@ -223,7 +222,7 @@ jobs:
           fi
           docker build \
             -f Dockerfile.${{ matrix.platform.os }} \
-            --build-arg REDIS_REF="${REDIS_REF}" \
+            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
             --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
             -t "${DOCKER_IMAGE}" \
@@ -305,7 +304,7 @@ jobs:
             make pack SHOW=1
 
       - name: Upload artifacts to S3
-        if: ${{ github.event_name != 'pull_request' && !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

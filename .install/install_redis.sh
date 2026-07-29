@@ -26,8 +26,8 @@ fi
 
 git clone https://github.com/redis/redis.git 
 cd redis
-git fetch origin "${REDIS_REF}"
-git checkout --detach FETCH_HEAD
+git fetch origin ${REDIS_REF}
+git checkout ${REDIS_REF}
 git submodule update --init --recursive
 # For Valgrind runs only, build Redis without _FORTIFY_SOURCE. At -O2/-O3 the
 # distro compiler lowers correct memmove() calls into __memcpy_chk(), which

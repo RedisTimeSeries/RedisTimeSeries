@@ -70,51 +70,30 @@ def validate_queries_during_migrations(env, post_migration, command, validate_re
     command: the query to run repeatedly (as a single string).
     validate_result: callback invoked with the command's reply to assert it is correct.
     """
-    # Three transient errors can surface while slots migrate; all are expected and tolerated (strings
+    # Two transient errors can surface while slots migrate; both are expected and tolerated (strings
     # must match libmr_commands.c):
     # - SLOT_RANGES_ERROR: a race between nodes propagating ownership of slots and a parallel multi-node
     #   command might lead to response on same slots from multiple nodes (or the opposite: missed slots).
     # - TOPOLOGY_CHANGED_ERROR: a topology change is seen mid-command (across the fan-out to all nodes)
     #   so in-flight executions are killed early and this is returned.
-    # - MAX_IDLE_ERROR: migration churn can delay one shard beyond LibMR's max-idle deadline,
-    #   especially with TLS. The settled-topology checks below still require a successful result.
     SLOT_RANGES_ERROR = "Query requires unavailable slots"
     TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
-    MAX_IDLE_ERROR = (
-        "A multi-keys command failed because at least one shard "
-        "did not reply within the given timeframe."
-    )
 
     # Two flavors of the same query check, both hitting a random shard:
     # - strict: used when the topology is settled (baseline + right after each migration
-    #   completes) -> the query must succeed and be correct. A max-idle reply from an
-    #   execution started during migration is retried for a bounded recovery window.
+    #   completes) -> the query must succeed and be correct; no transient error tolerated.
     # - tolerable: used in the background loop while slots may be mid-migration -> an occasional
     #   SLOT_RANGES_ERROR is expected and skipped, otherwise the result is validated.
     def strict_validation(env):
-        deadline = time.time() + 30
-        while True:
-            conn = env.getConnection(random.randrange(env.shardsCount))
-            try:
-                result = conn.execute_command(command)
-            except redis.exceptions.ResponseError as x:
-                if str(x) == MAX_IDLE_ERROR and time.time() < deadline:
-                    time.sleep(0.1)
-                    continue
-                raise
-            validate_result(result)
-            return
+        conn = env.getConnection(random.randrange(env.shardsCount))
+        validate_result(conn.execute_command(command))
 
     def tolerable_validation(env):
         conn = env.getConnection(random.randrange(env.shardsCount))
         try:
             result = conn.execute_command(command)
         except redis.exceptions.ResponseError as x:
-            assert str(x) in (
-                SLOT_RANGES_ERROR,
-                TOPOLOGY_CHANGED_ERROR,
-                MAX_IDLE_ERROR,
-            ), str(x)
+            assert str(x) in (SLOT_RANGES_ERROR, TOPOLOGY_CHANGED_ERROR), str(x)
             return
         validate_result(result)
 
@@ -215,3 +194,4 @@ def test_short_form_clusterset():
         assert withlabels == []
         assert len(samples) == samples_per_key
         assert all(int(sample[1]) == keys_per_group for sample in samples)
+
