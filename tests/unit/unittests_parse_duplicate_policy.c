@@ -130,6 +130,13 @@ MU_TEST(test_oversized_input_rejected) {
     mu_check(StringLenAggTypeToEnum("", 0) == TS_AGG_INVALID);
     mu_check(DuplicatePolicyFromString("blocks", 6) == DP_INVALID);   // one past "block"
     mu_check(StringLenAggTypeToEnum("countnans", 9) == TS_AGG_INVALID); // one past "countnan"
+
+    // A length far beyond the stack must be rejected on `len` alone, before the buffer is
+    // touched -- so a short buffer with a huge length is safe here, and is exactly what
+    // detects a regression to sizing the copy by `len` (that would overflow the stack).
+    const size_t beyond_stack = 9 * 1024 * 1024;
+    mu_check(DuplicatePolicyFromString("x", beyond_stack) == DP_INVALID);
+    mu_check(StringLenAggTypeToEnum("x", beyond_stack) == TS_AGG_INVALID);
 }
 
 // RedisModule_StringPtrLen is unset in unit builds, so stand in for it by treating the
