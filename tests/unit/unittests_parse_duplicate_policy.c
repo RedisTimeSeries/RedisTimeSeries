@@ -6,15 +6,26 @@
  * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
  * GNU Affero General Public License v3 (AGPLv3).
  */
+#include "compaction.h"
 #include "consts.h"
 #include "generic_chunk.h"
 #include "minunit.h"
 #include "parse_policies.h"
 #include "tsdb.h"
 
+#include <ctype.h>
 #include <string.h>
 
 #define DuplicatePolicyFromCString(str) DuplicatePolicyFromString(str, strlen(str))
+
+// Writes an alternating-case spelling of `src` into `dst`: "countnan" -> "CoUnTnAn".
+// Non-alphabetic bytes (e.g. the '.' in "std.p") are copied through unchanged.
+static void to_alternating_case(const char *src, size_t len, char *dst) {
+    for (size_t i = 0; i < len; i++) {
+        dst[i] = (i % 2 == 0) ? (char)toupper((unsigned char)src[i])
+                              : (char)tolower((unsigned char)src[i]);
+    }
+}
 
 MU_TEST(test_duplicate_policy_parse) {
     mu_check(DuplicatePolicyFromCString("Min") == DP_MIN);

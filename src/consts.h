@@ -89,6 +89,7 @@ typedef enum DuplicatePolicy
     DP_MIN = 4,
     DP_MAX = 5,
     DP_SUM = 6,
+    DP_TYPES_MAX // sentinel, keep last: bounds iteration over the policies above
 } DuplicatePolicy;
 
 // Longest valid DUPLICATE_POLICY keyword: "block"/"first" = 5 chars. Bounds the
