@@ -57,7 +57,7 @@ MU_TEST(test_ts_create_command_info_structure) {
 MU_TEST(test_ts_createrule_command_info_structure) {
     // Test that TS_CREATERULE_INFO has correct basic properties
     mu_check(TS_CREATERULE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
-    mu_check(TS_CREATERULE_INFO.arity == -5); // At least 5 arguments: TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
+    mu_check(TS_CREATERULE_INFO.arity == -6); // At least 6 arguments: TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
     mu_check(TS_CREATERULE_INFO.since != NULL);
     mu_check(strcmp(TS_CREATERULE_INFO.since, "1.0.0") == 0);
     mu_check(TS_CREATERULE_INFO.summary != NULL);

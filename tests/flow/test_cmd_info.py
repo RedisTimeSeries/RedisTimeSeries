@@ -43,7 +43,7 @@ class testCommandDocsAndHelp():
         with env.getClusterConnectionIfNeeded() as r:
             res = r.execute_command('COMMAND', 'INFO', 'TS.CREATERULE')
             assert res
-            assert_docs(env, 'TS.CREATERULE', summary='Create a compaction rule', complexity='O(1)', arity='-5', since='1.0.0', group='module')
+            assert_docs(env, 'TS.CREATERULE', summary='Create a compaction rule', complexity='O(1)', arity='-6', since='1.0.0', group='module')
 
     def test_command_info_ts_range(self):
         env = self.env
