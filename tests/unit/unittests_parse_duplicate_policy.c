@@ -100,6 +100,40 @@ MU_TEST(test_oversized_input_rejected) {
     mu_check(StringLenAggTypeToEnum("countnans", 9) == TS_AGG_INVALID); // one past "countnan"
 }
 
+// RedisModule_StringPtrLen is unset in unit builds, so stand in for it by treating the
+// RedisModuleString handle as a plain NUL-terminated buffer (same override idiom as
+// unittests_rdb_load_oom.c).
+static const char *rmstring_ptrlen_stub(const RedisModuleString *str, size_t *len) {
+    if (len != NULL) {
+        *len = strlen((const char *)str);
+    }
+    return (const char *)str;
+}
+
+// RMStringStrCmpUpper compares a client-supplied string against a literal. It must match
+// regardless of case, and must not copy the input onto the stack - so a huge input has to
+// compare unequal rather than overflow.
+MU_TEST(test_rm_string_strcmp_upper) {
+    const char *(*saved)(const RedisModuleString *, size_t *) = RedisModule_StringPtrLen;
+    RedisModule_StringPtrLen = rmstring_ptrlen_stub;
+
+    mu_check(RMStringStrCmpUpper((RedisModuleString *)"EMPTY", "EMPTY") == 0);
+    mu_check(RMStringStrCmpUpper((RedisModuleString *)"empty", "EMPTY") == 0);
+    mu_check(RMStringStrCmpUpper((RedisModuleString *)"eMpTy", "EMPTY") == 0);
+    mu_check(RMStringStrCmpUpper((RedisModuleString *)"other", "EMPTY") != 0);
+    mu_check(RMStringStrCmpUpper((RedisModuleString *)"", "EMPTY") != 0);
+
+    // an oversized input must be handled without an on-stack copy of it
+    char *huge = malloc(9 * 1024 * 1024 + 1);
+    mu_check(huge != NULL);
+    memset(huge, 'A', 9 * 1024 * 1024);
+    huge[9 * 1024 * 1024] = '\0';
+    mu_check(RMStringStrCmpUpper((RedisModuleString *)huge, "EMPTY") != 0);
+    free(huge);
+
+    RedisModule_StringPtrLen = saved;
+}
+
 // An out-of-range aggType reaches NewRule from a crafted RDB / RESTORE payload.
 // GetAggClass returns NULL for it, so NewRule must fail instead of dereferencing it.
 MU_TEST(test_new_rule_rejects_unknown_agg_type) {
@@ -121,5 +155,6 @@ MU_TEST_SUITE(parse_duplicate_policy_test_suite) {
     MU_RUN_TEST(test_agg_type_round_trip);
     MU_RUN_TEST(test_mixed_case_keywords);
     MU_RUN_TEST(test_oversized_input_rejected);
+    MU_RUN_TEST(test_rm_string_strcmp_upper);
     MU_RUN_TEST(test_new_rule_rejects_unknown_agg_type);
 }
