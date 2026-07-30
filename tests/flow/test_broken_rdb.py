@@ -173,6 +173,11 @@ def test_broken_rdb_out_of_range_duplicate_policy(env):
     env.assertEqual(len(offsets), 1)
 
     patched = bytearray(dump_last)
-    patched[offsets[0]] = 99  # well past DP_TYPES_MAX
+    # 63 is past DP_TYPES_MAX yet still encodes in a single RDB byte (the 6-bit form
+    # covers 0..63). A larger value such as 99 would switch to the 2-byte encoding,
+    # shifting every following byte, so Redis would reject the payload as malformed
+    # before the module ever saw the policy - the test would then pass for the wrong
+    # reason, whether or not the range check exists.
+    patched[offsets[0]] = 63
     env.expect('RESTORE', 'k', 0, _reseal(patched)).error()
     env.assertTrue(env.cmd('PING'))
