@@ -5,6 +5,7 @@
 
 #include <ctype.h>
 #include <math.h>
+#include <strings.h> // strncasecmp
 #include "rmutil/alloc.h"
 
 static const ChunkFuncs regChunk = {
@@ -114,26 +115,25 @@ int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr) {
 }
 
 DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
-    char input_lower[len];
-    for (int i = 0; i < len; i++) {
-        input_lower[i] = tolower(input[i]);
-    }
+    // Compare case-insensitively against the literals instead of lowercasing a copy:
+    // each branch already knows the exact length, so no buffer is needed and a
+    // caller-controlled `len` never sizes an allocation.
     if (len == 3) {
-        if (strncmp(input_lower, "min", len) == 0) {
+        if (strncasecmp(input, "min", len) == 0) {
             return DP_MIN;
-        } else if (strncmp(input_lower, "max", len) == 0) {
+        } else if (strncasecmp(input, "max", len) == 0) {
             return DP_MAX;
-        } else if (strncmp(input_lower, "sum", len) == 0) {
+        } else if (strncasecmp(input, "sum", len) == 0) {
             return DP_SUM;
         }
     } else if (len == 4) {
-        if (strncmp(input_lower, "last", len) == 0) {
+        if (strncasecmp(input, "last", len) == 0) {
             return DP_LAST;
         }
     } else if (len == 5) {
-        if (strncmp(input_lower, "block", len) == 0) {
+        if (strncasecmp(input, "block", len) == 0) {
             return DP_BLOCK;
-        } else if (strncmp(input_lower, "first", len) == 0) {
+        } else if (strncasecmp(input, "first", len) == 0) {
             return DP_FIRST;
         }
     }

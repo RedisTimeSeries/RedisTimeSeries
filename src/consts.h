@@ -82,6 +82,7 @@ typedef enum DuplicatePolicy
     DP_MIN = 4,
     DP_MAX = 5,
     DP_SUM = 6,
+    DP_TYPES_MAX // sentinel, keep last: bounds iteration over the policies above
 } DuplicatePolicy;
 
 static inline __attribute__((always_inline)) const char *DuplicatePolicyToString(
