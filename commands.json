@@ -1575,5 +1575,72 @@
         ],
         "since": "1.0.0",
         "group": "timeseries"
+    },
+    "TS.QUERYLABELS": {
+        "summary": "Get all label names, or all values of a given label, for time series matching a filter list, or all series",
+        "complexity": "O(n) where n is the number of time-series that match the filters (all indexed series when FILTER is omitted)",
+        "arguments": [
+            {
+                "name": "subtype",
+                "type": "oneof",
+                "arguments": [
+                    {
+                        "name": "LABELS",
+                        "type": "pure-token",
+                        "token": "LABELS"
+                    },
+                    {
+                        "type": "block",
+                        "name": "VALUES_BLOCK",
+                        "arguments": [
+                            {
+                                "name": "VALUES",
+                                "type": "pure-token",
+                                "token": "VALUES"
+                            },
+                            {
+                                "name": "label",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "filterExpr",
+                "token": "FILTER",
+                "type": "oneof",
+                "optional": true,
+                "arguments": [
+                    {
+                        "name": "l=v",
+                        "type": "string"
+                    },
+                    {
+                        "name": "l!=v",
+                        "type": "string"
+                    },
+                    {
+                        "name": "l=",
+                        "type": "string"
+                    },
+                    {
+                        "name": "l!=",
+                        "type": "string"
+                    },
+                    {
+                        "name": "l=(v1,v2,...)",
+                        "type": "string"
+                    },
+                    {
+                        "name": "l!=(v1,v2,...)",
+                        "type": "string"
+                    }
+                ],
+                "multiple": true
+            }
+        ],
+        "since": "8.10.0",
+        "group": "timeseries"
     }
 }

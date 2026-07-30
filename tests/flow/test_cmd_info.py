@@ -1,5 +1,7 @@
 from includes import *
 from docs_utils import *
+import json
+import os
 
 class testCommandDocsAndHelp():
     def __init__(self):
@@ -64,6 +66,16 @@ class testCommandDocsAndHelp():
             res = r.execute_command('COMMAND', 'INFO', 'TS.QUERYINDEX')
             assert res
             assert_docs(env, 'TS.QUERYINDEX', summary='Get all time series keys matching a filter list', complexity='O(n) where n is the number of time-series that match the filters', arity='-2', since='1.0.0', group='module')
+
+    def test_command_info_ts_querylabels(self):
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+        with env.getClusterConnectionIfNeeded() as r:
+            res = r.execute_command('COMMAND', 'INFO', 'TS.QUERYLABELS')
+            assert res
+            assert_docs(env, 'TS.QUERYLABELS', summary='Get all label names, or all values of a given label, for time series matching a filter list, or all series', complexity='O(n) where n is the number of time-series that match the filters (all indexed series when FILTER is omitted)', arity='-2', since='8.10.0', group='module')
 
     def test_command_info_ts_info(self):
         env = self.env
@@ -174,6 +186,35 @@ class testCommandDocsAndHelp():
             res = r.execute_command('COMMAND', 'INFO', 'TS.GET')
             assert res
             assert_docs(env, 'TS.GET', summary='Get the sample with the highest timestamp from a given time series', complexity='O(1)', arity='-2', since='1.0.0', group='module')
+
+    def test_all_registered_commands_in_commands_json(self):
+        # Regression test for https://github.com/RedisTimeSeries/RedisTimeSeries/issues/2127
+        # (MOD-17349): TS.QUERYLABELS was implemented and registered but missing from
+        # commands.json. Assert that every command the module registers has a matching
+        # entry in commands.json, so client/doc scaffolding generated from that file
+        # cannot silently drop a command again.
+        env = self.env
+        con = env.getConnection()
+        if is_redis_version_lower_than(con, '7.0.0', env.isCluster()):
+            env.skip()
+
+        commands_json = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'commands.json')
+        with open(commands_json) as f:
+            documented = {name.upper() for name in json.load(f).keys()}
+
+        with env.getClusterConnectionIfNeeded() as r:
+            listed = r.execute_command('COMMAND', 'LIST', 'FILTERBY', 'MODULE', 'timeseries')
+        # Normalize (some cluster connections return bytes) and keep only the module's
+        # user-facing TS.* commands. Filtering by prefix stays correct even if a server
+        # ignores FILTERBY and returns the full command table.
+        listed = [c.decode() if isinstance(c, bytes) else c for c in listed]
+        registered = {c.upper() for c in listed if c.upper().startswith('TS.')}
+        env.assertGreater(len(registered), 0)  # sanity: we actually enumerated the module
+
+        missing = sorted(registered - documented)
+        env.assertEqual(missing, [], message='Commands registered by the module but missing from commands.json: %s' % missing)
+        # Direct guard for the command from issue #2127.
+        env.assertContains('TS.QUERYLABELS', documented)
 
     # NOTE: Skipping COMMAND DOCS test for now due to client parsing differences across redis-py versions
 
