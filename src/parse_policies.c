@@ -11,6 +11,7 @@
 #include "compaction.h"
 #include "consts.h"
 
+#include <ctype.h> // isdigit
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>

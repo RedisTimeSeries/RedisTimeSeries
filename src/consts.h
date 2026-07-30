@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <ctype.h>
+#include <strings.h> // strcasecmp
 #include <assert.h>
 
 #if defined(__GNUC__)
@@ -180,14 +180,10 @@ typedef enum
     } while (0)
 
 static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str) {
-    size_t str_len;
-    const char *rm_str_cstr = RedisModule_StringPtrLen(rm_str, &str_len);
-    char input_upper[str_len + 1];
-    for (int i = 0; i < str_len; i++) {
-        input_upper[i] = toupper(rm_str_cstr[i]);
-    }
-    input_upper[str_len] = '\0';
-    return strcmp(input_upper, str);
+    // Compare case-insensitively in place rather than uppercasing a copy: the copy was
+    // sized by a caller-controlled length, so an oversized input could overflow the
+    // stack. RedisModule_StringPtrLen returns a NUL-terminated buffer.
+    return strcasecmp(RedisModule_StringPtrLen(rm_str, NULL), str);
 }
 
 extern bool _dontAssertOnFailiure;
