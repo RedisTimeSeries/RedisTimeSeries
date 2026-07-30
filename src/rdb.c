@@ -55,6 +55,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         Load_IOError_OrDefault(io, err, NULL, encver >= TS_SIZE_RDB_VER, 0);
     const DuplicatePolicy duplicatePolicy =
         Load_IOError_OrDefault(io, err, NULL, encver >= TS_IS_RESSETED_DUP_POLICY_RDB_VER, DP_NONE);
+    if (unlikely(duplicatePolicy < DP_NONE || duplicatePolicy >= DP_TYPES_MAX)) {
+        RedisModule_LogIOError(io, "error", "duplicatePolicy is out of range");
+        err = true;
+        return NULL;
+    }
 
     const bool hasSrcKey = Load_IOError_OrDefault(io, err, NULL, encver >= TS_SIZE_RDB_VER, false);
     RedisModuleString *srcKey = Load_IOError_OrDefault(io, err, NULL, hasSrcKey, NULL);

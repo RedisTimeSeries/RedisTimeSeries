@@ -114,9 +114,17 @@ int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr) {
 }
 
 DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
-    char input_lower[len];
-    for (int i = 0; i < len; i++) {
-        input_lower[i] = tolower(input[i]);
+    // `len` is caller-controlled, so bound it before the on-stack copy below: the
+    // buffer is sized by the longest valid keyword, never by the input. Anything
+    // longer can't match a known policy anyway.
+    if (len > MAX_DUPLICATE_POLICY_STR_LEN) {
+        return DP_INVALID;
+    }
+    char input_lower[MAX_DUPLICATE_POLICY_STR_LEN];
+    for (size_t i = 0; i < len; i++) {
+        // cast: tolower() is undefined for negative values, which a plain char yields
+        // for bytes >= 0x80 where char is signed
+        input_lower[i] = (char)tolower((unsigned char)input[i]);
     }
     if (len == 3) {
         if (strncmp(input_lower, "min", len) == 0) {

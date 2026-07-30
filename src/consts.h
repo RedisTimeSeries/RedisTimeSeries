@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <strings.h> // strcasecmp
 #include <ctype.h>
 #include <assert.h>
 
@@ -72,6 +73,12 @@ typedef enum
     TS_AGG_TYPES_MAX
 } TS_AGG_TYPES_T;
 
+// Longest valid aggregation keyword: "countnan"/"countall" = 8 chars. Bounds the
+// on-stack lowercase copy in StringLenAggTypeToEnum, so a caller-controlled length
+// can never size that buffer. Adding a longer keyword requires bumping this; the
+// test_agg_type_round_trip unit test fails until you do.
+#define MAX_AGG_TYPE_STR_LEN 8
+
 typedef enum DuplicatePolicy
 {
     DP_INVALID = -1,
@@ -82,7 +89,14 @@ typedef enum DuplicatePolicy
     DP_MIN = 4,
     DP_MAX = 5,
     DP_SUM = 6,
+    DP_TYPES_MAX // sentinel, keep last: bounds iteration over the policies above
 } DuplicatePolicy;
+
+// Longest valid DUPLICATE_POLICY keyword: "block"/"first" = 5 chars. Bounds the
+// on-stack lowercase copy in DuplicatePolicyFromString, so a caller-controlled length
+// can never size that buffer. Adding a longer keyword requires bumping this; the
+// test_duplicate_policy_round_trip unit test fails until you do.
+#define MAX_DUPLICATE_POLICY_STR_LEN 5
 
 static inline __attribute__((always_inline)) const char *DuplicatePolicyToString(
     const DuplicatePolicy policy) {
@@ -180,14 +194,10 @@ typedef enum
     } while (0)
 
 static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str) {
-    size_t str_len;
-    const char *rm_str_cstr = RedisModule_StringPtrLen(rm_str, &str_len);
-    char input_upper[str_len + 1];
-    for (int i = 0; i < str_len; i++) {
-        input_upper[i] = toupper(rm_str_cstr[i]);
-    }
-    input_upper[str_len] = '\0';
-    return strcmp(input_upper, str);
+    // Compare case-insensitively in place rather than uppercasing a copy: the copy was
+    // sized by a caller-controlled length, so an oversized input could overflow the
+    // stack. RedisModule_StringPtrLen returns a NUL-terminated buffer.
+    return strcasecmp(RedisModule_StringPtrLen(rm_str, NULL), str);
 }
 
 extern bool _dontAssertOnFailiure;

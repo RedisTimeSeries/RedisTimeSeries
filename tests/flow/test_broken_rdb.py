@@ -134,3 +134,50 @@ def test_broken_rdb_invalid_encoding_version(env):
     env.cmd('DEL', 'test_key')
 
     env.expect('RESTORE', 'test_key', 0, corrupted_dump).error()
+
+
+_CRC64_TABLE = []
+for _i in range(256):
+    _c = _i
+    for _ in range(8):
+        _c = (_c >> 1) ^ 0x95ac9329ac4bc9b5 if _c & 1 else _c >> 1
+    _CRC64_TABLE.append(_c)
+
+
+def _reseal(payload):
+    """Recompute the DUMP footer's CRC64 so a patched payload passes Redis's checksum
+    and actually reaches the module's rdb_load."""
+    crc = 0
+    for b in payload[:-8]:
+        crc = _CRC64_TABLE[(crc ^ b) & 0xFF] ^ (crc >> 8)
+    return bytes(payload[:-8]) + (crc & 0xFFFFFFFFFFFFFFFF).to_bytes(8, 'little')
+
+
+def test_broken_rdb_out_of_range_duplicate_policy(env):
+    """
+    A crafted payload whose duplicatePolicy is outside the enum must be rejected,
+    not loaded. The field is located by diffing two dumps of the same key that differ
+    only in that policy, so no offset is hard-coded.
+    """
+    env.skipOnCluster()
+
+    env.cmd('TS.CREATE', 'k', 'DUPLICATE_POLICY', 'last')   # DP_LAST = 2
+    dump_last = env.cmd('DUMP', 'k')
+    env.cmd('DEL', 'k')
+    env.cmd('TS.CREATE', 'k', 'DUPLICATE_POLICY', 'first')  # DP_FIRST = 3
+    dump_first = env.cmd('DUMP', 'k')
+    env.cmd('DEL', 'k')
+
+    body = len(dump_last) - 10  # trailing 2-byte RDB version + 8-byte CRC64
+    offsets = [i for i in range(body) if dump_last[i] != dump_first[i]]
+    env.assertEqual(len(offsets), 1)
+
+    patched = bytearray(dump_last)
+    # 63 is past DP_TYPES_MAX yet still encodes in a single RDB byte (the 6-bit form
+    # covers 0..63). A larger value such as 99 would switch to the 2-byte encoding,
+    # shifting every following byte, so Redis would reject the payload as malformed
+    # before the module ever saw the policy - the test would then pass for the wrong
+    # reason, whether or not the range check exists.
+    patched[offsets[0]] = 63
+    env.expect('RESTORE', 'k', 0, _reseal(patched)).error()
+    env.assertTrue(env.cmd('PING'))

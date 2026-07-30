@@ -1193,6 +1193,12 @@ CompactionRule *NewRule(RedisModuleString *destKey,
         return NULL;
     }
     rule->aggClass = GetAggClass(aggType);
+    if (rule->aggClass == NULL) {
+        // Unknown or out-of-range aggType (e.g. from a crafted RDB/RESTORE payload).
+        // Bail out before dereferencing aggClass below. destKey stays owned by the caller.
+        free(rule);
+        return NULL;
+    }
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext(false);
     rule->bucketDuration = bucketDuration;
