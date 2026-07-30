@@ -336,7 +336,7 @@
                 "type": "key"
             },
             {
-                "name": "value",
+                "name": "addend",
                 "type": "double"
             },
             {
@@ -352,9 +352,21 @@
                 "optional": true
             },
             {
-                "name": "uncompressed",
-                "type": "pure-token",
-                "token": "UNCOMPRESSED",
+                "token": "ENCODING",
+                "name": "enc",
+                "type": "oneof",
+                "arguments": [
+                    {
+                        "name": "uncompressed",
+                        "type": "pure-token",
+                        "token": "UNCOMPRESSED"
+                    },
+                    {
+                        "name": "compressed",
+                        "type": "pure-token",
+                        "token": "COMPRESSED"
+                    }
+                ],
                 "optional": true
             },
             {
@@ -362,6 +374,60 @@
                 "token": "CHUNK_SIZE",
                 "name": "size",
                 "optional": true
+            },
+            {
+                "type": "oneof",
+                "token": "DUPLICATE_POLICY",
+                "name": "policy",
+                "arguments": [
+                    {
+                        "name": "block",
+                        "type": "pure-token",
+                        "token": "BLOCK"
+                    },
+                    {
+                        "name": "first",
+                        "type": "pure-token",
+                        "token": "FIRST"
+                    },
+                    {
+                        "name": "last",
+                        "type": "pure-token",
+                        "token": "LAST"
+                    },
+                    {
+                        "name": "min",
+                        "type": "pure-token",
+                        "token": "MIN"
+                    },
+                    {
+                        "name": "max",
+                        "type": "pure-token",
+                        "token": "MAX"
+                    },
+                    {
+                        "name": "sum",
+                        "type": "pure-token",
+                        "token": "SUM"
+                    }
+                ],
+                "optional": true
+            },
+            {
+                "type": "block",
+                "name": "ignore",
+                "token": "IGNORE",
+                "optional": true,
+                "arguments": [
+                    {
+                        "type": "integer",
+                        "name": "ignoreMaxTimeDiff"
+                    },
+                    {
+                        "type": "double",
+                        "name": "ignoreMaxValDiff"
+                    }
+                ]
             },
             {
                 "type": "block",
@@ -393,7 +459,7 @@
                 "type": "key"
             },
             {
-                "name": "value",
+                "name": "subtrahend",
                 "type": "double"
             },
             {
@@ -409,9 +475,21 @@
                 "optional": true
             },
             {
-                "name": "uncompressed",
-                "type": "pure-token",
-                "token": "UNCOMPRESSED",
+                "token": "ENCODING",
+                "name": "enc",
+                "type": "oneof",
+                "arguments": [
+                    {
+                        "name": "uncompressed",
+                        "type": "pure-token",
+                        "token": "UNCOMPRESSED"
+                    },
+                    {
+                        "name": "compressed",
+                        "type": "pure-token",
+                        "token": "COMPRESSED"
+                    }
+                ],
                 "optional": true
             },
             {
@@ -419,6 +497,60 @@
                 "token": "CHUNK_SIZE",
                 "name": "size",
                 "optional": true
+            },
+            {
+                "type": "oneof",
+                "token": "DUPLICATE_POLICY",
+                "name": "policy",
+                "arguments": [
+                    {
+                        "name": "block",
+                        "type": "pure-token",
+                        "token": "BLOCK"
+                    },
+                    {
+                        "name": "first",
+                        "type": "pure-token",
+                        "token": "FIRST"
+                    },
+                    {
+                        "name": "last",
+                        "type": "pure-token",
+                        "token": "LAST"
+                    },
+                    {
+                        "name": "min",
+                        "type": "pure-token",
+                        "token": "MIN"
+                    },
+                    {
+                        "name": "max",
+                        "type": "pure-token",
+                        "token": "MAX"
+                    },
+                    {
+                        "name": "sum",
+                        "type": "pure-token",
+                        "token": "SUM"
+                    }
+                ],
+                "optional": true
+            },
+            {
+                "type": "block",
+                "name": "ignore",
+                "token": "IGNORE",
+                "optional": true,
+                "arguments": [
+                    {
+                        "type": "integer",
+                        "name": "ignoreMaxTimeDiff"
+                    },
+                    {
+                        "type": "double",
+                        "name": "ignoreMaxValDiff"
+                    }
+                ]
             },
             {
                 "type": "block",
