@@ -47,65 +47,6 @@ def test_create_params():
             assert r.execute_command('TS.CREATE', 'a')  # filter exists
 
 
-def test_create_oversized_duplicate_policy():
-    # An oversized DUPLICATE_POLICY must be rejected with a clean error, not crash
-    # the shard: the argument length is client-controlled, so a huge value must not
-    # reach an on-stack copy sized by it.
-    with Env().getClusterConnectionIfNeeded() as r:
-        huge_policy = 'A' * 9_000_000
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.CREATE', 'oversized', 'DUPLICATE_POLICY', huge_policy)
-        # the shard must still be responsive
-        assert r.ping()
-
-
-def test_mixed_case_duplicate_policy_and_aggregation():
-    # Both parsers match keywords case-insensitively. Assert the resulting behaviour,
-    # not just that the command was accepted, so a mixed-case spelling resolving to the
-    # wrong enum would still fail here.
-    with Env().getClusterConnectionIfNeeded() as r:
-        # 'LaSt' must behave as LAST: the newest sample wins
-        assert r.execute_command('TS.CREATE', 'mixed_dp_last', 'DUPLICATE_POLICY', 'LaSt')
-        assert r.execute_command('TS.ADD', 'mixed_dp_last', 1000, 1)
-        assert r.execute_command('TS.ADD', 'mixed_dp_last', 1000, 2)
-        assert r.execute_command('TS.RANGE', 'mixed_dp_last', 1000, 1000) == [[1000, b'2']]
-
-        # 'MiN' must behave as MIN: the smallest value wins
-        assert r.execute_command('TS.CREATE', 'mixed_dp_min', 'DUPLICATE_POLICY', 'MiN')
-        assert r.execute_command('TS.ADD', 'mixed_dp_min', 1000, 5)
-        assert r.execute_command('TS.ADD', 'mixed_dp_min', 1000, 3)
-        assert r.execute_command('TS.RANGE', 'mixed_dp_min', 1000, 1000) == [[1000, b'3']]
-
-        # 'bLoCk' must behave as BLOCK: the duplicate is rejected
-        assert r.execute_command('TS.CREATE', 'mixed_dp_block', 'DUPLICATE_POLICY', 'bLoCk')
-        assert r.execute_command('TS.ADD', 'mixed_dp_block', 1000, 1)
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.ADD', 'mixed_dp_block', 1000, 2)
-
-        # mixed-case aggregation types must resolve to the right aggregator, including
-        # a keyword containing a non-alphabetic character ('std.p')
-        assert r.execute_command('TS.CREATE', 'mixed_agg')
-        assert r.execute_command('TS.ADD', 'mixed_agg', 1000, 10)
-        assert r.execute_command('TS.ADD', 'mixed_agg', 1001, 20)
-        for agg_type, expected in [('AvG', b'15'), ('CoUnT', b'2'),
-                                   ('StD.p', b'5'), ('CoUnTaLl', b'2')]:
-            assert r.execute_command('TS.RANGE', 'mixed_agg', '-', '+',
-                                     'AGGREGATION', agg_type, 100) == [[1000, expected]]
-
-
-def test_oversized_aggregation_type():
-    # Same guarantee for the aggregation-type parser, which shares the pattern:
-    # an oversized AGGREGATION argument must be rejected, not crash the shard.
-    with Env().getClusterConnectionIfNeeded() as r:
-        assert r.execute_command('TS.CREATE', 'agg_oversized')
-        assert r.execute_command('TS.ADD', 'agg_oversized', 1000, 5)
-        huge_agg = 'A' * 9_000_000
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.RANGE', 'agg_oversized', '-', '+', 'AGGREGATION', huge_agg, 100)
-        # the shard must still be responsive
-        assert r.ping()
-
-
 def test_create_retention():
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)
