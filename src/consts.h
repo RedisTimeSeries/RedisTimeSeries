@@ -72,6 +72,12 @@ typedef enum
     TS_AGG_TYPES_MAX
 } TS_AGG_TYPES_T;
 
+// Longest valid aggregation keyword: "countnan"/"countall" = 8 chars. Bounds the
+// on-stack lowercase copy in StringLenAggTypeToEnum, so a caller-controlled length
+// can never size that buffer. Adding a longer keyword requires bumping this; the
+// test_agg_type_round_trip unit test fails until you do.
+#define MAX_AGG_TYPE_STR_LEN 8
+
 typedef enum DuplicatePolicy
 {
     DP_INVALID = -1,
@@ -83,6 +89,12 @@ typedef enum DuplicatePolicy
     DP_MAX = 5,
     DP_SUM = 6,
 } DuplicatePolicy;
+
+// Longest valid DUPLICATE_POLICY keyword: "block"/"first" = 5 chars. Bounds the
+// on-stack lowercase copy in DuplicatePolicyFromString, so a caller-controlled length
+// can never size that buffer. Adding a longer keyword requires bumping this; the
+// test_duplicate_policy_round_trip unit test fails until you do.
+#define MAX_DUPLICATE_POLICY_STR_LEN 5
 
 static inline __attribute__((always_inline)) const char *DuplicatePolicyToString(
     const DuplicatePolicy policy) {

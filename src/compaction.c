@@ -1008,9 +1008,17 @@ int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr) {
 }
 
 int StringLenAggTypeToEnum(const char *agg_type, size_t len) {
-    char agg_type_lower[len];
-    for (int i = 0; i < len; i++) {
-        agg_type_lower[i] = tolower(agg_type[i]);
+    // `len` is caller-controlled, so bound it before the on-stack copy below: the
+    // buffer is sized by the longest valid keyword, never by the input. Anything
+    // longer can't match a known type anyway.
+    if (len > MAX_AGG_TYPE_STR_LEN) {
+        return TS_AGG_INVALID;
+    }
+    char agg_type_lower[MAX_AGG_TYPE_STR_LEN];
+    for (size_t i = 0; i < len; i++) {
+        // cast: tolower() is undefined for negative values, which a plain char yields
+        // for bytes >= 0x80 where char is signed
+        agg_type_lower[i] = (char)tolower((unsigned char)agg_type[i]);
     }
 
     switch (len) {
