@@ -58,6 +58,27 @@ MU_TEST(test_agg_type_round_trip) {
     }
 }
 
+// Guards MAX_DUPLICATE_POLICY_STR_LEN directly: the on-stack buffer in
+// DuplicatePolicyFromString is that size, so no keyword may exceed it. Adding a longer
+// policy without bumping the #define fails here.
+MU_TEST(test_duplicate_policy_len_within_cap) {
+    for (DuplicatePolicy p = DP_BLOCK; p < DP_TYPES_MAX; p++) {
+        mu_assert(strlen(DuplicatePolicyToString(p)) <= MAX_DUPLICATE_POLICY_STR_LEN,
+                  "a DUPLICATE_POLICY keyword exceeds MAX_DUPLICATE_POLICY_STR_LEN - "
+                  "bump the #define in consts.h");
+    }
+}
+
+// Same guard for MAX_AGG_TYPE_STR_LEN. Measured on the lower-case form, since that is
+// the exact keyword StringLenAggTypeToEnum compares and therefore what the buffer holds.
+MU_TEST(test_agg_type_len_within_cap) {
+    for (TS_AGG_TYPES_T t = TS_AGG_MIN; t < TS_AGG_TYPES_MAX; t++) {
+        mu_assert(strlen(AggTypeEnumToStringLowerCase(t)) <= MAX_AGG_TYPE_STR_LEN,
+                  "an aggregation keyword exceeds MAX_AGG_TYPE_STR_LEN - "
+                  "bump the #define in consts.h");
+    }
+}
+
 // Every keyword must resolve regardless of case, for both parsers. Guards against a
 // regression from strncasecmp back to a case-sensitive comparison: an alternating-case
 // spelling matches nothing if the comparison stops being case-insensitive.
@@ -153,6 +174,8 @@ MU_TEST_SUITE(parse_duplicate_policy_test_suite) {
     MU_RUN_TEST(test_duplicate_policy_to_string);
     MU_RUN_TEST(test_duplicate_policy_round_trip);
     MU_RUN_TEST(test_agg_type_round_trip);
+    MU_RUN_TEST(test_duplicate_policy_len_within_cap);
+    MU_RUN_TEST(test_agg_type_len_within_cap);
     MU_RUN_TEST(test_mixed_case_keywords);
     MU_RUN_TEST(test_oversized_input_rejected);
     MU_RUN_TEST(test_rm_string_strcmp_upper);

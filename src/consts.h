@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <strings.h> // strcasecmp
+#include <ctype.h>
 #include <assert.h>
 
 #if defined(__GNUC__)
