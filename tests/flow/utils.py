@@ -11,6 +11,11 @@ import contextlib
 
 NUMBER_OF_SLOTS = 2**14
 
+
+def get_timeout():
+    return 60 if (VALGRIND or SANITIZER) else 10
+
+
 def Refresh_Cluster(env):
     for shard in range(0, env.shardsCount):
         con = env.getConnection(shard)
@@ -275,7 +280,7 @@ def compare_clusters(cluster1, cluster2):
 
 def wait_for_valid_cluster(env):
     """Wait until every node reports a valid cluster and all nodes agree on the topology."""
-    timeout = 60 if (VALGRIND or SANITIZER) else 5
+    timeout = get_timeout()
     deadline = time.time() + timeout
     while True:
         clusters = [validate_cluster(env.getConnection(i)) for i in range(env.shardsCount)]
@@ -293,7 +298,7 @@ def import_slots(source_conn, target_conn, slot_range: SlotRange):
         # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
         # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
         repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
-        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+        timeout = repl_diskless_sync_delay + get_timeout()
         while time.time() - start_time < timeout:
             (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
             migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
@@ -383,7 +388,7 @@ def added_slaves_to_cluster(env):
             # Wait for the initial sync to finish; CLUSTER FAILOVER times out on a not-yet-caught-up replica.
             # The master waits repl-diskless-sync-delay seconds before forking the sync child, so add it.
             repl_diskless_sync_delay = float(shard.getConnection().config_get("repl-diskless-sync-delay")["repl-diskless-sync-delay"])
-            timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+            timeout = repl_diskless_sync_delay + get_timeout()
             start_time = time.time()
             while replica_conn.info("replication")["master_link_status"] != "up":
                 if time.time() - start_time > timeout:
@@ -404,7 +409,7 @@ def added_slaves_to_cluster(env):
                 for replica_port, master_id in master_id_of_replica_port.items()
             )
 
-        timeout = 5 if not (VALGRIND or SANITIZER) else 60
+        timeout = get_timeout()
         start_time = time.time()
         while not expected(nodes := cluster_nodes(env.getConnection(0))):
             if time.time() - start_time > timeout:
@@ -433,7 +438,7 @@ def failover_node(replica_conn):
     master_conn = redis.Redis(host=master_ip, port=master_port, decode_responses=True)
 
     repl_diskless_sync_delay = float(master_conn.config_get("repl-diskless-sync-delay")["repl-diskless-sync-delay"])
-    sync_timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
+    sync_timeout = repl_diskless_sync_delay + get_timeout()
     start_time = time.time()
     while replica_conn.info("replication")["master_link_status"] != "up":
         if time.time() - start_time > sync_timeout:
@@ -444,7 +449,7 @@ def failover_node(replica_conn):
 
     replica_conn.execute_command("CLUSTER", "FAILOVER")
 
-    timeout = 5 if not (VALGRIND or SANITIZER) else 60
+    timeout = get_timeout()
     start_time = time.time()
     while time.time() - start_time < timeout:
         if replica_conn.execute_command("ROLE")[0] == "master" and master_conn.execute_command("ROLE")[0] == "slave":

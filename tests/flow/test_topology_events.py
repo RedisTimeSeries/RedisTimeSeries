@@ -12,6 +12,7 @@ from utils import (
     NUMBER_OF_SLOTS,
     failover_node,
     added_slaves_to_cluster,
+    get_timeout,
 )
 from test_asm import validate_queries_during_migrations
 
@@ -208,7 +209,7 @@ def ts_cluster_from_conn(conn):
 
 def wait_for_valid_ts_infocluster(env):
     """Wait until every node's timeseries.INFOCLUSTER reports full coverage and all nodes agree."""
-    timeout = 60 if (VALGRIND or SANITIZER) else 5
+    timeout = get_timeout()
     deadline = time.time() + timeout
     while True:
         clusters = [ts_cluster_from_conn(env.getConnection(i)) for i in range(env.shardsCount)]
