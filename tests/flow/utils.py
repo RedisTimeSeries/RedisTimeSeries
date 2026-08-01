@@ -355,6 +355,10 @@ def added_slaves_to_cluster(env):
             cluster_config_file = f"/tmp/replica-{replica_port}-{time.time_ns()}.conf"
 
             cluster_node_timeout = shard.getConnection().config_get("cluster-node-timeout")["cluster-node-timeout"]
+            master_log = shard.getConnection().config_get("logfile")["logfile"]
+            master_rdb = shard.getConnection().config_get("dbfilename")["dbfilename"]
+            replica_log = master_log.replace("master-", "slave-", 1) if "master-" in master_log else f"replica-{replica_port}.log"
+            replica_rdb = master_rdb.replace("master-", "slave-", 1) if "master-" in master_rdb else f"replica-{replica_port}.rdb"
             enable_debug_command = "no" if shard.enableDebugCommand is False else "yes"
             cmd = [shard.redisBinaryPath, "--port", str(replica_port),
                    "--cluster-enabled", "yes",
@@ -362,8 +366,8 @@ def added_slaves_to_cluster(env):
                    "--cluster-node-timeout", cluster_node_timeout,
                    "--enable-debug-command", enable_debug_command,
                    "--dir", shard.dbDirPath,
-                   "--dbfilename", f"replica-{replica_port}.rdb",
-                   "--logfile", f"replica-{replica_port}.log"]
+                   "--dbfilename", replica_rdb,
+                   "--logfile", replica_log]
             for pos, module in enumerate(shard.modulePath or []):
                 cmd += ["--loadmodule", module]
                 module_args = shard.moduleArgs[pos] if shard.moduleArgs else None
