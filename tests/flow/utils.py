@@ -264,7 +264,7 @@ def validate_cluster(conn):
 
 
 def compare_clusters(cluster1, cluster2):
-    """Compare two validate_cluster() dicts, per node only by id, ip, port, flags and slots."""
+    """Compare two validate_cluster() {node_id: ClusterNode} dicts"""
     # 'myself' and other flags like 'handshake'/'fail?' are transient, so they depend on which node we asked
     # only these flags are invariant across views:
     invariant_flags = {"master", "slave"}
@@ -272,8 +272,8 @@ def compare_clusters(cluster1, cluster2):
         return False
     for node_id in cluster1:
         n1, n2 = cluster1[node_id], cluster2[node_id]
-        if (n1.id, n1.ip, n1.port, n1.flags & invariant_flags, n1.slots) != \
-           (n2.id, n2.ip, n2.port, n2.flags & invariant_flags, n2.slots):
+        if (n1.id, n1.ip, n1.port, n1.flags & invariant_flags, n1.slots, n1.master) != \
+           (n2.id, n2.ip, n2.port, n2.flags & invariant_flags, n2.slots, n2.master):
             return False
     return True
 
@@ -415,6 +415,8 @@ def added_slaves_to_cluster(env):
             if time.time() - start_time > timeout:
                 raise AssertionError(f"cluster topology not as expected after {timeout}s, CLUSTER NODES: {nodes}")
             time.sleep(0.1)
+
+        wait_for_valid_cluster(env)
 
         yield master_id_of_replica_port
     finally:
