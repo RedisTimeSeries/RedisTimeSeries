@@ -533,6 +533,26 @@ def dump_cluster_info(env):
         dump_node_cluster_info(env.getConnection(shard))
 
 
+def dump_node_cluster_nodes(conn):
+    print(f"{get_node_address(conn)}:")
+    nodes = [ClusterNode.from_str(line) for line in conn.execute_command("CLUSTER", "NODES").splitlines()]
+    for n in sorted(nodes, key=lambda n: (n.port)):
+        role = "master" if "master" in n.flags else ("slave" if "slave" in n.flags else "?")
+        slots = ",".join(f"{sr.start}-{sr.end}" for sr in sorted(n.slots, key=lambda sr: sr.start)) or "-"
+        flags = ",".join(sorted(n.flags))
+        link = "connected" if n.link_state else "disconnected"
+        print(
+            f"    node {n.id} {n.ip}:{n.port} {role} master={n.master} "
+            f"slots={slots} flags={flags} link={link} epoch={n.config_epoch}"
+        )
+
+
+def dump_cluster_nodes(env):
+    print("\n===== CLUSTER NODES =====")
+    for shard in range(0, env.shardsCount):
+        dump_node_cluster_nodes(env.getConnection(shard))
+
+
 # A table of the shortest possible alphanumeric string that is mapped by redis' hslot (index in the table)
 # Shamelessly stolen from redis' crc16_slottable.h
 slot_table = [
