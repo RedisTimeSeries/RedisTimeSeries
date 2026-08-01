@@ -13,8 +13,25 @@ from utils import (
     failover_node,
     added_slaves_to_cluster,
     get_timeout,
+    dump_cluster_nodes,
 )
 from test_asm import validate_queries_during_migrations
+
+
+def test_add_node():
+    env = Env(shardsCount=2, decodeResponses=True, skipRefreshCluster=True)
+    skip_if_needed(env)
+
+    wait_for_valid_cluster(env)
+    print("\n===== before the addition =====")
+    dump_cluster_nodes(env)
+
+    env.addShardToClusterIfExists()
+    env.shardsCount = env.envRunner.shardsCount
+
+    wait_for_valid_cluster(env)
+    print("\n===== after the addition =====")
+    dump_cluster_nodes(env)
 
 
 def test_asm():
@@ -27,6 +44,7 @@ def test_asm():
 
     fill_some_data(env)
     validate_queries_during_migrations(env, post_migration, COMMAND, validate_result)
+
 
 def test_failover():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
@@ -76,6 +94,7 @@ def skip_if_needed(env):
     # query within LibMR's 5s max-idle during migration churn (MOD-14615 residual).
     if RUNNER_LABEL == "macos-15-intel":
         env.skip()
+
 
 def fill_some_data(env):
     fill_ts_data(env, NUMBER_OF_KEYS, SAMPLES_PER_KEY, label1=17, label2=19)
