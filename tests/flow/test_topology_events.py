@@ -14,6 +14,7 @@ from utils import (
     added_slaves_to_cluster,
 )
 from test_asm import validate_queries_during_migrations
+from dataclasses import dataclass
 
 
 def test_asm():
