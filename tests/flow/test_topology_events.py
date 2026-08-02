@@ -69,6 +69,7 @@ COMMAND = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
 
 def skip_if_needed(env):
+    env.skip("Skipping test_topology_events.py untill the feature is merged to redis fork")
     if env.env != "oss-cluster":
         env.skip()
 
