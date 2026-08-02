@@ -2,6 +2,7 @@ import time
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from typing import Optional, Set
 
 from includes import Env, VALGRIND, SANITIZER, BIGREDIS_TESTS, RUNNER_LABEL
