@@ -95,10 +95,13 @@ def test_asm_with_data_and_queries_during_migrations():
             validate_result(result)
 
     def migrate_slots():
+        def validate_command_on_both_shards(env):
+            validate_result(env.getConnection(0).execute_command(command))
+            validate_result(env.getConnection(1).execute_command(command))
         for _ in range(MIGRATION_CYCLES):
             if done.is_set():
                 break
-            migrate_slots_back_and_forth(env, command, validate_result)
+            migrate_slots_back_and_forth(env, validate_command_on_both_shards)
 
     with ThreadPoolExecutor() as executor:
         futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
@@ -400,86 +403,3 @@ def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
     with env.getClusterConnectionIfNeeded() as rc:
         for command in generate_commands():
             rc.execute_command(*command.split())
-
-
-def migrate_slots_back_and_forth(env, command=None, validate_result=None):
-    """
-    Migrates slots between the two shards. When done all slots are back to their original places.
-    Upon each migration, the command is executed and the result is validated (when not None).
-    """
-
-    def cluster_node_of(conn) -> ClusterNode:
-        for line in conn.execute_command("cluster", "nodes").splitlines():
-            cluster_node = ClusterNode.from_str(line)
-            if "myself" in cluster_node.flags:
-                return cluster_node
-        raise ValueError("No node with 'myself' flag found")
-
-    def middle_slot_range(slot_range: SlotRange) -> SlotRange:
-        third = (slot_range.end - slot_range.start) // 3
-        return SlotRange(slot_range.start + third, slot_range.end - third)
-
-    def cantorized_slot_set(slot_range: SlotRange) -> Set[SlotRange]:  # https://en.wikipedia.org/wiki/Cantor_set ;)
-        middle = middle_slot_range(slot_range)
-        return {SlotRange(slot_range.start, middle.start - 1), SlotRange(middle.end + 1, slot_range.end)}
-
-    first_conn, second_conn = env.getConnection(0), env.getConnection(1)
-    # Store some original values to be used throughout the test
-    (original_first_slot_range,) = cluster_node_of(first_conn).slots
-    (original_second_slot_range,) = cluster_node_of(second_conn).slots
-    middle_of_original_first = middle_slot_range(original_first_slot_range)
-    middle_of_original_second = middle_slot_range(original_second_slot_range)
-
-    import_slots(second_conn, first_conn, middle_of_original_second)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
-    assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
-
-    import_slots(first_conn, second_conn, middle_of_original_second)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range}
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range}
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
-
-    import_slots(first_conn, second_conn, middle_of_original_first)
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
-    assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
-
-    import_slots(second_conn, first_conn, middle_of_original_first)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range}
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range}
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
-
-
-def import_slots(source_conn, target_conn, slot_range: SlotRange):
-    task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
-
-    def wait_for_completion(conn):
-        start_time = time.time()
-        # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
-        # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
-        repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
-        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
-        while time.time() - start_time < timeout:
-            (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
-            migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
-            if migration_status["state"] == "completed":
-                break
-            time.sleep(0.1)
-        else:
-            raise TimeoutError(
-                f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}"
-            )
-
-    wait_for_completion(target_conn)
-    # The oss cluster's status data is not CP, but we should rather rely on eventual consistency,
-    # so let's wait for the source as well:
-    wait_for_completion(source_conn)
