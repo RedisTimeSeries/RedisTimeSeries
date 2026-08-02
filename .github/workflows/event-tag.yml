@@ -13,7 +13,7 @@ on:
       redis-ref-flex:
         description: 'Redis ref for the Flex (Big-Redis) leg (redislabsdev/Redis)'
         required: true
-        default: 'rl_big2_8.6'
+        default: 'rl_big2_unstable'
       redis-ref:
         description: 'Default redis branch — Linux jobs consume it as `rl_${ref}` on redislabsdev/Redis, macOS consumes it as `${ref}` on redis/redis (OSS). Use an unprefixed branch name so the same value resolves on both forks.'
         required: true
@@ -29,13 +29,13 @@ jobs:
       - name: set env
         id: set-env
         run: |
-          echo "redis-ref-flex=${{ inputs.redis-ref-flex || 'rl_big2_8.6' }}" >> $GITHUB_OUTPUT
+          echo "redis-ref-flex=${{ inputs.redis-ref-flex || 'rl_big2_unstable' }}" >> $GITHUB_OUTPUT
           echo "redis-ref=${{ inputs.redis-ref || 'unstable' }}" >> $GITHUB_OUTPUT
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
 
-  # --- Flex (Big-Redis) leg: rl_big2_8.6 ---
+  # --- Flex (Big-Redis) leg: rl_big2_unstable ---
   build-linux-x64-flex:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
