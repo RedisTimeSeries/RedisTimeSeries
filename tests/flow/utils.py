@@ -282,6 +282,15 @@ def wait_for_valid_cluster(env):
     """Wait until every node reports a valid cluster and all nodes agree on the topology."""
     timeout = get_timeout()
     deadline = time.time() + timeout
+    # Note that only the nodes in env are polled but any slaves added by added_slaves_to_cluster are not in env.
+    # This will be fixed in MOD-17386 when a fully cluster-aware env will enable waiting on all nodes.
+    # But the logic of waiting until all originally-master nodes have the same cluster topology view still holds,
+    # even when some of them were demoted due to a failover. Here's why:
+    # - A master is the authoritative origin of its own slot/role claims, so a polled slave node agreeing implies
+    #   its master already agrees on those.
+    # - The slaveof relation (ClusterNode.master) is weaker, since it is originated by the replica, but a replica
+    #   gossips with its own master most frequently and failover_node separately waits for master_link_status == up
+    #   before a failover, so it also holds.
     while True:
         clusters = [validate_cluster(env.getConnection(i)) for i in range(env.shardsCount)]
         if all(c is not None for c in clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
