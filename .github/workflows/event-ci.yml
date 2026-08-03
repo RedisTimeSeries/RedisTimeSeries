@@ -27,13 +27,13 @@ jobs:
           #   redis-ref      — unprefixed branch name shared by Linux non-Flex
           #                    jobs (private fork, consumed as `rl_${ref}`) and
           #                    macOS (OSS redis/redis, consumed as `${ref}`).
-          echo "redis-ref-flex=rl_big2_8.6" >> $GITHUB_OUTPUT
+          echo "redis-ref-flex=rl_big2_unstable" >> $GITHUB_OUTPUT
           echo "redis-ref=unstable" >> $GITHUB_OUTPUT
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
 
-  # --- Flex (Big-Redis) leg: rl_big2_8.6 ---
+  # --- Flex (Big-Redis) leg: rl_big2_unstable ---
   build-linux-x64-flex:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
