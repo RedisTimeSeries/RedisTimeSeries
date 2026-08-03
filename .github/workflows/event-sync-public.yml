@@ -1,0 +1,210 @@
+name: Event Sync Public
+
+# Periodically merges public/master (RedisTimeSeries/RedisTimeSeries) into this
+# private fork's master. On conflicts, the merge commit is pushed with conflict
+# markers still in place and a draft PR is opened for manual resolution. Always
+# opens a PR for human review — this workflow never merges.
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+on:
+  pull_request:
+  schedule:
+    - cron: '0 3 * * *' # Every day at 3:00 UTC
+  workflow_dispatch:
+    inputs:
+      public_ref:
+        description: 'Branch on RedisTimeSeries/RedisTimeSeries to merge'
+        type: string
+        default: 'master'
+
+concurrency:
+  group: sync-public
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BOT_MODULES_SYNC_APP_ID }}
+          private-key: ${{ secrets.BOT_MODULES_SYNC_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: master
+          fetch-depth: 0
+          submodules: recursive
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure git identity
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          bot_id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+      - name: Fetch public upstream
+        id: fetch-public
+        env:
+          PUBLIC_REF: ${{ inputs.public_ref || 'master' }}
+        run: |
+          git remote add public https://github.com/RedisTimeSeries/RedisTimeSeries.git
+          git fetch public "$PUBLIC_REF"
+          echo "public_sha=$(git rev-parse public/"$PUBLIC_REF")" >> "$GITHUB_OUTPUT"
+
+      - name: Check if already up to date
+        id: check
+        run: |
+          if git merge-base --is-ancestor ${{ steps.fetch-public.outputs.public_sha }} HEAD; then
+            echo "master is already up to date with public/${{ inputs.public_ref || 'master' }} (${{ steps.fetch-public.outputs.public_sha }}) — nothing to sync."
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create sync branch
+        if: steps.check.outputs.up_to_date == 'false'
+        id: branch
+        run: |
+          branch="sync/public-$(date -u +%Y%m%d)"
+          git checkout -b "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Attempt merge
+        if: steps.check.outputs.up_to_date == 'false'
+        id: merge
+        run: |
+          git merge --no-commit --no-ff ${{ steps.fetch-public.outputs.public_sha }} || true
+          conflicts=$(git diff --name-only --diff-filter=U)
+          {
+            echo "conflict_files<<CONFLICTS_EOF"
+            echo "$conflicts"
+            echo "CONFLICTS_EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ -n "$conflicts" ]; then
+            echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+            git commit --no-edit
+          fi
+
+      - name: Finalize merge commit with unresolved conflicts
+        if: steps.check.outputs.up_to_date == 'false' && steps.merge.outputs.has_conflicts == 'true'
+        id: finalize
+        run: |
+          echo "Conflicts left unresolved for manual follow-up in:"
+          echo "${{ steps.merge.outputs.conflict_files }}"
+          # Force-add so git allows the commit; markers stay in the files for a
+          # human to finish, matching the draft-PR fallback for unresolved conflicts.
+          # Stage only the conflicted files: a broad `git add -A` would re-record
+          # each submodule's stale working-tree HEAD into the index, silently
+          # reverting submodule pointers that the merge already updated (the
+          # working tree is not `submodule update`d after the merge).
+          git diff --name-only --diff-filter=U -z | xargs -0 --no-run-if-empty git add --
+          git commit --no-edit
+
+      - name: Push sync branch
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          branch="${{ steps.branch.outputs.branch }}"
+          # Try to push normally; if branch already exists, pull latest and push again
+          git push origin "$branch" || (
+            echo "Branch already exists, pulling latest and pushing again."
+            git fetch origin "$branch"
+            git rebase origin/"$branch"
+            git push origin "$branch" --force
+          )
+ 
+
+      - name: Close previous sync PR
+        if: steps.check.outputs.up_to_date == 'false'
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          old_prs=$(gh pr list --label "public-sync" --state open --base master --json number --jq '.[].number')
+          for pr in $old_prs; do
+            gh pr close "$pr" --comment "Superseded by a newer public-sync PR."
+          done
+
+      - name: Open pull request
+        if: steps.check.outputs.up_to_date == 'false'
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        id: open-pr
+        run: |
+          gh label create "public-sync" --color BFD4F2 --description "Automated public->private sync" 2>/dev/null || true
+
+          draft_flag=""
+          if [ "${{ steps.merge.outputs.has_conflicts }}" == "true" ]; then
+            draft_flag="--draft"
+          fi
+
+          body=$(cat <<PR_BODY_EOF
+          Automated sync of \`public/${{ inputs.public_ref || 'master' }}\` (RedisTimeSeries/RedisTimeSeries)
+          up to \`${{ steps.fetch-public.outputs.public_sha }}\` into \`master\`.
+
+          - Conflicts encountered: ${{ steps.merge.outputs.has_conflicts }}
+          - Files needing manual resolution: ${{ steps.merge.outputs.conflict_files || 'none' }}
+          - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          **Before merging:**
+          - [ ] Full CI (triggered automatically on this PR) is green
+          - [ ] If marked draft, resolve the remaining conflicts manually (see docs/flex-merge-playbook.md for known hotspots)
+          PR_BODY_EOF
+          )
+
+          pr_url=$(gh pr create \
+            --title "Sync public → private ($(date -u +%Y-%m-%d))" \
+            --body "$body" \
+            --base master \
+            --head "${{ steps.branch.outputs.branch }}" \
+            --label "public-sync" \
+            $draft_flag)
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Slack
+        if: always()
+        env:
+          DATATYPES_SLACK_WEBHOOK_URL: ${{ secrets.DATATYPES_SLACK_WEBHOOK_URL }}
+          JOB_STATUS: ${{ job.status }}
+          UP_TO_DATE: ${{ steps.check.outputs.up_to_date }}
+          HAS_CONFLICTS: ${{ steps.merge.outputs.has_conflicts }}
+          PR_URL: ${{ steps.open-pr.outputs.pr_url }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$DATATYPES_SLACK_WEBHOOK_URL" ]; then
+            echo "DATATYPES_SLACK_WEBHOOK_URL secret not set — skipping Slack notification."
+            exit 0
+          fi
+
+          if [ "$JOB_STATUS" != "success" ]; then
+            emoji="❌"; summary="Sync job failed — check the workflow run."
+          elif [ "$UP_TO_DATE" == "true" ]; then
+            emoji="✅"; summary="Already up to date with public/master — nothing to sync."
+          elif [ "$HAS_CONFLICTS" != "true" ]; then
+            emoji="✅"; summary="Clean merge — PR opened for review."
+          else
+            emoji="⚠️"; summary="Conflicts found — draft PR opened, needs manual resolution."
+          fi
+
+          nl=$'\n'
+          text="${emoji} *RedisTimeSeries public sync*: ${summary}"
+          if [ -n "$PR_URL" ]; then
+            text="${text}${nl}*PR:* ${PR_URL}"
+          fi
+          text="${text}${nl}<${WORKFLOW_URL}|View workflow run>"
+
+          payload=$(jq -n --arg text "$text" '{text: $text}')
+          curl -sf -X POST -H 'Content-type: application/json' --data "$payload" "$DATATYPES_SLACK_WEBHOOK_URL"
