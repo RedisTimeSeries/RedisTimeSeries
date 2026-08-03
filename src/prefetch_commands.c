@@ -78,6 +78,9 @@ static void mrange_async_ctx_destroy(MRangeAsyncCtx *m) {
             RedisModule_FreeString(NULL, m->args.limitLabels[i]);
         }
     }
+    // limitLabels are freed in-place above; clear the count so MRangeArgs_Free
+    // below can't double-free them (same guard as groupByLabel).
+    m->args.numLimitLabels = 0;
     free(m->groupByLabel_owned);
     // m->args.groupByLabel aliases m->groupByLabel_owned (set during async-path
     // setup). Clear the alias so MRangeArgs_Free can't double-free it if it

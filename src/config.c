@@ -48,6 +48,7 @@ void InitConfig(void) {
     TSGlobalConfig.options = SERIES_OPT_DEFAULT_COMPRESSION;
     TSGlobalConfig.libmrProtocol = LIBMR_PROTOCOL_DEFAULT;
     TSGlobalConfig.password = NULL;
+    TSGlobalConfig.topologyEvents = !RTS_IsEnterprise();
 
     if (getConfigStringCache) {
         RedisModule_FreeString(rts_staticCtx, getConfigStringCache);
@@ -278,23 +279,6 @@ static bool Config_SetIgnoreMaxValDiffFromRedisString(RedisModuleString *value,
     return true;
 }
 
-static bool Config_SetGlobalPasswordFromRedisString(RedisModuleString *value) {
-    if (TSGlobalConfig.password) {
-        free(TSGlobalConfig.password);
-        TSGlobalConfig.password = NULL;
-    }
-
-    size_t len = 0;
-    const char *str = RedisModule_StringPtrLen(value, &len);
-
-    if (!str || len == 0) {
-        return true;
-    }
-
-    TSGlobalConfig.password = strndup(str, len);
-    return true;
-}
-
 static bool Config_SetEncodingFromRedisString(RedisModuleString *value, RedisModuleString **err) {
     size_t len = 0;
     const char *encoding = RedisModule_StringPtrLen(value, &len);
@@ -351,6 +335,31 @@ static int setModernStringConfigValue(const char *name,
     } else if (!strcasecmp("ts-libmr-protocol", name)) {
         return Config_SetLibmrProtocolFromRedisString(value, err) ? REDISMODULE_OK
                                                                   : REDISMODULE_ERR;
+    }
+
+    return REDISMODULE_ERR;
+}
+
+static int getModernBoolConfigValue(const char *name, void *privdata) {
+    if (!strcasecmp("ts-topology-events", name)) {
+        return TSGlobalConfig.topologyEvents;
+    }
+
+    return 0;
+}
+
+static int setModernBoolConfigValue(const char *name,
+                                    int value,
+                                    void *data,
+                                    RedisModuleString **err) {
+    // Needed even though ts-topology-events is REDISMODULE_CONFIG_IMMUTABLE:
+    // RedisModule_LoadConfigs() applies startup values (e.g. redis.conf) through
+    // this setter. IMMUTABLE only rejects runtime CONFIG SET, not startup apply.
+    // (Module-load args are handled separately in ReadConfig.)
+    if (!strcasecmp("ts-topology-events", name)) {
+        TSGlobalConfig.topologyEvents = value;
+
+        return REDISMODULE_OK;
     }
 
     return REDISMODULE_ERR;
@@ -623,6 +632,25 @@ bool RegisterModernConfigurationOptions(RedisModuleCtx *ctx) {
             ctx, "notice", "\t{ %-*s: %*s }", 23, "ts-ignore-max-val-diff", 12, oldValue);
     }
 
+    if (RedisModule_RegisterBoolConfig(ctx,
+                                       "ts-topology-events",
+                                       TSGlobalConfig.topologyEvents,
+                                       REDISMODULE_CONFIG_UNPREFIXED | REDISMODULE_CONFIG_IMMUTABLE,
+                                       getModernBoolConfigValue,
+                                       setModernBoolConfigValue,
+                                       NULL,
+                                       NULL)) {
+        return false;
+    }
+
+    RedisModule_Log(ctx,
+                    "notice",
+                    "\t{ %-*s: %*s }",
+                    23,
+                    "ts-topology-events",
+                    12,
+                    TSGlobalConfig.topologyEvents ? "true" : "false");
+
     RedisModule_Log(ctx, "notice", "]");
 
     return true;
@@ -848,6 +876,27 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         isDeprecated = true;
     }
     TSGlobalConfig.prefetchBatchSize = DEFAULT_PREFETCH_BATCH_SIZE;
+
+    if (argc > 1 && RMUtil_ArgIndex("ts-topology-events", argv, argc) >= 0) {
+        RedisModuleString *topologyEvents;
+        if (RMUtil_ParseArgsAfter("ts-topology-events", argv, argc, "s", &topologyEvents) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after ts-topology-events");
+            return TSDB_ERROR;
+        }
+        const char *topologyEvents_cstr = RedisModule_StringPtrLen(topologyEvents, NULL);
+        if (!strcasecmp(topologyEvents_cstr, "yes")) {
+            TSGlobalConfig.topologyEvents = true;
+        } else if (!strcasecmp(topologyEvents_cstr, "no")) {
+            TSGlobalConfig.topologyEvents = false;
+        } else {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Invalid value for ts-topology-events, must be 'yes' or 'no': %s",
+                            topologyEvents_cstr);
+            return TSDB_ERROR;
+        }
+    }
 
     if (argc > 1 && RMUtil_ArgIndex("LIBMR_PROTOCOL", argv, argc) >= 0) {
         LOG_DEPRECATED_OPTION("LIBMR_PROTOCOL", "ts-libmr-protocol", showDeprecationWarning);

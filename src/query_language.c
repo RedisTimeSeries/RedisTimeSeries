@@ -1038,6 +1038,13 @@ int parseMRangeCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         }
     }
 
+    if (args.groupByLabel) {
+        args.groupByLabel = strdup(args.groupByLabel);
+    }
+    for (int i = 0; i < args.numLimitLabels; i++) {
+        args.limitLabels[i] = RedisModule_CreateStringFromString(NULL, args.limitLabels[i]);
+    }
+
     *out = args;
     return REDISMODULE_OK;
 
@@ -1053,6 +1060,14 @@ void MRangeArgs_Free(MRangeArgs *args) {
     free(args->rangeArgs.aggregationArgs.classes);
     args->rangeArgs.aggregationArgs.classes = NULL;
     args->rangeArgs.aggregationArgs.numClasses = 0;
+    if (args->groupByLabel) {
+        free((void *)args->groupByLabel);
+        args->groupByLabel = NULL;
+    }
+    for (int i = 0; i < args->numLimitLabels; i++) {
+        RedisModule_FreeString(NULL, args->limitLabels[i]);
+    }
+    args->numLimitLabels = 0;
 }
 
 void MGetArgs_Free(MGetArgs *args) {

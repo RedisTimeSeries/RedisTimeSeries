@@ -1,13 +1,15 @@
 import time
 import random
-from dataclasses import dataclass
-import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from typing import Optional, Set
+import re
 
 from includes import Env, VALGRIND, SANITIZER, BIGREDIS_TESTS, RUNNER_LABEL
 from utils import slot_table
+import redis
+from utils import migrate_slots_back_and_forth, fill_ts_data, wait_for_valid_cluster
 
 
 MIGRATION_CYCLES = 10
@@ -24,7 +26,7 @@ def test_asm_without_data():
         env.skip()
 
     for _ in range(MIGRATION_CYCLES):
-        migrate_slots_back_and_forth(env)
+        migrate_slots_back_and_forth(env, wait_for_valid_cluster)
 
 
 def test_asm_with_data():
@@ -37,13 +39,13 @@ def test_asm_with_data():
         # flex/bigredis build. Skip until the core adds ASM+bigredis support.
         env.skip()
 
-    fill_some_data(env, number_of_keys=100, samples_per_key=10, label="test")
+    fill_ts_data(env, number_of_keys=100, samples_per_key=10, label="test")
     for _ in range(MIGRATION_CYCLES):
-        migrate_slots_back_and_forth(env)
+        migrate_slots_back_and_forth(env, wait_for_valid_cluster)
 
 
 def test_asm_with_data_and_queries_during_migrations():
-    env = Env(shardsCount=2, decodeResponses=True, noLog=False)
+    env = Env(shardsCount=2, decodeResponses=True, noLog=False, moduleArgs="ts-topology-events no")
     if env.env != "oss-cluster":
         env.skip()
     if BIGREDIS_TESTS:
@@ -80,24 +82,26 @@ def test_asm_with_data_and_queries_during_migrations():
     done = threading.Event()
 
     def validate_command_in_a_loop():
+        # Note: should be the same as in libmr_commands.c
+        SLOT_RANGES_ERROR = "Query requires unavailable slots"
         while not done.is_set():
             try:
-                validate_result(conn.execute_command(command))
-            except Exception as e:
-                # Safe failure mode: topology changed mid-execution, so the command asks for retry.
-                msg = str(e)
-                assert (
-                    "cluster topology change during execution" in msg
-                    or "missing slot ownership metadata" in msg
-                    or "Query requires unavailable slots" in msg
-                    or "Please retry" in msg
-                ), msg
+                result = conn.execute_command(command)
+            except redis.exceptions.ResponseError as x:
+                error_message = str(x)
+                # An occasional SLOT_RANGES_ERROR is expected
+                assert error_message == SLOT_RANGES_ERROR, error_message
+                continue
+            validate_result(result)
 
     def migrate_slots():
+        def validate_command_on_both_shards(env):
+            validate_result(env.getConnection(0).execute_command(command))
+            validate_result(env.getConnection(1).execute_command(command))
         for _ in range(MIGRATION_CYCLES):
             if done.is_set():
                 break
-            migrate_slots_back_and_forth(env, command, validate_result)
+            migrate_slots_back_and_forth(env, validate_command_on_both_shards)
 
     with ThreadPoolExecutor() as executor:
         futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
@@ -120,10 +124,98 @@ def test_asm_with_data_and_queries_during_migrations():
     # Validate that all is fine after the migrations
     validate_result(conn.execute_command(command))
 
+def validate_queries_during_migrations(env, post_migration, command, validate_result):
+    """
+    Runs command from random shards in a loop while slots migrate back and forth, validating every result.
+
+    env: the cluster test environment.
+    post_migration: callback invoked with env after each migration completes (e.g. wait_for_valid_cluster
+    to wait for a consistent view of the cluster amongst all nodes, before continuing to other migrations)
+    command: the query to run repeatedly (as a single string).
+    validate_result: callback invoked with the command's reply to assert it is correct.
+    """
+    # Two transient errors can surface while slots migrate; both are expected and tolerated (strings
+    # must match libmr_commands.c):
+    # - SLOT_RANGES_ERROR: a race between nodes propagating ownership of slots and a parallel multi-node
+    #   command might lead to response on same slots from multiple nodes (or the opposite: missed slots).
+    # - TOPOLOGY_CHANGED_ERROR: a topology change is seen mid-command (across the fan-out to all nodes)
+    #   so in-flight executions are killed early and this is returned.
+    SLOT_RANGES_ERROR = "Query requires unavailable slots"
+    TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
+
+    # Two flavors of the same query check, both hitting a random shard:
+    # - strict: used when the topology is settled (baseline + right after each migration
+    #   completes) -> the query must succeed and be correct; no transient error tolerated.
+    # - tolerable: used in the background loop while slots may be mid-migration -> an occasional
+    #   SLOT_RANGES_ERROR is expected and skipped, otherwise the result is validated.
+    def strict_validation(env):
+        conn = env.getConnection(random.randrange(env.shardsCount))
+        validate_result(conn.execute_command(command))
+
+    def tolerable_validation(env):
+        conn = env.getConnection(random.randrange(env.shardsCount))
+        try:
+            result = conn.execute_command(command)
+        except redis.exceptions.ResponseError as x:
+            assert str(x) in (SLOT_RANGES_ERROR, TOPOLOGY_CHANGED_ERROR), str(x)
+            return
+        validate_result(result)
+
+    def validate_after_migration(env):
+        post_migration(env)
+        strict_validation(env)
+
+    # First validate the result on the "static" cluster
+    strict_validation(env)
+
+    # Now validate the command's result in a loop during the back and forth migrations
+    done = threading.Event()
+
+    def validate_command_in_a_loop():
+        while not done.is_set():
+            try:
+                validate_result(conn.execute_command(command))
+            except Exception as e:
+                # Safe failure mode: topology changed mid-execution, so the command asks for retry.
+                msg = str(e)
+                assert (
+                    "cluster topology change during execution" in msg
+                    or "missing slot ownership metadata" in msg
+                    or "Query requires unavailable slots" in msg
+                    or "Please retry" in msg
+                ), msg
+
+    def migrate_slots():
+        for _ in range(MIGRATION_CYCLES):
+            if done.is_set():
+                break
+            migrate_slots_back_and_forth(env, validate_after_migration)
+
+    with ThreadPoolExecutor() as executor:
+        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
+        try:
+            for future in as_completed(futures):
+                # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
+                done.set()
+                # This will raise an exception in case the validation function failed
+                future.result()
+        except TimeoutError as e:
+            # Under sanitizer, the migration may occasionally get stuck in 'init-rdbchannel' state.
+            # This is a known issue and will be fixed by MOD-15307; for now treat it as a pass and bail out.
+            if SANITIZER and "state is init-rdbchannel" in str(e):
+                print(f"Ignoring known sanitizer migration timeout: {e}")
+                done.set()
+                return
+            done.set()
+            raise
+
+    # Validate that all is fine after the migrations
+    strict_validation(env)
+
 
 def test_short_form_clusterset():
     # Skip the initial REFRESHCLUSTER so the modules start unaware of the cluster.
-    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True, moduleArgs="ts-topology-events no")
     if env.env != "oss-cluster":
         env.skip()
     if BIGREDIS_TESTS:
@@ -137,7 +229,7 @@ def test_short_form_clusterset():
     samples_per_key = 10
     number_of_groups = 10
     keys_per_group = number_of_keys // number_of_groups
-    fill_some_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key,
+    fill_ts_data(env, number_of_keys=number_of_keys, samples_per_key=samples_per_key,
                    label="test", group=lambda i: f"g{i % number_of_groups}")
 
     conn = env.getConnection(0)
@@ -311,86 +403,3 @@ def fill_some_data(env, number_of_keys: int, samples_per_key: int, **lables):
     with env.getClusterConnectionIfNeeded() as rc:
         for command in generate_commands():
             rc.execute_command(*command.split())
-
-
-def migrate_slots_back_and_forth(env, command=None, validate_result=None):
-    """
-    Migrates slots between the two shards. When done all slots are back to their original places.
-    Upon each migration, the command is executed and the result is validated (when not None).
-    """
-
-    def cluster_node_of(conn) -> ClusterNode:
-        for line in conn.execute_command("cluster", "nodes").splitlines():
-            cluster_node = ClusterNode.from_str(line)
-            if "myself" in cluster_node.flags:
-                return cluster_node
-        raise ValueError("No node with 'myself' flag found")
-
-    def middle_slot_range(slot_range: SlotRange) -> SlotRange:
-        third = (slot_range.end - slot_range.start) // 3
-        return SlotRange(slot_range.start + third, slot_range.end - third)
-
-    def cantorized_slot_set(slot_range: SlotRange) -> Set[SlotRange]:  # https://en.wikipedia.org/wiki/Cantor_set ;)
-        middle = middle_slot_range(slot_range)
-        return {SlotRange(slot_range.start, middle.start - 1), SlotRange(middle.end + 1, slot_range.end)}
-
-    first_conn, second_conn = env.getConnection(0), env.getConnection(1)
-    # Store some original values to be used throughout the test
-    (original_first_slot_range,) = cluster_node_of(first_conn).slots
-    (original_second_slot_range,) = cluster_node_of(second_conn).slots
-    middle_of_original_first = middle_slot_range(original_first_slot_range)
-    middle_of_original_second = middle_slot_range(original_second_slot_range)
-
-    import_slots(second_conn, first_conn, middle_of_original_second)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range, middle_of_original_second}
-    assert cluster_node_of(second_conn).slots == cantorized_slot_set(original_second_slot_range)
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
-
-    import_slots(first_conn, second_conn, middle_of_original_second)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range}
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range}
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
-
-    import_slots(first_conn, second_conn, middle_of_original_first)
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range, middle_of_original_first}
-    assert cluster_node_of(first_conn).slots == cantorized_slot_set(original_first_slot_range)
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
-
-    import_slots(second_conn, first_conn, middle_of_original_first)
-    assert cluster_node_of(first_conn).slots == {original_first_slot_range}
-    assert cluster_node_of(second_conn).slots == {original_second_slot_range}
-    if command is not None:
-        validate_result(first_conn.execute_command(command))
-        validate_result(second_conn.execute_command(command))
-
-
-def import_slots(source_conn, target_conn, slot_range: SlotRange):
-    task_id = target_conn.execute_command("CLUSTER", "MIGRATION", "IMPORT", slot_range.start, slot_range.end)
-
-    def wait_for_completion(conn):
-        start_time = time.time()
-        # Migration clients wait for `repl-diskless-sync-delay` seconds to start a new fork after the last child exits
-        # so for rapid ASM operations (as we do here) we need to add this value to our expected timeouts.
-        repl_diskless_sync_delay = float(conn.config_get()["repl-diskless-sync-delay"])
-        timeout = repl_diskless_sync_delay + (5 if not (VALGRIND or SANITIZER) else 60)
-        while time.time() - start_time < timeout:
-            (migration_status,) = conn.execute_command("CLUSTER", "MIGRATION", "STATUS", "ID", task_id)
-            migration_status = {key: value for key, value in zip(migration_status[0::2], migration_status[1::2])}
-            if migration_status["state"] == "completed":
-                break
-            time.sleep(0.1)
-        else:
-            raise TimeoutError(
-                f"Migration {task_id} did not complete in {timeout} seconds, state is {migration_status['state']}"
-            )
-
-    wait_for_completion(target_conn)
-    # The oss cluster's status data is not CP, but we should rather rely on eventual consistency,
-    # so let's wait for the source as well:
-    wait_for_completion(source_conn)
