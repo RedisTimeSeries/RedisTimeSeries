@@ -39,18 +39,22 @@ jobs:
     needs: [prepare-values]
     with:
       arch: x64
+      os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref-flex}}
       bigredis_tests: true
       quick: false
+      shard_topologies: true
     secrets: inherit
   build-linux-arm64-flex:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
       arch: arm64
+      os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref-flex}}
       bigredis_tests: true
       quick: false
+      shard_topologies: true
     secrets: inherit
   linux-valgrind-flex:
     uses: ./.github/workflows/flow-linux.yml
@@ -76,21 +80,49 @@ jobs:
     secrets: inherit
 
   # --- Default Linux leg: rl_${redis-ref} on the private fork ---
+  # One OS per arch (jammy) runs the FULL suite (all five topologies, incl.
+  # OSS-cluster / LibMR), topology-sharded so the variants run in parallel.
+  # The full multi-OS matrix runs in event-nightly.
   build-linux-x64:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
       arch: x64
+      os: jammy
       redis-ref: rl_${{needs.prepare-values.outputs.redis-ref}}
       quick: false
+      shard_topologies: true
     secrets: inherit
   build-linux-arm64:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]
     with:
       arch: arm64
+      os: jammy
       redis-ref: rl_${{needs.prepare-values.outputs.redis-ref}}
       quick: false
+      shard_topologies: true
+    secrets: inherit
+  # Remaining OSes are a small, toolchain-diverse compile-only smoke set. The
+  # module build is redis-ref-agnostic, so one smoke set per arch covers both
+  # the flex and default legs. Full multi-OS tests run in event-nightly.
+  build-linux-x64-smoke:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: x64
+      os: focal rocky9 amazonlinux2 azurelinux3
+      redis-ref: rl_${{needs.prepare-values.outputs.redis-ref}}
+      build_only: true
+    secrets: inherit
+  build-linux-arm64-smoke:
+    uses: ./.github/workflows/flow-linux.yml
+    needs: [prepare-values]
+    with:
+      arch: arm64
+      os: focal rocky9 amazonlinux2023 azurelinux3
+      redis-ref: rl_${{needs.prepare-values.outputs.redis-ref}}
+      build_only: true
     secrets: inherit
   linux-valgrind:
     uses: ./.github/workflows/flow-linux.yml
