@@ -624,7 +624,10 @@ static const RedisModuleCommandInfo TS_CREATERULE_INFO = {
     .summary = "Create a compaction rule",
     .complexity = "O(1)",
     .since = "1.0.0",
-    .arity = -5,
+    // TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
+    // [alignTimestamp] -- 6 tokens minimum, matching the argc != 6 && argc != 7
+    // check in TSDB_createRule
+    .arity = -6,
     .key_specs = (RedisModuleCommandKeySpec *)TS_CREATERULE_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_CREATERULE_ARGS,
 };

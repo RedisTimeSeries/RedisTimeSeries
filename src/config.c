@@ -898,6 +898,27 @@ int ReadDeprecatedLoadTimeConfig(RedisModuleCtx *ctx,
         }
     }
 
+    if (argc > 1 && RMUtil_ArgIndex("ts-topology-events", argv, argc) >= 0) {
+        RedisModuleString *topologyEvents;
+        if (RMUtil_ParseArgsAfter("ts-topology-events", argv, argc, "s", &topologyEvents) !=
+            REDISMODULE_OK) {
+            RedisModule_Log(ctx, "warning", "Unable to parse argument after ts-topology-events");
+            return TSDB_ERROR;
+        }
+        const char *topologyEvents_cstr = RedisModule_StringPtrLen(topologyEvents, NULL);
+        if (!strcasecmp(topologyEvents_cstr, "yes")) {
+            TSGlobalConfig.topologyEvents = true;
+        } else if (!strcasecmp(topologyEvents_cstr, "no")) {
+            TSGlobalConfig.topologyEvents = false;
+        } else {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Invalid value for ts-topology-events, must be 'yes' or 'no': %s",
+                            topologyEvents_cstr);
+            return TSDB_ERROR;
+        }
+    }
+
     if (argc > 1 && RMUtil_ArgIndex("LIBMR_PROTOCOL", argv, argc) >= 0) {
         LOG_DEPRECATED_OPTION("LIBMR_PROTOCOL", "ts-libmr-protocol", showDeprecationWarning);
         RedisModuleString *protocol;

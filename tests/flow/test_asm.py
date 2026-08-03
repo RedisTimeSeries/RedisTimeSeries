@@ -63,9 +63,8 @@ def test_asm_with_data_and_queries_during_migrations():
 
     number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
     samples_per_key = 150
-    fill_some_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
+    fill_ts_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
-    conn = env.getConnection(0)
     command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
     def validate_result(result):
@@ -75,54 +74,10 @@ def test_asm_with_data_and_queries_during_migrations():
         assert len(samples) == samples_per_key
         assert all(int(sample[1]) == number_of_keys for sample in samples)
 
-    # First validate the result on the "static" cluster
-    validate_result(conn.execute_command(command))
+    validate_queries_during_migrations(
+        env, post_migration=wait_for_valid_cluster, command=command, validate_result=validate_result
+    )
 
-    # Now validate the command's result in a loop during the back and forth migrations
-    done = threading.Event()
-
-    def validate_command_in_a_loop():
-        # Note: should be the same as in libmr_commands.c
-        SLOT_RANGES_ERROR = "Query requires unavailable slots"
-        while not done.is_set():
-            try:
-                result = conn.execute_command(command)
-            except redis.exceptions.ResponseError as x:
-                error_message = str(x)
-                # An occasional SLOT_RANGES_ERROR is expected
-                assert error_message == SLOT_RANGES_ERROR, error_message
-                continue
-            validate_result(result)
-
-    def migrate_slots():
-        def validate_command_on_both_shards(env):
-            validate_result(env.getConnection(0).execute_command(command))
-            validate_result(env.getConnection(1).execute_command(command))
-        for _ in range(MIGRATION_CYCLES):
-            if done.is_set():
-                break
-            migrate_slots_back_and_forth(env, validate_command_on_both_shards)
-
-    with ThreadPoolExecutor() as executor:
-        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
-        try:
-            for future in as_completed(futures):
-                # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
-                done.set()
-                # This will raise an exception in case the validation function failed
-                future.result()
-        except TimeoutError as e:
-            # Under sanitizer, the migration may occasionally get stuck in 'init-rdbchannel' state.
-            # This is a known issue and will be fixed by MOD-15307; for now treat it as a pass and bail out.
-            if SANITIZER and "state is init-rdbchannel" in str(e):
-                print(f"Ignoring known sanitizer migration timeout: {e}")
-                done.set()
-                return
-            done.set()
-            raise
-
-    # Validate that all is fine after the migrations
-    validate_result(conn.execute_command(command))
 
 def validate_queries_during_migrations(env, post_migration, command, validate_result):
     """
@@ -170,6 +125,88 @@ def validate_queries_during_migrations(env, post_migration, command, validate_re
 
     # Now validate the command's result in a loop during the back and forth migrations
     done = threading.Event()
+
+    def validate_command_in_a_loop():
+        while not done.is_set():
+            tolerable_validation(env)
+
+    def migrate_slots():
+        def validate_command_on_both_shards(env):
+            validate_result(env.getConnection(0).execute_command(command))
+            validate_result(env.getConnection(1).execute_command(command))
+        for _ in range(MIGRATION_CYCLES):
+            if done.is_set():
+                break
+            migrate_slots_back_and_forth(env, validate_command_on_both_shards)
+
+    with ThreadPoolExecutor() as executor:
+        futures = map(executor.submit, [validate_command_in_a_loop, migrate_slots])
+        try:
+            for future in as_completed(futures):
+                # On a healthy run slot migrations should complete cleanly and we then signal the validator loop to exit
+                done.set()
+                # This will raise an exception in case the validation function failed
+                future.result()
+        except TimeoutError as e:
+            # Under sanitizer, the migration may occasionally get stuck in 'init-rdbchannel' state.
+            # This is a known issue and will be fixed by MOD-15307; for now treat it as a pass and bail out.
+            if SANITIZER and "state is init-rdbchannel" in str(e):
+                print(f"Ignoring known sanitizer migration timeout: {e}")
+                done.set()
+                return
+            done.set()
+            raise
+
+    # Validate that all is fine after the migrations
+    strict_validation(env)
+
+def validate_queries_during_migrations(env, post_migration, command, validate_result):
+    """
+    Runs command from random shards in a loop while slots migrate back and forth, validating every result.
+
+    env: the cluster test environment.
+    post_migration: callback invoked with env after each migration completes (e.g. wait_for_valid_cluster
+    to wait for a consistent view of the cluster amongst all nodes, before continuing to other migrations)
+    command: the query to run repeatedly (as a single string).
+    validate_result: callback invoked with the command's reply to assert it is correct.
+    """
+    # Two transient errors can surface while slots migrate; both are expected and tolerated (strings
+    # must match libmr_commands.c):
+    # - SLOT_RANGES_ERROR: a race between nodes propagating ownership of slots and a parallel multi-node
+    #   command might lead to response on same slots from multiple nodes (or the opposite: missed slots).
+    # - TOPOLOGY_CHANGED_ERROR: a topology change is seen mid-command (across the fan-out to all nodes)
+    #   so in-flight executions are killed early and this is returned.
+    SLOT_RANGES_ERROR = "Query requires unavailable slots"
+    TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
+
+    # Two flavors of the same query check, both hitting a random shard:
+    # - strict: used when the topology is settled (baseline + right after each migration
+    #   completes) -> the query must succeed and be correct; no transient error tolerated.
+    # - tolerable: used in the background loop while slots may be mid-migration -> an occasional
+    #   SLOT_RANGES_ERROR is expected and skipped, otherwise the result is validated.
+    def strict_validation(env):
+        conn = env.getConnection(random.randrange(env.shardsCount))
+        validate_result(conn.execute_command(command))
+
+    def tolerable_validation(env):
+        conn = env.getConnection(random.randrange(env.shardsCount))
+        try:
+            result = conn.execute_command(command)
+        except redis.exceptions.ResponseError as x:
+            assert str(x) in (SLOT_RANGES_ERROR, TOPOLOGY_CHANGED_ERROR), str(x)
+            return
+        validate_result(result)
+
+    def validate_after_migration(env):
+        post_migration(env)
+        strict_validation(env)
+
+    # First validate the result on the "static" cluster
+    strict_validation(env)
+
+    # Now validate the command's result in a loop during the back and forth migrations
+    done = threading.Event()
+    conn = env.getConnection(0)
 
     def validate_command_in_a_loop():
         while not done.is_set():
