@@ -295,7 +295,9 @@ def wait_for_valid_cluster(env):
         clusters = [validate_cluster(env.getConnection(i)) for i in range(env.shardsCount)]
         if all(c is not None for c in clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
             return
-        assert time.time() < deadline, "cluster did not reach a valid, agreed state in time"
+        if time.time() >= deadline:
+            nodes = {i: env.getConnection(i).execute_command("CLUSTER", "NODES") for i in range(env.shardsCount)}
+            raise AssertionError(f"cluster did not reach a valid, agreed state in time, CLUSTER NODES: {nodes}")
         time.sleep(0.2)
 
 
