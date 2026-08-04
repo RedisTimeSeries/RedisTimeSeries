@@ -1,6 +1,7 @@
 import time
 import random
 import threading
+import functools
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from includes import *
 from utils import (
@@ -151,7 +152,9 @@ def validate_queries_during_failovers(env, post_failover, command, validate_resu
     # id changes) and momentarily see a slot as unavailable, so we also expect this:
     SLOT_RANGES_ERROR = "Query requires unavailable slots"
 
-    master_conns = {}
+    @functools.cache
+    def connection_of(ip, port):
+        return redis.Redis(host=ip, port=port, decode_responses=True)
 
     def random_master_conn():
         masters = [
@@ -160,9 +163,7 @@ def validate_queries_during_failovers(env, post_failover, command, validate_resu
             if "master" in node.flags
         ]
         node = random.choice(masters)
-        return master_conns.setdefault(
-            (node.ip, node.port), redis.Redis(host=node.ip, port=node.port, decode_responses=True)
-        )
+        return connection_of(node.ip, node.port)
 
     def strict_validation(env):
         validate_result(random_master_conn().execute_command(command))
