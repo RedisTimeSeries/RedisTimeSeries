@@ -23,6 +23,10 @@ def test_add_and_remove_node():
     env = Env(shardsCount=2, decodeResponses=True, skipRefreshCluster=True)
     skip_if_needed(env)
 
+    @functools.cache
+    def connection_of(ip, port):
+        return redis.Redis(host=ip, port=port, decode_responses=True)
+
     def node_summary(view):
         # {node_id: (ip, port, slots)} for a {node_id: ClusterNode} view - the node identity we compare.
         return {node_id: (node.ip, node.port, node.slots) for node_id, node in view.items()}
@@ -52,20 +56,45 @@ def test_add_and_remove_node():
     before = wait_for_valid_cluster(env)
     validate_before_addition(before, wait_for_valid_ts_infocluster(env))
 
-    cycles = 10
-    for _ in range(cycles):
-        # Add a new node
-        env.addShardToClusterIfExists()
-        env.shardsCount = env.envRunner.shardsCount
+    original_masters = list(before.values())
+    fill_some_data(env)
 
-        after_addition = wait_for_valid_cluster(env)
-        validate_after_addition(after_addition, wait_for_valid_ts_infocluster(env), before)
+    def tolerable_data_validation():
+        random_node = random.choice(original_masters)  # we don't risk racing with the added node so choose from OGs
+        try:
+            result = connection_of(random_node.ip, random_node.port).execute_command(COMMAND)
+        except redis.exceptions.ResponseError as x:
+            assert str(x) in (TOPOLOGY_CHANGED_ERROR, SLOT_RANGES_ERROR), str(x)
+            return
+        validate_result(result)
 
-        # Remove it, restoring the initial cluster
-        (new_node_id,) = set(after_addition) - set(before)
-        remove_slotless_node(env, new_node_id)
+    done = threading.Event()
 
-        validate_after_removal(wait_for_valid_cluster(env), wait_for_valid_ts_infocluster(env), before)
+    def validate_data_in_a_loop():
+        while not done.is_set():
+            tolerable_data_validation()
+
+    def add_remove_cycles():
+        cycles = 10
+        for _ in range(cycles):
+            # Add a new node
+            env.addShardToClusterIfExists()
+            env.shardsCount = env.envRunner.shardsCount
+
+            after_addition = wait_for_valid_cluster(env)
+            validate_after_addition(after_addition, wait_for_valid_ts_infocluster(env), before)
+
+            # Remove it, restoring the initial cluster
+            (new_node_id,) = set(after_addition) - set(before)
+            remove_slotless_node(env, new_node_id)
+
+            validate_after_removal(wait_for_valid_cluster(env), wait_for_valid_ts_infocluster(env), before)
+
+    with ThreadPoolExecutor() as executor:
+        futures = map(executor.submit, [validate_data_in_a_loop, add_remove_cycles])
+        for future in as_completed(futures):
+            done.set()  # the cycles thread finished (or raised); stop the endless data validator
+            future.result()
 
 
 def test_asm():
@@ -119,6 +148,20 @@ NUMBER_OF_KEYS = 1000 if not (VALGRIND or SANITIZER) else 100
 SAMPLES_PER_KEY = 150
 COMMAND = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
+# Some expected errors:
+
+TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
+# Clients of multi-shard commands are blocked. If a node that serves such a command is demoted
+# while the client is still blocked we expect the following error:
+UNBLOCKED_ERROR = "UNBLOCKED force unblock from blocking operation, instance state changed (master -> replica?)"
+# During a failover there is a brief period when the cluster state is set to fail
+# with cluster-allow-reads-when-down off it then rejects reads until it recovers (sub-second)
+# during which time we expect the following error:
+CLUSTERDOWN_ERROR = "CLUSTERDOWN The cluster is down"
+# A multi-shard fan-out can race slot-ownership propagation during a failover (the owning node's
+# id changes) and momentarily see a slot as unavailable, so we also expect this:
+SLOT_RANGES_ERROR = "Query requires unavailable slots"
+
 
 def skip_if_needed(env):
     if env.env != "oss-cluster":
@@ -152,18 +195,6 @@ def random_master_node(env):
 
 
 def validate_queries_during_failovers(env, post_failover, command, validate_result):
-    TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
-    # Clients of multi-shard commands are blocked. If a node that serves such a command is demoted
-    # while the client is still blocked we expect the following error:
-    UNBLOCKED_ERROR = "UNBLOCKED force unblock from blocking operation, instance state changed (master -> replica?)"
-    # During a failover there is a brief period when the cluster state is set to fail
-    # with cluster-allow-reads-when-down off it then rejects reads until it recovers (sub-second)
-    # during which time we expect the following error:
-    CLUSTERDOWN_ERROR = "CLUSTERDOWN The cluster is down"
-    # A multi-shard fan-out can race slot-ownership propagation during a failover (the owning node's
-    # id changes) and momentarily see a slot as unavailable, so we also expect this:
-    SLOT_RANGES_ERROR = "Query requires unavailable slots"
-
     @functools.cache
     def connection_of(ip, port):
         return redis.Redis(host=ip, port=port, decode_responses=True)
