@@ -13,25 +13,55 @@ from utils import (
     failover_node,
     added_slaves_to_cluster,
     get_timeout,
-    dump_cluster_nodes,
+    remove_slotless_node,
 )
 from test_asm import validate_queries_during_migrations
 
 
-def test_add_node():
+def test_add_and_remove_node():
     env = Env(shardsCount=2, decodeResponses=True, skipRefreshCluster=True)
     skip_if_needed(env)
 
-    wait_for_valid_cluster(env)
-    print("\n===== before the addition =====")
-    dump_cluster_nodes(env)
+    def node_summary(view):
+        # {node_id: (ip, port, slots)} for a {node_id: ClusterNode} view - the node identity we compare.
+        return {node_id: (node.ip, node.port, node.slots) for node_id, node in view.items()}
 
+    def validate_views_agree(cluster, infocluster):
+        # The redis (CLUSTER NODES) and timeseries (INFOCLUSTER) views must expose the same
+        # nodes at the same addresses owning the same slots.
+        assert node_summary(cluster) == node_summary(infocluster)
+
+    def validate_before_addition(cluster, infocluster):
+        validate_views_agree(cluster, infocluster)
+        assert len(cluster) == 2  # the two masters the env starts with
+
+    def validate_after_addition(cluster, infocluster, before):
+        validate_views_agree(cluster, infocluster)
+        # Exactly one node joined; its address is irrelevant, we only require that it owns no slots.
+        (new_node_id,) = set(cluster) - set(before)
+        assert cluster[new_node_id].slots == set()
+        # The original masters are untouched (address + slots).
+        assert node_summary({id: node for id, node in cluster.items() if id != new_node_id}) == node_summary(before)
+
+    def validate_after_removal(cluster, infocluster, before):
+        validate_views_agree(cluster, infocluster)
+        # The topology is restored to exactly what it was before the addition (address + slots).
+        assert node_summary(cluster) == node_summary(before)
+
+    before = wait_for_valid_cluster(env)
+    validate_before_addition(before, wait_for_valid_ts_infocluster(env))
+
+    # Add a new node
     env.addShardToClusterIfExists()
     env.shardsCount = env.envRunner.shardsCount
 
-    wait_for_valid_cluster(env)
-    print("\n===== after the addition =====")
-    dump_cluster_nodes(env)
+    after_addition = wait_for_valid_cluster(env)
+    validate_after_addition(after_addition, wait_for_valid_ts_infocluster(env), before)
+
+    (new_node_id,) = set(after_addition) - set(before)
+    remove_slotless_node(env, new_node_id)
+
+    validate_after_removal(wait_for_valid_cluster(env), wait_for_valid_ts_infocluster(env), before)
 
 
 def test_asm():
@@ -227,12 +257,15 @@ def ts_cluster_from_conn(conn):
 
 
 def wait_for_valid_ts_infocluster(env):
-    """Wait until every node's timeseries.INFOCLUSTER reports full coverage and all nodes agree."""
+    """Wait until every node's timeseries.INFOCLUSTER reports full coverage and all nodes agree.
+
+    Returns the agreed topology as a {node_id: ClusterNode} dict (the first polled node's view).
+    """
     timeout = get_timeout()
     deadline = time.time() + timeout
     while True:
         clusters = [ts_cluster_from_conn(env.getConnection(i)) for i in range(env.shardsCount)]
         if all(c is not None for c in clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
-            return
+            return clusters[0]
         assert time.time() < deadline, "timeseries.INFOCLUSTER did not reach a valid, agreed state in time"
         time.sleep(0.2)
