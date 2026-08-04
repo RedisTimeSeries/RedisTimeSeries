@@ -64,7 +64,7 @@ def test_add_and_remove_node():
         try:
             result = connection_of(random_node.ip, random_node.port).execute_command(COMMAND)
         except redis.exceptions.ResponseError as x:
-            assert str(x) in (TOPOLOGY_CHANGED_ERROR, SLOT_RANGES_ERROR), str(x)
+            assert str(x) == TOPOLOGY_CHANGED_ERROR, str(x)
             return
         validate_result(result)
 
