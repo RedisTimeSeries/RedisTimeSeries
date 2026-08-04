@@ -52,17 +52,20 @@ def test_add_and_remove_node():
     before = wait_for_valid_cluster(env)
     validate_before_addition(before, wait_for_valid_ts_infocluster(env))
 
-    # Add a new node
-    env.addShardToClusterIfExists()
-    env.shardsCount = env.envRunner.shardsCount
+    cycles = 10
+    for _ in range(cycles):
+        # Add a new node
+        env.addShardToClusterIfExists()
+        env.shardsCount = env.envRunner.shardsCount
 
-    after_addition = wait_for_valid_cluster(env)
-    validate_after_addition(after_addition, wait_for_valid_ts_infocluster(env), before)
+        after_addition = wait_for_valid_cluster(env)
+        validate_after_addition(after_addition, wait_for_valid_ts_infocluster(env), before)
 
-    (new_node_id,) = set(after_addition) - set(before)
-    remove_slotless_node(env, new_node_id)
+        # Remove it, restoring the initial cluster
+        (new_node_id,) = set(after_addition) - set(before)
+        remove_slotless_node(env, new_node_id)
 
-    validate_after_removal(wait_for_valid_cluster(env), wait_for_valid_ts_infocluster(env), before)
+        validate_after_removal(wait_for_valid_cluster(env), wait_for_valid_ts_infocluster(env), before)
 
 
 def test_asm():
