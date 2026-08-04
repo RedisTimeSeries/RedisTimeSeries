@@ -105,13 +105,12 @@ jobs:
         if: inputs.dry_run != true
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         with:
-          app-id: ${{ vars.BUMP_APP_ID }}
-          private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.RE_BUMP_APP_ID }}
+          private-key: ${{ secrets.RE_BUMP_APP_PRIVATE_KEY }}
           owner: redislabsdev
           repositories: Redis-Enterprise
           permission-actions: write
           permission-pull-requests: read
-          permission-contents: read # to verify our version actually landed on the RE branch
 
       - name: Dispatch beta bump in Redis-Enterprise
         id: dispatch
@@ -137,29 +136,28 @@ jobs:
           # so any timestamp-ordered lookup can latch onto another module's run and report
           # its conclusion. The version appearing in RE is the signal we actually want.
           #
-          # master is checked as well as the PR branch: RE legitimately no-ops when the
-          # previous PR was merged and the version is already on master.
-          landed=false
+          # Checked through the pull request, not the repo contents API: the token is scoped
+          # to actions:write + pull-requests:read, and asking for a permission the app
+          # installation does not grant makes the token mint itself fail.
+          landed=false; pr_url=
           for _ in $(seq 1 30); do # ~15 min
-            for ref in "$RE_PR_BRANCH" master; do
-              if gh api "/repos/$RE_REPO/contents/modules/modules_build_files_generator.py?ref=$ref" \
-                   --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep -q "$TIMESERIES_VERSION"; then
-                landed=true
-                echo "$TIMESERIES_VERSION is present on $ref."
-                break 2
-              fi
-            done
+            # RE always uses one branch, so the PR is either newly created or updated in place.
+            pr=$(gh pr list --repo "$RE_REPO" --head "$RE_PR_BRANCH" --base master \
+                   --state open --json number,url --jq '.[0] // empty | "\(.number) \(.url)"')
+            pr_num=${pr%% *}; pr_url=${pr#* }
+            if [ -n "$pr_num" ] && gh api "/repos/$RE_REPO/pulls/$pr_num/files" --paginate \
+                 --jq '.[].patch // empty' | grep -q "$TIMESERIES_VERSION"; then
+              landed=true
+              echo "$TIMESERIES_VERSION is in the diff of $pr_url"
+              break
+            fi
             sleep 30
           done
           echo "landed=$landed" >> "$GITHUB_OUTPUT"
-          if [ "$landed" != "true" ]; then
-            echo "::warning::$TIMESERIES_VERSION reached neither $RE_PR_BRANCH nor master within 15 minutes."
-          fi
-
-          # RE always uses one branch, so the PR is either newly created or updated in place.
-          pr_url=$(gh pr list --repo "$RE_REPO" --head "$RE_PR_BRANCH" --base master \
-            --state open --json url --jq '.[0].url // empty')
           echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+          if [ "$landed" != "true" ]; then
+            echo "::warning::$TIMESERIES_VERSION did not appear in the RE pull request within 15 minutes."
+          fi
 
       - name: Notify Slack
         if: always()
