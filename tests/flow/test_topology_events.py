@@ -142,6 +142,15 @@ def validate_result(result):
     assert all(int(sample[1]) == NUMBER_OF_KEYS for sample in samples)
 
 
+def random_master_node(env):
+    masters = [
+        node
+        for node in map(ClusterNode.from_str, env.getConnection(0).execute_command("CLUSTER", "NODES").splitlines())
+        if "master" in node.flags
+    ]
+    return random.choice(masters)
+
+
 def validate_queries_during_failovers(env, post_failover, command, validate_result):
     TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
     # Clients of multi-shard commands are blocked. If a node that serves such a command is demoted
@@ -159,21 +168,14 @@ def validate_queries_during_failovers(env, post_failover, command, validate_resu
     def connection_of(ip, port):
         return redis.Redis(host=ip, port=port, decode_responses=True)
 
-    def random_master_conn():
-        masters = [
-            node
-            for node in map(ClusterNode.from_str, env.getConnection(0).execute_command("CLUSTER", "NODES").splitlines())
-            if "master" in node.flags
-        ]
-        node = random.choice(masters)
-        return connection_of(node.ip, node.port)
-
     def strict_validation(env):
-        validate_result(random_master_conn().execute_command(command))
+        node = random_master_node(env)
+        validate_result(connection_of(node.ip, node.port).execute_command(command))
 
     def tolerable_validation(env):
+        node = random_master_node(env)
         try:
-            result = random_master_conn().execute_command(command)
+            result = connection_of(node.ip, node.port).execute_command(command)
         except redis.exceptions.ResponseError as x:
             assert str(x) in (TOPOLOGY_CHANGED_ERROR, UNBLOCKED_ERROR, CLUSTERDOWN_ERROR, SLOT_RANGES_ERROR), str(x)
             return
