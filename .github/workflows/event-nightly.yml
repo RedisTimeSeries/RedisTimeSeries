@@ -79,11 +79,13 @@ jobs:
           echo '{}' | jq \
             --arg snapshot_template "$SNAPSHOT_TEMPLATE" \
             --arg module_version "$MODULE_VERSION" \
-            '{snapshot_template: $snapshot_template, module_version: $module_version}' \
+            --arg beta_version "$BETA_VERSION" \
+            '{snapshot_template: $snapshot_template, module_version: $module_version, beta_version: $beta_version}' \
             > build-metadata.json
         env:
           SNAPSHOT_TEMPLATE: ${{ steps.set-env.outputs.snapshot-template }}
           MODULE_VERSION: ${{ steps.get-version.outputs.module-version }}
+          BETA_VERSION: ${{ steps.set-env.outputs.beta-version }}
 
       - name: Upload build metadata
         uses: actions/upload-artifact@v4

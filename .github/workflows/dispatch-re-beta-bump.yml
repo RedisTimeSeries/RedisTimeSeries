@@ -1,0 +1,207 @@
+name: Dispatch RE Beta Bump
+
+# Daily: find the newest fully-green nightly build and ask Redis-Enterprise to bump its
+# redistimeseries beta (feature_set="99.99") version to that build's artifacts. The mutation lives
+# in RE (.github/workflows/modules_bump_beta_version.yaml) — this workflow only dispatches it,
+# so the app token needs `Actions: write` on RE and never write access to its contents.
+
+permissions:
+  actions: read
+  contents: read
+
+on:
+  schedule:
+    - cron: '30 4 * * *' # 04:30 UTC, well after the 20:20 UTC nightly
+  workflow_dispatch:
+    inputs:
+      timeseries_version:
+        description: 'Full beta version to dispatch (e.g. 99.99.99.20260719.203219.296). Leave empty to discover from the latest green nightly.'
+        required: false
+        type: string
+        default: ''
+      dry_run:
+        description: 'Resolve the version but do not dispatch to Redis-Enterprise'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: dispatch-re-beta-bump
+  cancel-in-progress: false
+
+env:
+  RE_REPO: redislabsdev/Redis-Enterprise
+  RE_WORKFLOW: modules_bump_beta_version.yaml
+  RE_PR_BRANCH: automation/modules-beta-bump
+  # Jobs allowed to be red without disqualifying a nightly run. Valgrind and sanitizer
+  # currently have known outstanding issues; they don't affect the packed artifacts.
+  IGNORED_JOBS_RE: valgrind|sanitizer
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the latest nightly run
+        id: nightly
+        if: inputs.timeseries_version == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Only ever consider the newest nightly: it runs daily, so an older green run
+          # would mean quietly bumping RE to a stale build. If today's is red, no bump.
+          id=$(gh run list --repo "$REPO" --workflow event-nightly.yml \
+                 --branch master --status completed --limit 1 \
+                 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$id" ]; then
+            echo "::error::No completed event-nightly run found on master."
+            exit 1
+          fi
+          # Set the URL before the gate so a red run is still linked in Slack.
+          echo "run_id=$id" >> "$GITHUB_OUTPUT"
+          echo "run_url=${{ github.server_url }}/$REPO/actions/runs/$id" >> "$GITHUB_OUTPUT"
+
+          # Skipped jobs are acceptable — some nightly jobs are `if:`-gated.
+          conclusions=$(gh api "/repos/$REPO/actions/runs/$id/jobs" --paginate \
+            --jq ".jobs[] | select(.name | test(\"$IGNORED_JOBS_RE\") | not) | .conclusion")
+          if [ -z "$conclusions" ] || grep -qvE '^(success|skipped)$' <<<"$conclusions"; then
+            echo "::error::Latest nightly run $id is not green (ignoring $IGNORED_JOBS_RE) — not bumping."
+            exit 1
+          fi
+          echo "Latest nightly run $id is green."
+
+      - name: Resolve timeseries_version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OVERRIDE: ${{ inputs.timeseries_version }}
+          NIGHTLY_RUN_ID: ${{ steps.nightly.outputs.run_id }}
+        run: |
+          if [ -n "$OVERRIDE" ]; then
+            timeseries_version="$OVERRIDE"
+          else
+            gh run download "$NIGHTLY_RUN_ID" --repo "$REPO" --name build-metadata --dir metadata
+            # The nightly's beta-version is already the full RE token (sbin/pack.sh overrides
+            # SEMVER with it), so no composition with module_version is needed here.
+            timeseries_version=$(jq -r '.beta_version // empty' metadata/build-metadata.json)
+            if [ -z "$timeseries_version" ]; then
+              echo "::error::build-metadata.json from run $NIGHTLY_RUN_ID has no beta_version — is event-nightly.yml up to date?"
+              exit 1
+            fi
+          fi
+
+          # Same invariant RE enforces (BETA_VERSION_PREFIX in modules/common.py); fail here
+          # rather than burn a dispatch on a value the bump script will reject.
+          if ! grep -qE '^99\.99\.99\.[A-Za-z0-9._-]+$' <<<"$timeseries_version"; then
+            echo "::error::'$timeseries_version' is not a valid beta version (must start with 99.99.99.)."
+            exit 1
+          fi
+          echo "timeseries_version=$timeseries_version" >> "$GITHUB_OUTPUT"
+          echo "Resolved timeseries_version=$timeseries_version"
+
+      - name: Generate dispatch token
+        id: app-token
+        if: inputs.dry_run != true
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.BUMP_APP_ID }}
+          private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
+          owner: redislabsdev
+          repositories: Redis-Enterprise
+          permission-actions: write
+          permission-pull-requests: read
+          permission-contents: read # to verify our version actually landed on the RE branch
+
+      - name: Dispatch beta bump in Redis-Enterprise
+        id: dispatch
+        if: inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TIMESERIES_VERSION: ${{ steps.version.outputs.timeseries_version }}
+        run: |
+          gh workflow run "$RE_WORKFLOW" \
+            --repo "$RE_REPO" \
+            --ref master \
+            -f timeseries_version="$TIMESERIES_VERSION"
+
+      - name: Wait for the bump to land in Redis-Enterprise
+        id: re-pr
+        if: inputs.dry_run != true && steps.dispatch.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TIMESERIES_VERSION: ${{ steps.version.outputs.timeseries_version }}
+        run: |
+          # Poll for the outcome rather than trying to identify "our" RE run. Several module
+          # repos dispatch this same RE workflow, and a workflow_dispatch returns no run id,
+          # so any timestamp-ordered lookup can latch onto another module's run and report
+          # its conclusion. The version appearing in RE is the signal we actually want.
+          #
+          # master is checked as well as the PR branch: RE legitimately no-ops when the
+          # previous PR was merged and the version is already on master.
+          landed=false
+          for _ in $(seq 1 30); do # ~15 min
+            for ref in "$RE_PR_BRANCH" master; do
+              if gh api "/repos/$RE_REPO/contents/modules/modules_build_files_generator.py?ref=$ref" \
+                   --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep -q "$TIMESERIES_VERSION"; then
+                landed=true
+                echo "$TIMESERIES_VERSION is present on $ref."
+                break 2
+              fi
+            done
+            sleep 30
+          done
+          echo "landed=$landed" >> "$GITHUB_OUTPUT"
+          if [ "$landed" != "true" ]; then
+            echo "::warning::$TIMESERIES_VERSION reached neither $RE_PR_BRANCH nor master within 15 minutes."
+          fi
+
+          # RE always uses one branch, so the PR is either newly created or updated in place.
+          pr_url=$(gh pr list --repo "$RE_REPO" --head "$RE_PR_BRANCH" --base master \
+            --state open --json url --jq '.[0].url // empty')
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Slack
+        if: always()
+        env:
+          DATATYPES_SLACK_WEBHOOK_URL: ${{ secrets.DATATYPES_SLACK_WEBHOOK_URL }}
+          JOB_STATUS: ${{ job.status }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          TIMESERIES_VERSION: ${{ steps.version.outputs.timeseries_version }}
+          NIGHTLY_URL: ${{ steps.nightly.outputs.run_url }}
+          PR_URL: ${{ steps.re-pr.outputs.pr_url }}
+          LANDED: ${{ steps.re-pr.outputs.landed }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$DATATYPES_SLACK_WEBHOOK_URL" ]; then
+            echo "DATATYPES_SLACK_WEBHOOK_URL secret not set — skipping Slack notification."
+            exit 0
+          fi
+
+          if [ "$JOB_STATUS" != "success" ]; then
+            emoji="❌"; summary="Failed to dispatch the RE beta bump."
+          elif [ "$DRY_RUN" == "true" ]; then
+            emoji="ℹ️"; summary="Dry run — resolved a version but dispatched nothing."
+          elif [ "$LANDED" == "true" ]; then
+            emoji="✅"; summary="Beta version is in RE."
+          else
+            emoji="⚠️"; summary="Dispatched, but the version had not reached RE after 15 minutes — check the RE runs."
+          fi
+
+          nl=$'\n'
+          text="${emoji} *RedisTimeSeries → RE beta bump*: ${summary}"
+          # `[ -n x ] && ...` would abort the step under `bash -e` when the var is empty.
+          if [ -n "$TIMESERIES_VERSION" ]; then text="${text}${nl}*Version:* \`${TIMESERIES_VERSION}\`"; fi
+          if [ -n "$PR_URL" ]; then text="${text}${nl}*PR (created/updated):* ${PR_URL}"; fi
+          if [ -n "$NIGHTLY_URL" ]; then text="${text}${nl}<${NIGHTLY_URL}|Source nightly run>"; fi
+          # Link the RE workflow's run list, not a specific run: we deliberately no longer
+          # guess which run was ours (see the wait step).
+          if [ "$DRY_RUN" != "true" ]; then
+            text="${text}${nl}<${GITHUB_SERVER_URL}/${RE_REPO}/actions/workflows/${RE_WORKFLOW}|RE bump runs>"
+          fi
+          text="${text}${nl}<${WORKFLOW_URL}|View this workflow run>"
+
+          payload=$(jq -n --arg text "$text" '{text: $text}')
+          # A transient Slack 5xx must not turn a successful bump into a red run.
+          curl -sf -X POST -H 'Content-type: application/json' --data "$payload" \
+            "$DATATYPES_SLACK_WEBHOOK_URL" || echo "::warning::Slack notification failed to send."
