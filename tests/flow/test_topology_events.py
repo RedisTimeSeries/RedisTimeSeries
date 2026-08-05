@@ -1,6 +1,7 @@
 import time
 import random
 import threading
+import functools
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from includes import *
 from utils import (
@@ -13,8 +14,85 @@ from utils import (
     failover_node,
     added_slaves_to_cluster,
     get_timeout,
+    remove_slotless_node,
 )
 from test_asm import validate_queries_during_migrations
+
+
+def test_add_and_remove_node():
+    env = Env(shardsCount=2, decodeResponses=True, skipRefreshCluster=True)
+    skip_if_needed(env)
+
+    def node_summary(view):
+        # {node_id: (ip, port, slots)} for a {node_id: ClusterNode} view - the node identity we compare.
+        return {node_id: (node.ip, node.port, node.slots) for node_id, node in view.items()}
+
+    def validate_views_agree(cluster, infocluster):
+        # The redis (CLUSTER NODES) and timeseries (INFOCLUSTER) views must expose the same
+        # nodes at the same addresses owning the same slots.
+        assert node_summary(cluster) == node_summary(infocluster)
+
+    def validate_before_addition(cluster, infocluster):
+        validate_views_agree(cluster, infocluster)
+        assert len(cluster) == 2  # the two masters the env starts with
+
+    def validate_after_addition(cluster, infocluster, before):
+        validate_views_agree(cluster, infocluster)
+        # Exactly one node joined; its address is irrelevant, we only require that it owns no slots.
+        (new_node_id,) = set(cluster) - set(before)
+        assert cluster[new_node_id].slots == set()
+        # The original masters are untouched (address + slots).
+        assert node_summary({id: node for id, node in cluster.items() if id != new_node_id}) == node_summary(before)
+
+    def validate_after_removal(cluster, infocluster, before):
+        validate_views_agree(cluster, infocluster)
+        # The topology is restored to exactly what it was before the addition (address + slots).
+        assert node_summary(cluster) == node_summary(before)
+
+    before = wait_for_valid_cluster(env)
+    validate_before_addition(before, wait_for_valid_ts_infocluster(env))
+
+    # Connections to the original nodes only, snapshotted before any node is added: we don't risk
+    # racing with the added node so choose from OGs. env.getConnection carries the env's TLS config.
+    original_conns = [env.getConnection(i) for i in range(env.shardsCount)]
+    fill_some_data(env)
+
+    def tolerable_data_validation():
+        conn = random.choice(original_conns)
+        try:
+            result = conn.execute_command(COMMAND)
+        except redis.exceptions.ResponseError as x:
+            assert str(x) == TOPOLOGY_CHANGED_ERROR, str(x)
+            return
+        validate_result(result)
+
+    done = threading.Event()
+
+    def validate_data_in_a_loop():
+        while not done.is_set():
+            tolerable_data_validation()
+
+    def add_remove_cycles():
+        cycles = 10
+        for _ in range(cycles):
+            # Add a new node
+            env.addShardToClusterIfExists()
+            env.shardsCount = env.envRunner.shardsCount
+
+            after_addition = wait_for_valid_cluster(env)
+            validate_after_addition(after_addition, wait_for_valid_ts_infocluster(env), before)
+
+            # Remove it, restoring the initial cluster
+            (new_node_id,) = set(after_addition) - set(before)
+            remove_slotless_node(env, new_node_id)
+
+            validate_after_removal(wait_for_valid_cluster(env), wait_for_valid_ts_infocluster(env), before)
+
+    with ThreadPoolExecutor() as executor:
+        futures = map(executor.submit, [validate_data_in_a_loop, add_remove_cycles])
+        for future in as_completed(futures):
+            done.set()  # the cycles thread finished (or raised); stop the endless data validator
+            future.result()
 
 
 def test_asm():
@@ -28,10 +106,11 @@ def test_asm():
     fill_some_data(env)
     validate_queries_during_migrations(env, post_migration, COMMAND, validate_result)
 
+
 def test_failover():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     skip_if_needed(env)
-    if env.useTLS:
+    if env.useTLS:  # The added slaves do support TLS (for now; will be resolved by MOD-17386)
         env.skip()
 
     def post_failover(env):
@@ -67,6 +146,20 @@ NUMBER_OF_KEYS = 1000 if not (VALGRIND or SANITIZER) else 100
 SAMPLES_PER_KEY = 150
 COMMAND = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
 
+# Some expected errors:
+
+TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
+# Clients of multi-shard commands are blocked. If a node that serves such a command is demoted
+# while the client is still blocked we expect the following error:
+UNBLOCKED_ERROR = "UNBLOCKED force unblock from blocking operation, instance state changed (master -> replica?)"
+# During a failover there is a brief period when the cluster state is set to fail
+# with cluster-allow-reads-when-down off it then rejects reads until it recovers (sub-second)
+# during which time we expect the following error:
+CLUSTERDOWN_ERROR = "CLUSTERDOWN The cluster is down"
+# A multi-shard fan-out can race slot-ownership propagation during a failover (the owning node's
+# id changes) and momentarily see a slot as unavailable, so we also expect this:
+SLOT_RANGES_ERROR = "Query requires unavailable slots"
+
 
 def skip_if_needed(env):
     if env.env != "oss-cluster":
@@ -76,6 +169,7 @@ def skip_if_needed(env):
     # query within LibMR's 5s max-idle during migration churn (MOD-14615 residual).
     if RUNNER_LABEL == "macos-15-intel":
         env.skip()
+
 
 def fill_some_data(env):
     fill_ts_data(env, NUMBER_OF_KEYS, SAMPLES_PER_KEY, label1=17, label2=19)
@@ -89,38 +183,28 @@ def validate_result(result):
     assert all(int(sample[1]) == NUMBER_OF_KEYS for sample in samples)
 
 
+def random_master_node(env):
+    masters = [
+        node
+        for node in map(ClusterNode.from_str, env.getConnection(0).execute_command("CLUSTER", "NODES").splitlines())
+        if "master" in node.flags
+    ]
+    return random.choice(masters)
+
+
 def validate_queries_during_failovers(env, post_failover, command, validate_result):
-    TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
-    # Clients of multi-shard commands are blocked. If a node that serves such a command is demoted
-    # while the client is still blocked we expect the following error:
-    UNBLOCKED_ERROR = "UNBLOCKED force unblock from blocking operation, instance state changed (master -> replica?)"
-    # During a failover there is a brief period when the cluster state is set to fail
-    # with cluster-allow-reads-when-down off it then rejects reads until it recovers (sub-second)
-    # during which time we expect the following error:
-    CLUSTERDOWN_ERROR = "CLUSTERDOWN The cluster is down"
-    # A multi-shard fan-out can race slot-ownership propagation during a failover (the owning node's
-    # id changes) and momentarily see a slot as unavailable, so we also expect this:
-    SLOT_RANGES_ERROR = "Query requires unavailable slots"
-
-    master_conns = {}
-
-    def random_master_conn():
-        masters = [
-            node
-            for node in map(ClusterNode.from_str, env.getConnection(0).execute_command("CLUSTER", "NODES").splitlines())
-            if "master" in node.flags
-        ]
-        node = random.choice(masters)
-        return master_conns.setdefault(
-            (node.ip, node.port), redis.Redis(host=node.ip, port=node.port, decode_responses=True)
-        )
+    @functools.cache
+    def connection_of(ip, port):
+        return redis.Redis(host=ip, port=port, decode_responses=True)
 
     def strict_validation(env):
-        validate_result(random_master_conn().execute_command(command))
+        node = random_master_node(env)
+        validate_result(connection_of(node.ip, node.port).execute_command(command))
 
     def tolerable_validation(env):
+        node = random_master_node(env)
         try:
-            result = random_master_conn().execute_command(command)
+            result = connection_of(node.ip, node.port).execute_command(command)
         except redis.exceptions.ResponseError as x:
             assert str(x) in (TOPOLOGY_CHANGED_ERROR, UNBLOCKED_ERROR, CLUSTERDOWN_ERROR, SLOT_RANGES_ERROR), str(x)
             return
@@ -208,12 +292,15 @@ def ts_cluster_from_conn(conn):
 
 
 def wait_for_valid_ts_infocluster(env):
-    """Wait until every node's timeseries.INFOCLUSTER reports full coverage and all nodes agree."""
+    """Wait until every node's timeseries.INFOCLUSTER reports full coverage and all nodes agree.
+
+    Returns the agreed topology as a {node_id: ClusterNode} dict (the first polled node's view).
+    """
     timeout = get_timeout()
     deadline = time.time() + timeout
     while True:
         clusters = [ts_cluster_from_conn(env.getConnection(i)) for i in range(env.shardsCount)]
         if all(c is not None for c in clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
-            return
+            return clusters[0]
         assert time.time() < deadline, "timeseries.INFOCLUSTER did not reach a valid, agreed state in time"
         time.sleep(0.2)
