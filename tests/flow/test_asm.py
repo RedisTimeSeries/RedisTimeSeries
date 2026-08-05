@@ -9,7 +9,7 @@ import re
 from includes import Env, VALGRIND, SANITIZER, BIGREDIS_TESTS, RUNNER_LABEL
 from utils import slot_table
 import redis
-from utils import migrate_slots_back_and_forth, fill_ts_data, wait_for_valid_cluster
+from utils import migrate_slots_back_and_forth, fill_ts_data, wait_for_valid_cluster, get_timeout
 
 
 MIGRATION_CYCLES = 10
@@ -282,7 +282,7 @@ def test_short_form_clusterset():
     # Poll TS.QUERYINDEX until propagation lands -- fan-out goes from local-only
     # (~number_of_keys / shardsCount) to the full set once every shard has been
     # informed via CLUSTERSETFROMSHARD.
-    deadline = time.time() + (60 if (VALGRIND or SANITIZER) else 10)
+    deadline = time.time() + get_timeout()
     while time.time() < deadline:
         queryindex = conn.execute_command('TS.QUERYINDEX', 'label=test')
         if len(queryindex) == number_of_keys:
