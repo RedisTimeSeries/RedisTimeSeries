@@ -23,10 +23,6 @@ def test_add_and_remove_node():
     env = Env(shardsCount=2, decodeResponses=True, skipRefreshCluster=True)
     skip_if_needed(env)
 
-    @functools.cache
-    def connection_of(ip, port):
-        return redis.Redis(host=ip, port=port, decode_responses=True)
-
     def node_summary(view):
         # {node_id: (ip, port, slots)} for a {node_id: ClusterNode} view - the node identity we compare.
         return {node_id: (node.ip, node.port, node.slots) for node_id, node in view.items()}
@@ -56,13 +52,15 @@ def test_add_and_remove_node():
     before = wait_for_valid_cluster(env)
     validate_before_addition(before, wait_for_valid_ts_infocluster(env))
 
-    original_masters = list(before.values())
+    # Connections to the original nodes only, snapshotted before any node is added: we don't risk
+    # racing with the added node so choose from OGs. env.getConnection carries the env's TLS config.
+    original_conns = [env.getConnection(i) for i in range(env.shardsCount)]
     fill_some_data(env)
 
     def tolerable_data_validation():
-        random_node = random.choice(original_masters)  # we don't risk racing with the added node so choose from OGs
+        conn = random.choice(original_conns)
         try:
-            result = connection_of(random_node.ip, random_node.port).execute_command(COMMAND)
+            result = conn.execute_command(COMMAND)
         except redis.exceptions.ResponseError as x:
             assert str(x) == TOPOLOGY_CHANGED_ERROR, str(x)
             return
@@ -112,7 +110,7 @@ def test_asm():
 def test_failover():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     skip_if_needed(env)
-    if env.useTLS:
+    if env.useTLS:  # The added slaves do support TLS (for now; will be resolved by MOD-17386)
         env.skip()
 
     def post_failover(env):
