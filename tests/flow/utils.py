@@ -6,7 +6,9 @@ import time
 import inspect
 import re
 import random
+import threading
 import contextlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 NUMBER_OF_SLOTS = 2**14
@@ -610,6 +612,18 @@ def dump_cluster_nodes(env):
     print("\n===== CLUSTER NODES =====")
     for shard in range(0, env.shardsCount):
         dump_node_cluster_nodes(env.getConnection(shard))
+
+
+def run_until_first_finishes(*tasks):
+    """Run tasks concurrently; when the first one finishes (or raises), signal the rest to stop and
+    propagate any exception. Each task is called with a threading.Event that is set once any task
+    returns - an endless task should loop while not event.is_set()."""
+    done = threading.Event()
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(task, done) for task in tasks]
+        for future in as_completed(futures):
+            done.set()
+            future.result()
 
 
 # A table of the shortest possible alphanumeric string that is mapped by redis' hslot (index in the table)
@@ -1642,3 +1656,4 @@ slot_table = [
 ]
 
 assert len(slot_table) == NUMBER_OF_SLOTS
+

@@ -1,8 +1,6 @@
 import time
 import random
-import threading
 import functools
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from includes import *
 from utils import (
     fill_ts_data,
@@ -15,6 +13,9 @@ from utils import (
     added_slaves_to_cluster,
     get_timeout,
     remove_slotless_node,
+    dump_node_cluster_nodes,
+    dump_node_infocluster,
+    run_until_first_finishes,
 )
 from test_asm import validate_queries_during_migrations
 
@@ -66,13 +67,11 @@ def test_add_and_remove_node():
             return
         validate_result(result)
 
-    done = threading.Event()
-
-    def validate_data_in_a_loop():
+    def validate_data_in_a_loop(done):
         while not done.is_set():
             tolerable_data_validation()
 
-    def add_remove_cycles():
+    def add_remove_cycles(done):
         cycles = 10
         for _ in range(cycles):
             # Add a new node
@@ -88,11 +87,45 @@ def test_add_and_remove_node():
 
             validate_after_removal(wait_for_valid_cluster(env), wait_for_valid_ts_infocluster(env), before)
 
-    with ThreadPoolExecutor() as executor:
-        futures = map(executor.submit, [validate_data_in_a_loop, add_remove_cycles])
-        for future in as_completed(futures):
-            done.set()  # the cycles thread finished (or raised); stop the endless data validator
-            future.result()
+    run_until_first_finishes(validate_data_in_a_loop, add_remove_cycles)
+
+
+def test_take_node_down_and_up():
+    env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
+    skip_if_needed(env)
+
+    wait_for_valid_cluster(env)
+    wait_for_valid_ts_infocluster(env)
+
+    # An untouchable node: it is never stopped and we use it for the data validations
+    untouchable = env.envRunner.shards[0]
+    fill_some_data(env)
+
+    def tolerable_data_validation():
+        try:
+            result = untouchable.getConnection().execute_command(COMMAND)
+        except redis.exceptions.ResponseError as x:
+            assert str(x) in (TOPOLOGY_CHANGED_ERROR, SLOT_RANGES_ERROR, CLUSTERDOWN_ERROR, SHARD_TIMEOUT_ERROR), str(x)
+            return
+        validate_result(result)
+
+    def validate_data_in_a_loop(done):
+        while not done.is_set():
+            tolerable_data_validation()
+
+    def node_down_up_cycles(done):
+        cycles = 10
+        round_robin_on = [shard for shard in env.envRunner.shards if shard is not untouchable]
+        for cycle in range(cycles):
+            victim = round_robin_on[cycle % len(round_robin_on)]
+            time.sleep(1)  # let the node some time to work on subtasks
+            victim.stopEnv()
+            wait_for_down_state_view_agreement(env, victim)
+            victim.startEnv()
+            wait_for_valid_cluster(env)
+            wait_for_valid_ts_infocluster(env)
+
+    run_until_first_finishes(validate_data_in_a_loop, node_down_up_cycles)
 
 
 def test_asm():
@@ -159,6 +192,8 @@ CLUSTERDOWN_ERROR = "CLUSTERDOWN The cluster is down"
 # A multi-shard fan-out can race slot-ownership propagation during a failover (the owning node's
 # id changes) and momentarily see a slot as unavailable, so we also expect this:
 SLOT_RANGES_ERROR = "Query requires unavailable slots"
+# While a peer master is down its slots go unreachable, so the fan-out can time out waiting for that shard:
+SHARD_TIMEOUT_ERROR = "A multi-keys command failed because at least one shard did not reply within the given timeframe."
 
 
 def skip_if_needed(env):
@@ -216,25 +251,19 @@ def validate_queries_during_failovers(env, post_failover, command, validate_resu
 
     strict_validation(env)
 
-    done = threading.Event()
-
-    def validate_command_in_a_loop():
+    def validate_command_in_a_loop(done):
         while not done.is_set():
             tolerable_validation(env)
 
-    def failover_back_and_forth():
-        failover_all_slaves(env, validate_after_failover)
-        failover_all_slaves(env, validate_after_failover)
-
-    with ThreadPoolExecutor() as executor:
+    def failover_back_and_forth(done):
         # Just one round-robin and back, unfortunately. We can't loop this since redis rate-limits
         # failover votes to once per 2*cluster-node-timeout per demoted primary, so a second cycle
         # would have to wait out that cooldown period before it could failover the same nodes again.
         # This will make the test too long.
-        futures = map(executor.submit, [validate_command_in_a_loop, failover_back_and_forth])
-        for future in as_completed(futures):
-            done.set()
-            future.result()
+        failover_all_slaves(env, validate_after_failover)
+        failover_all_slaves(env, validate_after_failover)
+
+    run_until_first_finishes(validate_command_in_a_loop, failover_back_and_forth)
 
     strict_validation(env)
 
@@ -250,6 +279,52 @@ def failover_all_slaves(env, validator=None):
         if validator is not None:
             print(f"\n----- master {master.ip}:{master.port} failed over to replica {replica.ip}:{replica.port} -----")
             validator(env)
+
+
+def redis_master_addrs(conn):
+    """{node_id: (ip, port)} for master nodes as seen in CLUSTER NODES (a fail-flagged master still counts)."""
+    return {
+        node.id: (node.ip, node.port)
+        for node in map(ClusterNode.from_str, conn.execute_command("CLUSTER", "NODES").splitlines())
+        if "master" in node.flags
+    }
+
+
+def ts_master_addrs(conn):
+    """{node_id: (ip, port)} for master nodes in timeseries.INFOCLUSTER, ignoring slots (unlike
+    ts_cluster_from_conn there is no full-coverage gate, so this works while a master is down)."""
+    conn.execute_command("debug", "MARK-INTERNAL-CLIENT")
+    reply = conn.execute_command("timeseries.INFOCLUSTER")
+    if reply == "no cluster mode":
+        return None
+    addrs = {}
+    for node in reply[4]:
+        fields = {key: val for key, val in zip(node[::2], node[1::2]) if key not in ("minHslot", "maxHslot")}
+        addrs[fields["id"]] = (fields["ip"], int(fields["port"]))
+    return addrs
+
+
+def wait_for_down_state_view_agreement(env, victim):
+    # While the victim shard is down, wait until the surviving nodes' redis and timeseries views agree
+    # on the same set of nodes (ignoring slots, which are in flux while a node is down).
+    up_shards = [shard for shard in env.envRunner.shards if shard is not victim]
+    deadline = time.time() + get_timeout()
+    while True:
+        conns = [shard.getConnection() for shard in up_shards]
+        redis_views = [redis_master_addrs(c) for c in conns]
+        ts_views = [ts_master_addrs(c) for c in conns]
+        if (
+            all(v == redis_views[0] for v in redis_views[1:])
+            and all(v == ts_views[0] for v in ts_views[1:])
+            and redis_views[0] == ts_views[0]
+        ):
+            return
+        if time.time() >= deadline:
+            for conn in conns:
+                dump_node_cluster_nodes(conn)
+                dump_node_infocluster(conn)
+            assert False, "redis and timeseries master views did not agree while a node was down"
+        time.sleep(0.2)
 
 
 def ts_cluster_from_conn(conn):
@@ -292,15 +367,18 @@ def ts_cluster_from_conn(conn):
 
 
 def wait_for_valid_ts_infocluster(env):
-    """Wait until every node's timeseries.INFOCLUSTER reports full coverage and all nodes agree.
-
-    Returns the agreed topology as a {node_id: ClusterNode} dict (the first polled node's view).
-    """
+    # Wait until every node's timeseries.INFOCLUSTER reports full coverage and all nodes agree.
+    # Returns the agreed topology as a {node_id: ClusterNode} dict (the first polled node's view).
     timeout = get_timeout()
     deadline = time.time() + timeout
     while True:
-        clusters = [ts_cluster_from_conn(env.getConnection(i)) for i in range(env.shardsCount)]
-        if all(c is not None for c in clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
+        try:
+            clusters = [ts_cluster_from_conn(env.getConnection(i)) for i in range(env.shardsCount)]
+        except redis.exceptions.ClusterDownError:
+            # A just-rejoined master's cluster state is transiently 'fail', so INFOCLUSTER is rejected;
+            # keep polling until it turns healthy.
+            clusters = None
+        if clusters is not None and all(clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
             return clusters[0]
         assert time.time() < deadline, "timeseries.INFOCLUSTER did not reach a valid, agreed state in time"
         time.sleep(0.2)
