@@ -72,7 +72,7 @@ def verifyClusterInitialized(env):
             nodes = res[4]
             allConnected = True
             for n in nodes:
-                status = n[17]
+                status = n[-1]
                 if status != b'connected':
                     allConnected = False
             if not allConnected:
