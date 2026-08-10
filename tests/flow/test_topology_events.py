@@ -193,6 +193,7 @@ CLUSTERDOWN_ERROR = "CLUSTERDOWN The cluster is down"
 # id changes) and momentarily see a slot as unavailable, so we also expect this:
 SLOT_RANGES_ERROR = "Query requires unavailable slots"
 # While a peer master is down its slots go unreachable, so the fan-out can time out waiting for that shard:
+# This error is currently swallowed when a node comes down and up again, but should be removed as part of MOD-17548.
 SHARD_TIMEOUT_ERROR = "A multi-keys command failed because at least one shard did not reply within the given timeframe."
 
 
