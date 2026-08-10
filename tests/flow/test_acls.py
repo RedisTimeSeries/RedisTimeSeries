@@ -638,3 +638,43 @@ def test_libmr_internal_commands_is_not_allowed(env):
     env.expect('timeseries.NETWORKTEST').error().contains('unknown command')
     env.expect('timeseries.FORCESHARDSCONNECTION').error().contains('unknown command')
 
+
+LIBMR_INTERNAL_COMMANDS = [
+    'timeseries.INNERCOMMUNICATION',
+    'timeseries.HELLO',
+    'timeseries.CLUSTERSETFROMSHARD',
+    'timeseries.INFOCLUSTER',
+    'timeseries.NETWORKTEST',
+    'timeseries.FORCESHARDSCONNECTION',
+]
+
+
+@skip(onVersionLowerThan='8.0.0')
+def test_libmr_internal_commands_not_hidden_on_enterprise(env):
+    """Complement of test_libmr_internal_commands_is_not_allowed: on an
+    enterprise binary the hiding is the proxy's job (_proxy-filtered), so these
+    commands must NOT carry the `internal` flag.
+
+    They used to, whenever an enterprise shard ran with cluster-enabled=yes -
+    which is per-database on enterprise, set for the OSS cluster API and/or for
+    ASM. `internal` commands are only visible on an internal connection, so on a
+    deployment where the internal secret is not shared between the shards (a
+    Redis Enterprise database, whose cluster is synthesized by the cluster
+    plugin rather than gossiped over a cluster bus) the shard's own libmr link
+    could not see them either: the HELLO handshake failed with
+    `unknown command` at 1Hz forever and the fan-out never formed - MOD-17518.
+
+    RLTest's oss-cluster env has a real cluster bus and therefore a genuinely
+    shared internal secret, so it cannot reproduce that hang directly. What it
+    can pin down is the flag itself, which is the part that was wrong.
+    """
+    if not is_enterprise(env):
+        env.skip()
+    for cmd in LIBMR_INTERNAL_COMMANDS:
+        try:
+            env.getConnection().execute_command(cmd)
+            err = ''  # replied at all, so it is certainly visible
+        except Exception as e:
+            err = str(e)
+        env.assertNotContains('unknown command', err, message=cmd)
+
