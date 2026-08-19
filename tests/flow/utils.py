@@ -6,7 +6,9 @@ import time
 import inspect
 import re
 import random
+import threading
 import contextlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 NUMBER_OF_SLOTS = 2**14
@@ -279,7 +281,10 @@ def compare_clusters(cluster1, cluster2):
 
 
 def wait_for_valid_cluster(env):
-    """Wait until every node reports a valid cluster and all nodes agree on the topology."""
+    """Wait until every node reports a valid cluster and all nodes agree on the topology.
+
+    Returns the agreed topology as a {node_id: ClusterNode} dict (the first polled node's view).
+    """
     timeout = get_timeout()
     deadline = time.time() + timeout
     # Note that only the nodes in env are polled but any slaves added by added_slaves_to_cluster are not in env.
@@ -294,11 +299,67 @@ def wait_for_valid_cluster(env):
     while True:
         clusters = [validate_cluster(env.getConnection(i)) for i in range(env.shardsCount)]
         if all(c is not None for c in clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
-            return
+            return clusters[0]
         if time.time() >= deadline:
             nodes = {i: env.getConnection(i).execute_command("CLUSTER", "NODES") for i in range(env.shardsCount)}
             raise AssertionError(f"cluster did not reach a valid, agreed state in time, CLUSTER NODES: {nodes}")
         time.sleep(0.2)
+
+
+def remove_slotless_node(env, node_id):
+    """Remove a slot-less master node (given by its id) from the OSS-cluster env, the
+    mirror image of `env.addShardToClusterIfExists()` that's unfortunately missing from RLTest.
+
+    Performs the canonical removal procedure that `redis-cli --cluster del-node` uses:
+    `CLUSTER FORGET <id>` on every *other* node, then `CLUSTER RESET SOFT` on the removed
+    node. Asserts the node owns no slots (a node that still owns slots must have them
+    migrated away first). Finally tears down the removed node's process and drops it from
+    RLTest's env bookkeeping so it is no longer polled or awaited.
+    """
+    def cluster_node_ids(c):
+        return {node.id for node in map(ClusterNode.from_str, c.execute_command("CLUSTER", "NODES").splitlines())}
+
+    # Locate the RLTest shard backing this node (so we can drive and later tear it down).
+    victim_shard = next(
+        (shard for shard in env.envRunner.shards if shard.getConnection().execute_command("CLUSTER", "MYID") == node_id),
+        None,
+    )
+    assert victim_shard is not None, f"no node with id {node_id} in the env"
+    conn = victim_shard.getConnection()
+    remaining_shards = [shard for shard in env.envRunner.shards if shard is not victim_shard]
+
+    # A node that still owns slots can't be removed; the caller must migrate its slots away first.
+    myself = next(
+        node
+        for node in map(ClusterNode.from_str, conn.execute_command("CLUSTER", "NODES").splitlines())
+        if "myself" in node.flags
+    )
+    assert not myself.slots, f"node {node_id} still owns slots {myself.slots}; migrate them away before removal"
+
+    # CLUSTER FORGET is synchronous per node; send it from every *other* node, sowe only wait for the +OK response.
+    for shard in remaining_shards:
+        response = shard.getConnection().execute_command("CLUSTER", "FORGET", node_id)
+        assert response in ("OK", b"OK")
+
+    # CLUSTER RESET SOFT is also synchronous; it makes the removed node forget the rest of the cluster.
+    response = conn.execute_command("CLUSTER", "RESET", "SOFT")
+    assert response in ("OK", b"OK")
+
+    # FORGET takes effect locally at once, but each node keeps gossiping its own view; wait until every
+    # remaining node has dropped the removed id from its topology (the asynchronous part of the removal).
+    deadline = time.time() + get_timeout()
+    while True:
+        views = {shard.getMasterPort(): cluster_node_ids(shard.getConnection()) for shard in remaining_shards}
+        if all(node_id not in ids for ids in views.values()):
+            break
+        assert time.time() < deadline, f"node {node_id} still present after {get_timeout()}s: {views}"
+        time.sleep(0.2)
+
+    # Tear down the removed node's process and drop it from RLTest's bookkeeping.
+    victim_shard.stopEnv()
+    env.envRunner.shards.remove(victim_shard)
+    env.envRunner.shardsCount -= 1
+    env.shardsCount = env.envRunner.shardsCount
 
 
 def import_slots(source_conn, target_conn, slot_range: SlotRange):
@@ -531,6 +592,38 @@ def dump_cluster_info(env):
     print("\n===== CLUSTER INFO =====")
     for shard in range(0, env.shardsCount):
         dump_node_cluster_info(env.getConnection(shard))
+
+
+def dump_node_cluster_nodes(conn):
+    print(f"{get_node_address(conn)}:")
+    nodes = [ClusterNode.from_str(line) for line in conn.execute_command("CLUSTER", "NODES").splitlines()]
+    for n in sorted(nodes, key=lambda n: (n.port)):
+        role = "master" if "master" in n.flags else ("slave" if "slave" in n.flags else "?")
+        slots = ",".join(f"{sr.start}-{sr.end}" for sr in sorted(n.slots, key=lambda sr: sr.start)) or "-"
+        flags = ",".join(sorted(n.flags))
+        link = "connected" if n.link_state else "disconnected"
+        print(
+            f"    node {n.id} {n.ip}:{n.port} {role} master={n.master} "
+            f"slots={slots} flags={flags} link={link} epoch={n.config_epoch}"
+        )
+
+
+def dump_cluster_nodes(env):
+    print("\n===== CLUSTER NODES =====")
+    for shard in range(0, env.shardsCount):
+        dump_node_cluster_nodes(env.getConnection(shard))
+
+
+def run_until_first_finishes(*tasks):
+    """Run tasks concurrently; when the first one finishes (or raises), signal the rest to stop and
+    propagate any exception. Each task is called with a threading.Event that is set once any task
+    returns - an endless task should loop while not event.is_set()."""
+    done = threading.Event()
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(task, done) for task in tasks]
+        for future in as_completed(futures):
+            done.set()
+            future.result()
 
 
 # A table of the shortest possible alphanumeric string that is mapped by redis' hslot (index in the table)
@@ -1563,3 +1656,4 @@ slot_table = [
 ]
 
 assert len(slot_table) == NUMBER_OF_SLOTS
+
