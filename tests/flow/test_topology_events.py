@@ -74,6 +74,8 @@ def test_add_and_remove_node():
     def add_remove_cycles(done):
         cycles = 10
         for _ in range(cycles):
+            if done.is_set():
+                return
             # Add a new node
             env.addShardToClusterIfExists()
             env.shardsCount = env.envRunner.shardsCount
@@ -117,6 +119,8 @@ def test_take_node_down_and_up():
         cycles = 10
         round_robin_on = [shard for shard in env.envRunner.shards if shard is not untouchable]
         for cycle in range(cycles):
+            if done.is_set():
+                return
             victim = round_robin_on[cycle % len(round_robin_on)]
             time.sleep(1)  # let the node some time to work on subtasks
             victim.stopEnv()
