@@ -573,3 +573,177 @@ def test_broken_rdb_rejects_compressed_chunk_count_overflow_bypass(env):
     env.cmd('DEL', 'test_key')
 
     env.expect('RESTORE', 'test_key', 0, malicious_dump).error()
+
+def _gorilla_wide_sample_bitstream(nbits: int) -> bytes:
+    """
+    Build a gorilla data buffer of `nbits` bits (rounded up to whole bytes) whose
+    every decoded sample consumes 71 bits, so decoding drives `iter->idx` forward
+    fast. Crucially it never takes the readFloat path, so it does NOT trip the
+    DEBUG-only asserts in gorilla.c (which would abort the server on any build
+    regardless of this fix) -- the test must stay portable across debug/release/asan.
+
+    Per-sample bit layout consumed by Compressed_ChunkIteratorGetNext (LSB-first):
+      1 : timestamp control bit = 1  -> not "off", so readInteger() is called
+      5 : readInteger control bits = 1 x5 -> falls through to the 64-bit branch
+      64: the delta value (zeros)
+      1 : value control bit = 0 -> "off", uses prevValue, readFloat() NOT called
+    => 71 bits/sample, all control paths assert-free.
+    """
+    unit = [1, 1, 1, 1, 1, 1] + [0] * 65  # 6 ones + 64 delta zeros + 1 value-control zero
+    total_bits = ((nbits + 7) // 8) * 8
+    bits = (unit * (total_bits // len(unit) + 1))[:total_bits]
+    out = bytearray(total_bits // 8)
+    for i, bit in enumerate(bits):
+        if bit:
+            out[i // 8] |= (1 << (i % 8))  # bit position p -> byte p//8, LSB-first
+    return bytes(out)
+
+
+def _patch_first_compressed_chunk_overread(dump: bytes):
+    """
+    Craft a poisoned compressed chunk that PASSES the load-time count/idx/size
+    consistency checks but whose `count`-driven decoder would still walk off the
+    data buffer.
+
+    We set idx = size*8 (the max the load check allows) and count = size*4 (so
+    count-1 <= idx/2 holds), and fill the data buffer with a pattern in which each
+    decoded sample consumes 71 bits. Decoding `count` such samples requires far
+    more than the size*8 bits the buffer holds, so without the decoder-time
+    `idx >= size*8` bound the reader reads adjacent heap.
+
+    Returns (poisoned_dump, inflated_count).
+    """
+    b = bytearray(dump)
+    assert _verify_dump_payload(dump), "baseline DUMP payload should have valid checksum"
+
+    idx = 0
+    idx += 1  # object type byte
+    _, _, idx = _rdb_load_len(dump, idx)  # moduleid
+
+    def read_opcode():
+        nonlocal idx
+        op, _, idx2 = _rdb_load_len(dump, idx)
+        idx = idx2
+        return op
+
+    def read_uint_capture():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 2  # RDB_MODULE_OPCODE_UINT
+        val_start = idx
+        val, _, idx2 = _rdb_load_len(dump, idx)
+        idx = idx2
+        return val, val_start, idx
+
+    def read_string_skip():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 5  # RDB_MODULE_OPCODE_STRING
+        idx = _rdb_skip_string(dump, idx)
+
+    def read_double_skip():
+        nonlocal idx
+        op = read_opcode()
+        assert op == 4  # RDB_MODULE_OPCODE_DOUBLE
+        idx += 8
+
+    read_string_skip()                 # keyName
+    read_uint_capture()                # retentionTime
+    read_uint_capture()                # chunkSizeBytes
+    options, _, _ = read_uint_capture()
+    assert options == 2, "test assumes default COMPRESSED encoding (SERIES_OPT_COMPRESSED_GORILLA)"
+    read_uint_capture()                # lastTimestamp
+    read_double_skip()                 # lastValue
+    read_uint_capture()                # totalSamples
+    read_uint_capture()                # duplicatePolicy
+    has_src, _, _ = read_uint_capture()
+    assert has_src == 0
+    read_uint_capture()                # ignoreMaxTimeDiff
+    read_double_skip()                 # ignoreMaxValDiff
+    labels_count, _, _ = read_uint_capture()
+    assert labels_count == 0
+    rules_count, _, _ = read_uint_capture()
+    assert rules_count == 0
+    num_chunks, _, _ = read_uint_capture()
+    assert num_chunks == 1
+
+    size_val, size_start, size_end = read_uint_capture()   # chunk->size
+    _, count_start, count_end = read_uint_capture()        # chunk->count
+    _, idx_start, idx_end = read_uint_capture()            # chunk->idx
+
+    assert size_val % 8 == 0 and size_val > 0
+
+    # Skip the remaining scalar fields to reach the data-string field.
+    read_uint_capture()  # baseValue
+    read_uint_capture()  # baseTimestamp
+    read_uint_capture()  # prevTimestamp
+    read_uint_capture()  # prevTimestampDelta
+    read_uint_capture()  # prevValue
+    read_uint_capture()  # prevLeading
+    read_uint_capture()  # prevTrailing
+
+    string_field_start = idx
+    op = read_opcode()
+    assert op == 5  # RDB_MODULE_OPCODE_STRING
+    data_field_end = _rdb_skip_string(dump, idx)
+
+    inflated_count = size_val * 4          # count-1 <= idx/2 == size*4, so this passes the load check
+    poisoned_idx = size_val * 8            # max idx the load check permits
+
+    # Rebuild the data-string field as a plain (non-encoded) buffer of the declared
+    # size whose every decoded sample consumes 71 bits (assert-free, see helper).
+    data = _gorilla_wide_sample_bitstream(size_val * 8)
+    new_field = bytes([5]) + _rdb_encode_len(size_val) + data
+
+    # Edit right-to-left so earlier offsets stay valid.
+    b[string_field_start:data_field_end] = new_field
+    b[idx_start:idx_end] = _rdb_encode_len(poisoned_idx)
+    b[count_start:count_end] = _rdb_encode_len(inflated_count)
+
+    _patch_dump_crc(b)
+    assert _verify_dump_payload(bytes(b)), "patched DUMP payload should have valid checksum"
+    return bytes(b), inflated_count
+
+
+def test_broken_rdb_compressed_chunk_read_side_over_read_is_bounded(env):
+    """
+    Regression for the read-side heap over-read (MOD-17238 / VDP-4940): a chunk
+    whose `count` claims more samples than its data encodes must not let the
+    gorilla decoder read past the buffer.
+
+    The poisoned chunk is internally consistent (passes the load-time checks) but
+    each of its samples decodes to 71 bits, so an unbounded `count`-driven decode
+    walks far past the `size*8`-bit buffer -- crashing under ASan / on a real
+    over-read. With the fix the decoder stops at `size*8` bits (the data buffer is
+    over-allocated so the last look-ahead stays in-bounds); the loop, still bounded
+    by `count`, then re-emits the last in-bounds sample instead of leaking heap.
+
+    So the server must survive and every returned sample must be the safe decoded
+    value (baseTimestamp=1000, delta 0) -- never adjacent heap content.
+    """
+    env.skipOnCluster()
+
+    env.cmd('TS.CREATE', 'test_key', 'CHUNK_SIZE', '64')
+    env.cmd('TS.ADD', 'test_key', 1000, 1.0)
+
+    valid_dump = env.cmd('DUMP', 'test_key')
+    poisoned_dump, _inflated_count = _patch_first_compressed_chunk_overread(valid_dump)
+
+    env.cmd('DEL', 'test_key')
+
+    # The payload is internally consistent, so RESTORE may accept it; if it does,
+    # decoding it must be bounded (no out-of-bounds read, no crash).
+    try:
+        env.cmd('RESTORE', 'test_key', 0, poisoned_dump)
+    except Exception:
+        # Rejected at load time is also a safe outcome.
+        assert env.cmd('PING')
+        return
+
+    res = env.cmd('TS.RANGE', 'test_key', '-', '+')
+
+    # Server must survive decoding the poisoned chunk (an over-read would crash it).
+    assert env.cmd('PING')
+    # No heap must leak: every sample stays at the in-bounds decoded timestamp.
+    for ts, _val in res:
+        env.assertEqual(int(ts), 1000)

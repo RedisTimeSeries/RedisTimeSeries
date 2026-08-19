@@ -21,6 +21,13 @@ typedef uint64_t binary_t;
 typedef uint64_t globalbit_t;
 typedef uint8_t localbit_t;
 
+// The gorilla bit reader (readBits) may look one 64-bit word past the word holding the
+// current bit position, and a single sample decode advances the cursor by up to ~211 bits.
+// Compressed chunk data buffers are over-allocated by this many bytes so that decoding which
+// is bounded at `size * 8` bits (see Compressed_ChunkIteratorGetNext) can never read or write
+// outside the allocation, even for a corrupt chunk whose `count` exceeds its encoded data.
+#define GORILLA_DATA_READAHEAD_BYTES (8 * sizeof(binary_t))
+
 typedef union
 {
     double d;

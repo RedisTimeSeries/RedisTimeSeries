@@ -31,7 +31,7 @@ Chunk_t *Compressed_NewChunk(size_t size) {
     _log_if(size % 8 != 0, "chunk size isn't multiplication of 8");
     CompressedChunk *chunk = (CompressedChunk *)calloc(1, sizeof(CompressedChunk));
     chunk->size = size;
-    chunk->data = (uint64_t *)calloc(chunk->size, sizeof(char));
+    chunk->data = (uint64_t *)calloc(chunk->size + GORILLA_DATA_READAHEAD_BYTES, sizeof(char));
 #ifdef DEBUG
     memset(chunk->data, 0, chunk->size);
 #endif
@@ -54,8 +54,9 @@ Chunk_t *Compressed_CloneChunk(const Chunk_t *chunk) {
     const CompressedChunk *oldChunk = chunk;
     CompressedChunk *newChunk = malloc(sizeof(CompressedChunk));
     memcpy(newChunk, oldChunk, sizeof(CompressedChunk));
-    newChunk->data = malloc(newChunk->size);
+    newChunk->data = malloc(newChunk->size + GORILLA_DATA_READAHEAD_BYTES);
     memcpy(newChunk->data, oldChunk->data, oldChunk->size);
+    memset((char *)newChunk->data + newChunk->size, 0, GORILLA_DATA_READAHEAD_BYTES);
     return newChunk;
 }
 
@@ -82,8 +83,10 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     if (res != CR_OK) {
         int oldsize = chunk->size;
         chunk->size += CHUNK_RESIZE_STEP;
-        chunk->data = (uint64_t *)realloc(chunk->data, chunk->size * sizeof(char));
-        memset((char *)chunk->data + oldsize, 0, CHUNK_RESIZE_STEP);
+        chunk->data = (uint64_t *)realloc(chunk->data, chunk->size + GORILLA_DATA_READAHEAD_BYTES);
+        memset((char *)chunk->data + oldsize,
+               0,
+               (chunk->size + GORILLA_DATA_READAHEAD_BYTES) - oldsize);
         // printf("Chunk extended to %lu \n", chunk->size);
         res = Compressed_AddSample(chunk, sample);
         assert(res == CR_OK);
@@ -107,7 +110,8 @@ static void trimChunk(CompressedChunk *chunk) {
         // align to 8 bytes (uint64_t) otherwise we will have an heap overflow in gorilla.c because
         // each write happens in 8 bytes blocks.
         newSize += sizeof(binary_t) - (newSize % sizeof(binary_t));
-        chunk->data = realloc(chunk->data, newSize);
+        chunk->data = realloc(chunk->data, newSize + GORILLA_DATA_READAHEAD_BYTES);
+        memset((char *)chunk->data + newSize, 0, GORILLA_DATA_READAHEAD_BYTES);
         chunk->size = newSize;
     }
 }
@@ -511,6 +515,43 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                          (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
+// Validates a compressed chunk that was loaded/deserialized from an untrusted source and,
+// when valid, installs read-ahead padding on its data buffer. `len` is the actual length of
+// the loaded `data` buffer. Returns true if the chunk is self-consistent and safe to decode.
+static bool Compressed_ValidateLoadedChunk(CompressedChunk *compchunk, size_t len) {
+    if (compchunk->data == NULL) {
+        return false;
+    }
+    if (len == 0) {
+        return false; /* Buffer size must be non-zero */
+    }
+    if (compchunk->idx > len * 8) {
+        return false; /* Bit index can't exceed buffer size in bits */
+    }
+    if (compchunk->size != len) {
+        return false; /* size metadata must match actual buffer length */
+    }
+    if (compchunk->size % sizeof(binary_t) != 0) {
+        return false; /* gorilla.c reads/writes data in binary_t (8-byte) words */
+    }
+    /* Every sample after the first costs >=2 bits to encode (appendInteger/appendFloat
+     * in gorilla.c), so idx must be able to cover count-1 appended samples.
+     * Written as idx/2 < count-1 (equivalent to idx < 2*(count-1) for non-negative
+     * integers) to avoid overflow when count is attacker-inflated near UINT64_MAX. */
+    if (compchunk->count > 0 && compchunk->idx / 2 < compchunk->count - 1) {
+        return false;
+    }
+    // Over-allocate so the decoder's bounded look-ahead can never touch unallocated memory.
+    uint64_t *padded =
+        (uint64_t *)realloc(compchunk->data, compchunk->size + GORILLA_DATA_READAHEAD_BYTES);
+    if (padded == NULL) {
+        return false;
+    }
+    compchunk->data = padded;
+    memset((char *)compchunk->data + compchunk->size, 0, GORILLA_DATA_READAHEAD_BYTES);
+    return true;
+}
+
 int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     bool err = false;
     errdefer(err, *chunk = NULL);
@@ -537,27 +578,7 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
 
     size_t len;
     compchunk->data = (uint64_t *)LoadStringBuffer_IOError(io, &len, err, TSDB_ERROR);
-    if (len == 0) {
-        err = true;
-        return TSDB_ERROR; /* Buffer size must be non-zero */
-    }
-    if (compchunk->idx > len * 8) {
-        err = true;
-        return TSDB_ERROR; /* Bit index can't exceed buffer size in bits */
-    }
-    if (compchunk->size != len) {
-        err = true;
-        return TSDB_ERROR; /* size metadata must match actual buffer length */
-    }
-    if (compchunk->size % sizeof(binary_t) != 0) {
-        err = true;
-        return TSDB_ERROR; /* gorilla.c reads/writes data in binary_t (8-byte) words */
-    }
-    /* Every sample after the first costs >=2 bits to encode (appendInteger/appendFloat
-     * in gorilla.c), so idx must be able to cover count-1 appended samples.
-     * Written as idx/2 < count-1 (equivalent to idx < 2*(count-1) for non-negative
-     * integers) to avoid overflow when count is attacker-inflated near UINT64_MAX. */
-    if (compchunk->count > 0 && compchunk->idx / 2 < compchunk->count - 1) {
+    if (!Compressed_ValidateLoadedChunk(compchunk, len)) {
         err = true;
         return TSDB_ERROR;
     }
@@ -575,6 +596,10 @@ void Compressed_MRSerialize(Chunk_t *chunk, WriteSerializationCtx *sctx) {
 
 int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
     CompressedChunk *compchunk = (CompressedChunk *)malloc(sizeof(*compchunk));
+    if (compchunk == NULL) {
+        *chunk = NULL;
+        return TSDB_ERROR;
+    }
 
     compchunk->data = NULL;
     compchunk->size = MR_SerializationCtxReadLongLongWrapper(sctx);
@@ -590,6 +615,11 @@ int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
 
     size_t len;
     compchunk->data = (uint64_t *)MR_ownedBufferFrom(sctx, &len);
+    if (!Compressed_ValidateLoadedChunk(compchunk, len)) {
+        Compressed_FreeChunk(compchunk);
+        *chunk = NULL;
+        return TSDB_ERROR;
+    }
     *chunk = (Chunk_t *)compchunk;
     return TSDB_OK;
 }
