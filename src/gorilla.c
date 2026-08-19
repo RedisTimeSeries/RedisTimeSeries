@@ -534,6 +534,12 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         iter->count++;
         return CR_OK;
     }
+    // Defense against a corrupt chunk whose `count` claims more samples than the data buffer
+    // actually encodes.
+    if (unlikely(iter->idx >= iter->chunk->size * 8)) {
+        iter->count++;
+        return CR_END;
+    }
     const uint64_t *bins = iter->chunk->data;
     // We're fast checking the control bits for the cases in which the delta is 0
     // This avoids the call to expensive readInteger and readFloat functions
