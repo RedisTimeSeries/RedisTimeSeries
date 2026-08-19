@@ -83,9 +83,10 @@ static void ensureAddSample(CompressedChunk *chunk, Sample *sample) {
     if (res != CR_OK) {
         int oldsize = chunk->size;
         chunk->size += CHUNK_RESIZE_STEP;
-        chunk->data =
-            (uint64_t *)realloc(chunk->data, chunk->size + GORILLA_DATA_READAHEAD_BYTES);
-        memset((char *)chunk->data + oldsize, 0, (chunk->size + GORILLA_DATA_READAHEAD_BYTES) - oldsize);
+        chunk->data = (uint64_t *)realloc(chunk->data, chunk->size + GORILLA_DATA_READAHEAD_BYTES);
+        memset((char *)chunk->data + oldsize,
+               0,
+               (chunk->size + GORILLA_DATA_READAHEAD_BYTES) - oldsize);
         // printf("Chunk extended to %lu \n", chunk->size);
         res = Compressed_AddSample(chunk, sample);
         assert(res == CR_OK);

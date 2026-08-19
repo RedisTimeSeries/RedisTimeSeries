@@ -534,7 +534,8 @@ ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *abstractIter, Sample *s
         iter->count++;
         return CR_OK;
     }
-    // Defense against a corrupt chunk whose `count` claims more samples than the data buffer actually encodes.
+    // Defense against a corrupt chunk whose `count` claims more samples than the data buffer
+    // actually encodes.
     if (unlikely(iter->idx >= iter->chunk->size * 8)) {
         iter->count++;
         return CR_END;
