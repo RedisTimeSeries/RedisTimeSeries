@@ -379,9 +379,10 @@ def wait_for_valid_ts_infocluster(env):
     while True:
         try:
             clusters = [ts_cluster_from_conn(env.getConnection(i)) for i in range(env.shardsCount)]
-        except redis.exceptions.ClusterDownError:
+        except redis.exceptions.ResponseError as x:
             # A just-rejoined master's cluster state is transiently 'fail', so INFOCLUSTER is rejected;
             # keep polling until it turns healthy.
+            assert str(x) == CLUSTERDOWN_ERROR, str(x)
             clusters = None
         if clusters is not None and all(clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
             return clusters[0]
