@@ -24,6 +24,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Validate tag version
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: ./sbin/validate-tag-version
       - name: set env
         id: set-env
         env:
@@ -36,6 +40,7 @@ jobs:
           echo "redis-ref=${REDIS_REF}" >> $GITHUB_OUTPUT
   linter:
     uses: ./.github/workflows/flow-linter.yml
+    needs: [prepare-values]
     secrets: inherit
   build-linux-x64:
     uses: ./.github/workflows/flow-linux.yml
