@@ -53,15 +53,19 @@ jobs:
           # Generate timestamp at workflow start for consistent beta versioning
           TIMESTAMP=$(date -u +"%Y%m%d.%H%M%S")
           WORKFLOW_NUM=${{ github.run_number }}
-          BETA_VERSION="99.99.99.${TIMESTAMP}.${WORKFLOW_NUM}"
+          REF_NAME="${{ github.ref_name }}"
+          REF_NAME="${REF_NAME//[^A-Za-z0-9._-]/_}"
+          if [[ "$REF_NAME" == "master" ]]; then
+            BETA_VERSION="99.99.99.${TIMESTAMP}.${WORKFLOW_NUM}"
+          else
+            BETA_VERSION="${REF_NAME}.${TIMESTAMP}.${WORKFLOW_NUM}"
+          fi
           
           echo "beta-timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
           echo "beta-version=${BETA_VERSION}" >> $GITHUB_OUTPUT
           echo "Generated beta version: ${BETA_VERSION}"
 
-          BRANCH_NAME="${{ github.ref_name }}"
-          BRANCH_NAME="${BRANCH_NAME//[^A-Za-z0-9._-]/_}"
-          SNAPSHOT_TEMPLATE="redistimeseries/snapshots/redistimeseries.@OS.${BRANCH_NAME}.${TIMESTAMP}.${WORKFLOW_NUM}.zip"
+          SNAPSHOT_TEMPLATE="redistimeseries/snapshots/redistimeseries.@OS.${BETA_VERSION}.zip"
           echo "snapshot-template=${SNAPSHOT_TEMPLATE}" >> $GITHUB_OUTPUT
           echo "Snapshot template: ${SNAPSHOT_TEMPLATE}"
 
