@@ -14,7 +14,20 @@ if [[ ! "${GITHUB_REF:-}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 TAG_VERSION="${GITHUB_REF#refs/tags/v}"
-HEADER_VERSION="$("$HERE/getver")"
+HEADER_VERSION="$(awk '
+	$1 == "#define" && $2 == "REDISTIMESERIES_VERSION_MAJOR" { major=$3 }
+	$1 == "#define" && $2 == "REDISTIMESERIES_VERSION_MINOR" { minor=$3 }
+	$1 == "#define" && $2 == "REDISTIMESERIES_VERSION_PATCH" { patch=$3 }
+	END {
+		if (major !~ /^[0-9]+$/ || minor !~ /^[0-9]+$/ || patch !~ /^[0-9]+$/) {
+			exit 1
+		}
+		print major "." minor "." patch
+	}
+' src/version.h)" || {
+	echo "::error::Could not read RedisTimeSeries version from src/version.h."
+	exit 1
+}
 
 if [[ "$TAG_VERSION" != "$HEADER_VERSION" ]]; then
 	echo "::error::Tag version (${TAG_VERSION}) does not match src/version.h (${HEADER_VERSION})."
