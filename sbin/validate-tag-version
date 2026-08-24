@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -euo pipefail
+
+PROGNAME="${BASH_SOURCE[0]}"
+HERE="$(cd "$(dirname "$PROGNAME")" &>/dev/null && pwd)"
+ROOT=$(cd "$HERE/.." && pwd)
+
+cd "$ROOT"
+
+if [[ ! "${GITHUB_REF:-}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	echo "::error::Event TAG must run on a version tag like v10.9.9. Current ref: ${GITHUB_REF:-}"
+	exit 1
+fi
+
+TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+HEADER_VERSION="$("$HERE/getver")"
+
+if [[ "$TAG_VERSION" != "$HEADER_VERSION" ]]; then
+	echo "::error::Tag version (${TAG_VERSION}) does not match src/version.h (${HEADER_VERSION})."
+	exit 1
+fi
+
+echo "Tag version matches src/version.h: ${TAG_VERSION}"
