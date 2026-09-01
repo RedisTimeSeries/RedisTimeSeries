@@ -6,6 +6,7 @@ import time
 # import redis
 # from utils import Env
 from includes import *
+from test_helper_classes import _get_ts_info
 
 
 def test_incrby():
@@ -145,3 +146,43 @@ def test_incrby_no_timestamp_replicates_diverging_timestamp():
     with env.getSlaveConnection() as slave:
         slave_sample = slave.execute_command('ts.get', key)
     env.assertEqual(master_ts, slave_sample[0])
+
+
+def test_incrby_create_with_labels_replicates_correctly():
+    # When TIMESTAMP is omitted, replication rewrites the command by
+    # appending "TIMESTAMP <ts>" (see
+    # test_incrby_no_timestamp_replicates_diverging_timestamp). If the
+    # create-on-write command also carries a trailing LABELS clause,
+    # appending TIMESTAMP after it gets swallowed as a bogus label/value
+    # pair on replicas and AOF-replay, since LABELS greedily consumes every
+    # token that follows it.
+    if not Env().useSlaves:
+        Env().skip()
+    Env().skipOnCluster()
+    env = Env()
+    key = 'incrby_create_with_labels'
+    warmup_key = 'incrby_create_with_labels_warmup'
+    with env.getConnection() as master:
+        master.execute_command('ts.create', warmup_key)
+    # Make sure the replica is already online and streaming live-propagated
+    # commands (rather than picking up our key via a fresh full RDB sync)
+    # before we issue the create-on-write TS.INCRBY below.
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', warmup_key):
+                break
+        time.sleep(0.1)
+    else:
+        raise Exception('replica never caught up with warmup key')
+    with env.getConnection() as master:
+        master.execute_command('ts.incrby', key, 1, 'LABELS', 'region', 'us')
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', key):
+                break
+        time.sleep(0.1)
+    else:
+        raise Exception('replica never caught up with initial ts.incrby')
+    with env.getSlaveConnection() as slave:
+        info = _get_ts_info(slave, key)
+    env.assertEqual(info.labels, {b'region': b'us'})
