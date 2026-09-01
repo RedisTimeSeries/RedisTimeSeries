@@ -1000,14 +1000,14 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                 const size_t preArgc = labelsLoc - 1;
                 const size_t postArgc = argc - labelsLoc;
                 RedisModule_Replicate(ctx,
-                                       replCmd,
-                                       "vclv",
-                                       argv + 1, // start after the command name
-                                       preArgc,
-                                       "TIMESTAMP",
-                                       currentUpdatedTime,
-                                       argv + labelsLoc, // the LABELS clause, unchanged
-                                       postArgc);
+                                      replCmd,
+                                      "vclv",
+                                      argv + 1, // start after the command name
+                                      preArgc,
+                                      "TIMESTAMP",
+                                      currentUpdatedTime,
+                                      argv + labelsLoc, // the LABELS clause, unchanged
+                                      postArgc);
             }
         } else {
             // number of args, until the TIMESTAMP argument (included)
