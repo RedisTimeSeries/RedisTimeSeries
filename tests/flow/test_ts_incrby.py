@@ -196,6 +196,7 @@ def test_incrby_create_with_labels_replicates_correctly():
     else:
         raise Exception('replica never caught up with warmup key')
 
+    pre_restart_sample = {}
     for cmd in ('ts.incrby', 'ts.decrby'):
         key = 'incrby_create_with_labels_%s' % cmd
         with env.getConnection() as master:
@@ -213,10 +214,12 @@ def test_incrby_create_with_labels_replicates_correctly():
             slave_sample = slave.execute_command('ts.get', key)
         env.assertEqual(info.labels, {b'region': b'us'})
         env.assertEqual(master_sample, slave_sample)
+        pre_restart_sample[cmd] = master_sample
 
     # Also exercise the AOF-replay path (not just the live replication
     # stream): restart master and replica and reload from AOF/RDB, then
-    # verify the data survived intact.
+    # verify the data survived intact against what was captured before
+    # the restart.
     env.restartAndReload()
     for cmd in ('ts.incrby', 'ts.decrby'):
         key = 'incrby_create_with_labels_%s' % cmd
@@ -228,20 +231,77 @@ def test_incrby_create_with_labels_replicates_correctly():
             slave_sample = slave.execute_command('ts.get', key)
         env.assertEqual(master_info.labels, {b'region': b'us'})
         env.assertEqual(slave_info.labels, {b'region': b'us'})
-        env.assertEqual(master_sample, slave_sample)
+        env.assertEqual(master_sample, pre_restart_sample[cmd])
+        env.assertEqual(slave_sample, pre_restart_sample[cmd])
 
 
 def test_incrby_create_with_key_named_labels_replicates_correctly():
     # RMUtil_ArgIndex scans the whole argv, so a key literally named
     # "LABELS" (case-insensitively) must not be mistaken for a LABELS
     # clause when deciding where to insert the resolved TIMESTAMP.
+    #
+    # Note: this only checks the sample, not labels - a key named LABELS
+    # also confuses parseLabelsFromArgs itself (which scans from argv[0],
+    # same as here), a separate, pre-existing bug outside this fix's scope.
     if not Env().useSlaves:
         Env().skip()
     Env().skipOnCluster()
     env = Env()
     key = 'LABELS'
+    warmup_key = 'incrby_key_named_labels_warmup'
+    with env.getConnection() as master:
+        master.execute_command('ts.create', warmup_key)
+    # Make sure the replica has finished its initial full sync and is
+    # applying live-propagated commands before we issue the create-on-write
+    # TS.INCRBY - otherwise the key arrives inside the full-sync RDB and the
+    # rewritten command is never parsed by the replica (see
+    # repl-diskless-sync-delay).
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', warmup_key):
+                break
+        time.sleep(0.1)
+    else:
+        raise Exception('replica never caught up with warmup key')
     with env.getConnection() as master:
         master.execute_command('ts.incrby', key, 1)
+        master_sample = master.execute_command('ts.get', key)
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', key):
+                break
+        time.sleep(0.1)
+    else:
+        raise Exception('replica never caught up with initial ts.incrby')
+    with env.getSlaveConnection() as slave:
+        slave_sample = slave.execute_command('ts.get', key)
+    env.assertEqual(master_sample, slave_sample)
+
+
+def test_incrby_create_with_key_named_ignore_replicates_correctly():
+    # A key literally named "IGNORE" (case-insensitively) makes
+    # parseIgnoreArgs match the key instead of a real IGNORE clause, so its
+    # two operands land right after the key. Inserting the resolved
+    # TIMESTAMP at a fixed index would shift those operands and break
+    # replica/AOF parsing entirely - this is why the insert must stay
+    # gated on an actual LABELS clause (labelsLoc > 2) instead.
+    if not Env().useSlaves:
+        Env().skip()
+    Env().skipOnCluster()
+    env = Env()
+    key = 'IGNORE'
+    warmup_key = 'incrby_key_named_ignore_warmup'
+    with env.getConnection() as master:
+        master.execute_command('ts.create', warmup_key)
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', warmup_key):
+                break
+        time.sleep(0.1)
+    else:
+        raise Exception('replica never caught up with warmup key')
+    with env.getConnection() as master:
+        master.execute_command('ts.incrby', key, 1, 5)
         master_sample = master.execute_command('ts.get', key)
     for _ in range(100):
         with env.getSlaveConnection() as slave:
@@ -266,6 +326,21 @@ def test_incrby_labels_key_named_timestamp_replicates_correctly():
     Env().skipOnCluster()
     env = Env()
     key = 'incrby_labels_key_named_timestamp'
+    warmup_key = 'incrby_labels_key_named_timestamp_warmup'
+    with env.getConnection() as master:
+        master.execute_command('ts.create', warmup_key)
+    # Make sure the replica has finished its initial full sync and is
+    # applying live-propagated commands before we issue the create-on-write
+    # TS.INCRBY - otherwise the key arrives inside the full-sync RDB and the
+    # rewritten command is never parsed by the replica (see
+    # repl-diskless-sync-delay).
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', warmup_key):
+                break
+        time.sleep(0.1)
+    else:
+        raise Exception('replica never caught up with warmup key')
     with env.getConnection() as master:
         master.execute_command('ts.incrby', key, 1, 'LABELS', 'a', 'b', 'TIMESTAMP', '*')
         master_info = _get_ts_info(master, key)

@@ -1490,6 +1490,11 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
     int labelsLoc = RMUtil_ArgIndex("LABELS", argv, argc);
+    // Both keywords can only appear at index 3 or later (past <key> <value>); a match at
+    // index 1 or 2 is the key name or the value, not a directive.
+    if (timestampLoc <= 2) {
+        timestampLoc = -1;
+    }
     if (labelsLoc > 2 && timestampLoc > labelsLoc) {
         // "TIMESTAMP" matched here is actually a label key/value inside the LABELS tail, not
         // a real TIMESTAMP directive, since LABELS greedily consumes every token after it.
@@ -1543,23 +1548,29 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (useLocalTimestamp) {
             const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
             if (timestampLoc == -1) {
-                // TIMESTAMP must go right after <key> <value> (index 3): a trailing LABELS
-                // clause greedily consumes every token after it, so appending TIMESTAMP at
-                // the end would replicate a bogus "TIMESTAMP <ts>" label pair instead. Index
-                // 3 is always just past <key> <value>, so every optional clause (LABELS
-                // included) keeps its original order, and this stays correct for any future
-                // greedy trailing clause.
-                const size_t preArgc = 2;         // key + value
-                const size_t postArgc = argc - 3; // every optional clause, unchanged
-                RedisModule_Replicate(ctx,
-                                      replCmd,
-                                      "vclv",
-                                      argv + 1, // key, value
-                                      preArgc,
-                                      "TIMESTAMP",
-                                      currentUpdatedTime,
-                                      argv + 3, // remaining clauses, unchanged
-                                      postArgc);
+                // A real LABELS clause can only start at index 3 (past <key> <value>), and it
+                // greedily consumes every token after it, so the resolved TIMESTAMP has to be
+                // inserted before it. With no LABELS clause, keep appending at the end:
+                // inserting at index 3 would shift the operands of any other clause whose
+                // keyword collides with the key name (e.g. a key named IGNORE, whose second
+                // operand sits at index 3), and the replica would then fail to parse it.
+                if (labelsLoc > 2) {
+                    const size_t preArgc = labelsLoc - 1;
+                    const size_t postArgc = argc - labelsLoc;
+                    RedisModule_Replicate(ctx,
+                                          replCmd,
+                                          "vclv",
+                                          argv + 1, // args before the LABELS clause
+                                          preArgc,
+                                          "TIMESTAMP",
+                                          currentUpdatedTime,
+                                          argv + labelsLoc, // the LABELS clause, unchanged
+                                          postArgc);
+                } else {
+                    const size_t replArgc = argc - 1;
+                    RedisModule_Replicate(
+                        ctx, replCmd, "vcl", argv + 1, replArgc, "TIMESTAMP", currentUpdatedTime);
+                }
             } else {
                 // number of args, until the TIMESTAMP argument (included)
                 const size_t preArgc = timestampLoc;
