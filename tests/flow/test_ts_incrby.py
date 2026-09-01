@@ -171,6 +171,44 @@ def test_incrby_no_timestamp_replicates_diverging_timestamp():
     env.assertEqual(master_ts, slave_sample[0])
 
 
+def test_incrby_key_named_timestamp_replicates_correctly():
+    # RMUtil_ArgIndex returns the FIRST match scanning from argv[0], so a
+    # key literally named "TIMESTAMP" (case-insensitively) matches at the
+    # key's own position. The resolved timestamp computed on the primary
+    # must still reach the replica intact - not re-resolved to the
+    # replica's own, later wall-clock instant - even under replication
+    # delay. Without the injected stall below this passes by luck: on an
+    # idle loopback the gap can be as little as 1ms.
+    if not Env().useSlaves:
+        Env().skip()
+    Env().skipOnCluster()
+    env = Env()
+    key = 'TIMESTAMP'
+    with env.getConnection() as master:
+        master.execute_command('ts.create', key)
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', key):
+                break
+        time.sleep(0.1)
+    else:
+        raise Exception('replica never caught up with initial ts.create')
+    slave_sleep_secs = 2
+    def block_slave_main_thread():
+        with env.getSlaveConnection() as slave:
+            slave.execute_command('DEBUG', 'SLEEP', slave_sleep_secs)
+    blocker = threading.Thread(target=block_slave_main_thread)
+    blocker.start()
+    time.sleep(0.3)  # let DEBUG SLEEP actually start running on the slave
+    with env.getConnection() as master:
+        master_ts = master.execute_command('ts.incrby', key, 5)
+    blocker.join()
+    time.sleep(1)  # give the replica time to apply the now-unblocked command
+    with env.getSlaveConnection() as slave:
+        slave_sample = slave.execute_command('ts.get', key)
+    env.assertEqual(master_ts, slave_sample[0])
+
+
 def test_incrby_create_with_labels_replicates_correctly():
     # When TIMESTAMP is omitted, replication rewrites the command with a
     # resolved "TIMESTAMP <ts>" (see

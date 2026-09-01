@@ -1488,12 +1488,17 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     long long currentUpdatedTime = -1;
-    int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
-    int labelsLoc = RMUtil_ArgIndex("LABELS", argv, argc);
-    // Both keywords can only appear at index 3 or later (past <key> <value>); a match at
-    // index 1 or 2 is the key name or the value, not a directive.
-    if (timestampLoc <= 2) {
-        timestampLoc = -1;
+    // Both keywords can only appear at index 3 or later (past <key> <value>), so scan only
+    // from there. Zeroing a late match instead would also discard the real directive when the
+    // key name is itself "TIMESTAMP" or "LABELS" - RMUtil_ArgIndex returns the FIRST match,
+    // which for those key names is argv[1], not the directive.
+    int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv + 3, argc - 3);
+    if (timestampLoc != -1) {
+        timestampLoc += 3;
+    }
+    int labelsLoc = RMUtil_ArgIndex("LABELS", argv + 3, argc - 3);
+    if (labelsLoc != -1) {
+        labelsLoc += 3;
     }
     if (labelsLoc > 2 && timestampLoc > labelsLoc) {
         // "TIMESTAMP" matched here is actually a label key/value inside the LABELS tail, not
