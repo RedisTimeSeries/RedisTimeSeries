@@ -1489,6 +1489,15 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
+    int labelsLoc = RMUtil_ArgIndex("LABELS", argv, argc);
+    if (labelsLoc > 2 && timestampLoc > labelsLoc) {
+        // "TIMESTAMP" matched here is actually a label key/value inside the LABELS tail, not
+        // a real TIMESTAMP directive, since LABELS greedily consumes every token after it.
+        timestampLoc = -1;
+    }
+    if (timestampLoc != -1 && timestampLoc + 1 >= argc) {
+        return RedisModule_WrongArity(ctx);
+    }
     const bool useLocalTimestamp =
         timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*");
     if (useLocalTimestamp) {
@@ -1530,48 +1539,46 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST, true);
 
-    if (useLocalTimestamp) {
-        const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
-        if (timestampLoc == -1) {
-            // LABELS greedily consumes every token after it as a label/value pair, so it must
-            // stay the last clause; insert TIMESTAMP before it instead of after, or a create-on-
-            // write TS.INCRBY/TS.DECRBY with LABELS would replicate a bogus "TIMESTAMP" label.
-            int labelsLoc = RMUtil_ArgIndex("LABELS", argv, argc);
-            if (labelsLoc == -1) {
-                const size_t replArgc = argc - 1;
-                RedisModule_Replicate(
-                    ctx, replCmd, "vcl", argv + 1, replArgc, "TIMESTAMP", currentUpdatedTime);
-            } else {
-                const size_t preArgc = labelsLoc - 1;
-                const size_t postArgc = argc - labelsLoc;
+    if (rv == REDISMODULE_OK) {
+        if (useLocalTimestamp) {
+            const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
+            if (timestampLoc == -1) {
+                // TIMESTAMP must go right after <key> <value> (index 3): a trailing LABELS
+                // clause greedily consumes every token after it, so appending TIMESTAMP at
+                // the end would replicate a bogus "TIMESTAMP <ts>" label pair instead. Index
+                // 3 is always just past <key> <value>, so every optional clause (LABELS
+                // included) keeps its original order, and this stays correct for any future
+                // greedy trailing clause.
+                const size_t preArgc = 2;         // key + value
+                const size_t postArgc = argc - 3; // every optional clause, unchanged
                 RedisModule_Replicate(ctx,
                                       replCmd,
                                       "vclv",
-                                      argv + 1, // start after the command name
+                                      argv + 1, // key, value
                                       preArgc,
                                       "TIMESTAMP",
                                       currentUpdatedTime,
-                                      argv + labelsLoc, // the LABELS clause, unchanged
+                                      argv + 3, // remaining clauses, unchanged
                                       postArgc);
+            } else {
+                // number of args, until the TIMESTAMP argument (included)
+                const size_t preArgc = timestampLoc;
+                // number of args, after the TIMESTAMP argument
+                const size_t postArgc = argc - timestampLoc - 2;
+                RedisModule_Replicate(
+                    ctx,
+                    replCmd,
+                    "vlv",
+                    argv + 1, // start after the command name
+                    preArgc,
+                    currentUpdatedTime, // the timestamp value
+                    argv + timestampLoc +
+                        2, // start after the TIMESTAMP argument, rest of the arguments
+                    postArgc);
             }
         } else {
-            // number of args, until the TIMESTAMP argument (included)
-            const size_t preArgc = timestampLoc;
-            // number of args, after the TIMESTAMP argument
-            const size_t postArgc = argc - timestampLoc - 2;
-            RedisModule_Replicate(
-                ctx,
-                replCmd,
-                "vlv",
-                argv + 1, // start after the command name
-                preArgc,
-                currentUpdatedTime, // the timestamp value
-                argv + timestampLoc +
-                    2, // start after the TIMESTAMP argument, rest of the arguments
-                postArgc);
+            RedisModule_ReplicateVerbatim(ctx);
         }
-    } else {
-        RedisModule_ReplicateVerbatim(ctx);
     }
     RedisModule_CloseKey(key);
 
