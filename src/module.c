@@ -988,9 +988,27 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (useLocalTimestamp) {
         const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
         if (timestampLoc == -1) {
-            const size_t replArgc = argc - 1;
-            RedisModule_Replicate(
-                ctx, replCmd, "vcl", argv + 1, replArgc, "TIMESTAMP", currentUpdatedTime);
+            // LABELS greedily consumes every token after it as a label/value pair, so it must
+            // stay the last clause; insert TIMESTAMP before it instead of after, or a create-on-
+            // write TS.INCRBY/TS.DECRBY with LABELS would replicate a bogus "TIMESTAMP" label.
+            int labelsLoc = RMUtil_ArgIndex("LABELS", argv, argc);
+            if (labelsLoc == -1) {
+                const size_t replArgc = argc - 1;
+                RedisModule_Replicate(
+                    ctx, replCmd, "vcl", argv + 1, replArgc, "TIMESTAMP", currentUpdatedTime);
+            } else {
+                const size_t preArgc = labelsLoc - 1;
+                const size_t postArgc = argc - labelsLoc;
+                RedisModule_Replicate(ctx,
+                                       replCmd,
+                                       "vclv",
+                                       argv + 1, // start after the command name
+                                       preArgc,
+                                       "TIMESTAMP",
+                                       currentUpdatedTime,
+                                       argv + labelsLoc, // the LABELS clause, unchanged
+                                       postArgc);
+            }
         } else {
             // number of args, until the TIMESTAMP argument (included)
             const size_t preArgc = timestampLoc;
