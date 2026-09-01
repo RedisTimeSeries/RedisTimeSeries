@@ -175,7 +175,8 @@ def test_incrby_create_with_labels_replicates_correctly():
     else:
         raise Exception('replica never caught up with warmup key')
     with env.getConnection() as master:
-        master.execute_command('ts.incrby', key, 1, 'LABELS', 'region', 'us')
+        master_ts = master.execute_command('ts.incrby', key, 1, 'LABELS', 'region', 'us')
+        master_sample = master.execute_command('ts.get', key)
     for _ in range(100):
         with env.getSlaveConnection() as slave:
             if slave.execute_command('exists', key):
@@ -185,4 +186,7 @@ def test_incrby_create_with_labels_replicates_correctly():
         raise Exception('replica never caught up with initial ts.incrby')
     with env.getSlaveConnection() as slave:
         info = _get_ts_info(slave, key)
+        slave_sample = slave.execute_command('ts.get', key)
     env.assertEqual(info.labels, {b'region': b'us'})
+    env.assertEqual(master_ts, slave_sample[0])
+    env.assertEqual(master_sample, slave_sample)
