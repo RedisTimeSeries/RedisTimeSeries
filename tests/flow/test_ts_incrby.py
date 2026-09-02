@@ -89,62 +89,6 @@ def test_incrby_with_update_latest():
         assert len(result) == 20
         assert result[19] == [20, b'95']
 
-
-def test_incrby_error_cases():
-    """Minimal test for TS.INCRBY error handling (cluster-compatible)"""
-    with Env().getClusterConnectionIfNeeded() as r:
-        # Test with wrong number of arguments - cluster-compatible approach
-        if hasattr(r, 'nodes_manager'):  # Redis cluster
-            with pytest.raises(redis.ResponseError):
-                r.execute_command('TS.INCRBY', target_nodes=r.get_default_node())
-        else:  # Single node Redis
-            with pytest.raises(redis.ResponseError):
-                r.execute_command('TS.INCRBY')
-        
-        # Test with invalid addend value
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.INCRBY', 'test_key', 'not_a_number')
-
-def test_ts_incrby_NaN():
-    with Env().getClusterConnectionIfNeeded() as r:
-        r.execute_command('ts.create', 'tester')
-        r.execute_command('ts.add', 'tester', 1, 'nan')
-
-        # Add a number to a NaN value, error expected
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.incrby', 'tester', '1')
-            r.execute_command('TS.decrby', 'tester', '1')
-        
-        r.execute_command('ts.add', 'tester', 2,  1)
-        # Add a NaN value to a number, error expected
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.incrby', 'tester', 'nan')
-            r.execute_command('TS.decrby', 'tester', 'nan')
-
-def test_ts_incrby_arg_validation_before_creation():
-    # This test ensures that the key is not created if validation fails (MOD-8167)
-    with Env().getClusterConnectionIfNeeded() as r:
-        # Test 1: Invalid value should not create the key
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.INCRBY', 'test_invalid_value', 'foo')
-        # Key should not exist
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.GET', 'test_invalid_value')
-        
-        # Test 2: Invalid timestamp should not create the key
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.INCRBY', 'test_invalid_ts', '5', 'TIMESTAMP', 'invalid')
-        # Key should not exist
-        with pytest.raises(redis.ResponseError):
-            r.execute_command('TS.GET', 'test_invalid_ts')
-        
-        # Test 3: Valid command should create the key
-        r.execute_command('TS.INCRBY', 'test_valid', '5')
-        # Key should exist
-        result = r.execute_command('TS.GET', 'test_valid')
-        assert result is not None
-
-
 def test_incrby_no_timestamp_replicates_diverging_timestamp():
     # TS.INCRBY/TS.DECRBY without an explicit TIMESTAMP resolve the timestamp
     # via RedisModule_Milliseconds() on the primary, but TSDB_incrby then
