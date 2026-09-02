@@ -9,6 +9,26 @@ from includes import *
 from test_helper_classes import _get_ts_info
 
 
+def _wait_for_replica_key(env, key, what):
+    for _ in range(100):
+        with env.getSlaveConnection() as slave:
+            if slave.execute_command('exists', key):
+                return
+        time.sleep(0.1)
+    raise Exception('replica never caught up with %s' % what)
+
+
+def _wait_for_replica_online(env, warmup_key):
+    # The replica only joins the live propagation stream once its initial full
+    # sync completes (repl-diskless-sync-delay defaults to 5s). Until then a
+    # create-on-write key arrives inside the full-sync RDB and the rewritten
+    # command is never parsed by the replica at all - which would make these
+    # tests pass vacuously.
+    with env.getConnection() as master:
+        master.execute_command('ts.create', warmup_key)
+    _wait_for_replica_key(env, warmup_key, 'warmup key')
+
+
 def test_incrby():
     with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
@@ -144,13 +164,7 @@ def test_incrby_no_timestamp_replicates_diverging_timestamp():
     # Make sure the initial replica sync has caught up with the key creation
     # before we start controlling timing below, so the only delay measured
     # is the one we inject, not leftover initial-sync latency.
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with initial ts.create')
+    _wait_for_replica_key(env, key, 'initial ts.create')
     slave_sleep_secs = 2
     def block_slave_main_thread():
         # DEBUG SLEEP blocks the replica's single event loop entirely, so it
@@ -186,13 +200,7 @@ def test_incrby_key_named_timestamp_replicates_correctly():
     key = 'TIMESTAMP'
     with env.getConnection() as master:
         master.execute_command('ts.create', key)
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with initial ts.create')
+    _wait_for_replica_key(env, key, 'initial ts.create')
     slave_sleep_secs = 2
     def block_slave_main_thread():
         with env.getSlaveConnection() as slave:
@@ -221,18 +229,7 @@ def test_incrby_create_with_labels_replicates_correctly():
     Env().skipOnCluster()
     env = Env()
     warmup_key = 'incrby_create_with_labels_warmup'
-    with env.getConnection() as master:
-        master.execute_command('ts.create', warmup_key)
-    # Make sure the replica is already online and streaming live-propagated
-    # commands (rather than picking up our key via a fresh full RDB sync)
-    # before we issue the create-on-write TS.INCRBY below.
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', warmup_key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with warmup key')
+    _wait_for_replica_online(env, warmup_key)
 
     pre_restart_sample = {}
     for cmd in ('ts.incrby', 'ts.decrby'):
@@ -240,13 +237,7 @@ def test_incrby_create_with_labels_replicates_correctly():
         with env.getConnection() as master:
             master.execute_command(cmd, key, 1, 'LABELS', 'region', 'us')
             master_sample = master.execute_command('ts.get', key)
-        for _ in range(100):
-            with env.getSlaveConnection() as slave:
-                if slave.execute_command('exists', key):
-                    break
-            time.sleep(0.1)
-        else:
-            raise Exception('replica never caught up with initial %s' % cmd)
+        _wait_for_replica_key(env, key, 'initial %s' % cmd)
         with env.getSlaveConnection() as slave:
             info = _get_ts_info(slave, key)
             slave_sample = slave.execute_command('ts.get', key)
@@ -287,30 +278,11 @@ def test_incrby_create_with_key_named_labels_replicates_correctly():
     env = Env()
     key = 'LABELS'
     warmup_key = 'incrby_key_named_labels_warmup'
-    with env.getConnection() as master:
-        master.execute_command('ts.create', warmup_key)
-    # Make sure the replica has finished its initial full sync and is
-    # applying live-propagated commands before we issue the create-on-write
-    # TS.INCRBY - otherwise the key arrives inside the full-sync RDB and the
-    # rewritten command is never parsed by the replica (see
-    # repl-diskless-sync-delay).
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', warmup_key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with warmup key')
+    _wait_for_replica_online(env, warmup_key)
     with env.getConnection() as master:
         master.execute_command('ts.incrby', key, 1)
         master_sample = master.execute_command('ts.get', key)
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with initial ts.incrby')
+    _wait_for_replica_key(env, key, 'initial ts.incrby')
     with env.getSlaveConnection() as slave:
         slave_sample = slave.execute_command('ts.get', key)
     env.assertEqual(master_sample, slave_sample)
@@ -329,25 +301,11 @@ def test_incrby_create_with_key_named_ignore_replicates_correctly():
     env = Env()
     key = 'IGNORE'
     warmup_key = 'incrby_key_named_ignore_warmup'
-    with env.getConnection() as master:
-        master.execute_command('ts.create', warmup_key)
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', warmup_key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with warmup key')
+    _wait_for_replica_online(env, warmup_key)
     with env.getConnection() as master:
         master.execute_command('ts.incrby', key, 1, 5)
         master_sample = master.execute_command('ts.get', key)
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with initial ts.incrby')
+    _wait_for_replica_key(env, key, 'initial ts.incrby')
     with env.getSlaveConnection() as slave:
         slave_sample = slave.execute_command('ts.get', key)
     env.assertEqual(master_sample, slave_sample)
@@ -365,31 +323,12 @@ def test_incrby_labels_key_named_timestamp_replicates_correctly():
     env = Env()
     key = 'incrby_labels_key_named_timestamp'
     warmup_key = 'incrby_labels_key_named_timestamp_warmup'
-    with env.getConnection() as master:
-        master.execute_command('ts.create', warmup_key)
-    # Make sure the replica has finished its initial full sync and is
-    # applying live-propagated commands before we issue the create-on-write
-    # TS.INCRBY - otherwise the key arrives inside the full-sync RDB and the
-    # rewritten command is never parsed by the replica (see
-    # repl-diskless-sync-delay).
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', warmup_key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with warmup key')
+    _wait_for_replica_online(env, warmup_key)
     with env.getConnection() as master:
         master.execute_command('ts.incrby', key, 1, 'LABELS', 'a', 'b', 'TIMESTAMP', '*')
         master_info = _get_ts_info(master, key)
         master_sample = master.execute_command('ts.get', key)
-    for _ in range(100):
-        with env.getSlaveConnection() as slave:
-            if slave.execute_command('exists', key):
-                break
-        time.sleep(0.1)
-    else:
-        raise Exception('replica never caught up with initial ts.incrby')
+    _wait_for_replica_key(env, key, 'initial ts.incrby')
     with env.getSlaveConnection() as slave:
         slave_info = _get_ts_info(slave, key)
         slave_sample = slave.execute_command('ts.get', key)
