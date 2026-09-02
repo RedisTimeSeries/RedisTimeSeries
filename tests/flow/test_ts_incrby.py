@@ -201,20 +201,33 @@ def test_incrby_key_named_timestamp_replicates_correctly():
     with env.getConnection() as master:
         master.execute_command('ts.create', key)
     _wait_for_replica_key(env, key, 'initial ts.create')
+    before_ms = int(time.time() * 1000)
     slave_sleep_secs = 2
+    stall_error = []
     def block_slave_main_thread():
-        with env.getSlaveConnection() as slave:
-            slave.execute_command('DEBUG', 'SLEEP', slave_sleep_secs)
+        # A failure in here cannot fail the test on its own - the stall would
+        # silently vanish and the assertions below would pass trivially - so
+        # record it and re-raise on the main thread.
+        try:
+            with env.getSlaveConnection() as slave:
+                slave.execute_command('DEBUG', 'SLEEP', slave_sleep_secs)
+        except Exception as e:
+            stall_error.append(e)
     blocker = threading.Thread(target=block_slave_main_thread)
     blocker.start()
     time.sleep(0.3)  # let DEBUG SLEEP actually start running on the slave
     with env.getConnection() as master:
         master_ts = master.execute_command('ts.incrby', key, 5)
     blocker.join()
+    if stall_error:
+        raise stall_error[0]
     time.sleep(1)  # give the replica time to apply the now-unblocked command
     with env.getSlaveConnection() as slave:
         slave_sample = slave.execute_command('ts.get', key)
     env.assertEqual(master_ts, slave_sample[0])
+    # The resolved timestamp must be wall-clock "now". Before the fix a key
+    # named TIMESTAMP made argv[2] the timestamp, storing the sample at ts=5.
+    env.assertGreaterEqual(master_ts, before_ms)
 
 
 def test_incrby_create_with_labels_replicates_correctly():
