@@ -199,6 +199,7 @@ SLOT_RANGES_ERROR = "Query requires unavailable slots"
 # While a peer master is down its slots go unreachable, so the fan-out can time out waiting for that shard:
 # This error is currently swallowed when a node comes down and up again, but should be removed as part of MOD-17548.
 SHARD_TIMEOUT_ERROR = "A multi-keys command failed because at least one shard did not reply within the given timeframe."
+CONNECTION_RESET_ERROR = "Connection reset by peer"
 
 
 def skip_if_needed(env):
@@ -247,6 +248,9 @@ def validate_queries_during_failovers(env, post_failover, command, validate_resu
             result = connection_of(node.ip, node.port).execute_command(command)
         except redis.exceptions.ResponseError as x:
             assert str(x) in (TOPOLOGY_CHANGED_ERROR, UNBLOCKED_ERROR, CLUSTERDOWN_ERROR, SLOT_RANGES_ERROR), str(x)
+            return
+        except redis.exceptions.ConnectionError as x:
+            assert CONNECTION_RESET_ERROR in str(x), str(x)
             return
         validate_result(result)
 
