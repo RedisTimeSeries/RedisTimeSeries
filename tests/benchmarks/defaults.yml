@@ -1,4 +1,9 @@
 version: 0.1
+
+remote:
+  - type: oss-standalone
+  - setup: modules-m5
+
 exporter:
   redistimeseries:
     timemetric: "$.StartTime"
