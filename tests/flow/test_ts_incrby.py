@@ -6,6 +6,7 @@ import time
 # import redis
 # from utils import Env
 import pytest
+import redis
 from RLTest import Env
 from includes import *
 from test_helper_classes import _get_ts_info
