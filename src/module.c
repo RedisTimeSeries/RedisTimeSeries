@@ -1176,8 +1176,29 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     long long currentUpdatedTime = -1;
-    int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
-    if (timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
+    // Both keywords can only appear at index 3 or later (past <key> <value>), so scan only
+    // from there. Zeroing a late match instead would also discard the real directive when the
+    // key name is itself "TIMESTAMP" or "LABELS" - RMUtil_ArgIndex returns the FIRST match,
+    // which for those key names is argv[1], not the directive.
+    int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv + 3, argc - 3);
+    if (timestampLoc != -1) {
+        timestampLoc += 3;
+    }
+    int labelsLoc = RMUtil_ArgIndex("LABELS", argv + 3, argc - 3);
+    if (labelsLoc != -1) {
+        labelsLoc += 3;
+    }
+    if (labelsLoc > 2 && timestampLoc > labelsLoc) {
+        // "TIMESTAMP" matched here is actually a label key/value inside the LABELS tail, not
+        // a real TIMESTAMP directive, since LABELS greedily consumes every token after it.
+        timestampLoc = -1;
+    }
+    if (timestampLoc != -1 && timestampLoc + 1 >= argc) {
+        return RedisModule_WrongArity(ctx);
+    }
+    const bool useLocalTimestamp =
+        timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*");
+    if (useLocalTimestamp) {
         currentUpdatedTime = RedisModule_Milliseconds();
     } else if (RedisModule_StringToLongLong(argv[timestampLoc + 1],
                                             (long long *)&currentUpdatedTime) != REDISMODULE_OK) {
@@ -1199,7 +1220,54 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     int rv = internalAdd(ctx, series, currentUpdatedTime, result, DP_LAST, true);
-    RedisModule_ReplicateVerbatim(ctx);
+
+    if (rv == REDISMODULE_OK) {
+        if (useLocalTimestamp) {
+            const char *replCmd = isIncr ? "TS.INCRBY" : "TS.DECRBY";
+            if (timestampLoc == -1) {
+                // A real LABELS clause can only start at index 3 (past <key> <value>), and it
+                // greedily consumes every token after it, so the resolved TIMESTAMP has to be
+                // inserted before it. With no LABELS clause, keep appending at the end:
+                // inserting at index 3 would shift the operands of any other clause whose
+                // keyword collides with the key name (e.g. a key named IGNORE, whose second
+                // operand sits at index 3), and the replica would then fail to parse it.
+                if (labelsLoc > 2) {
+                    const size_t preArgc = labelsLoc - 1;
+                    const size_t postArgc = argc - labelsLoc;
+                    RedisModule_Replicate(ctx,
+                                          replCmd,
+                                          "vclv",
+                                          argv + 1, // args before the LABELS clause
+                                          preArgc,
+                                          "TIMESTAMP",
+                                          currentUpdatedTime,
+                                          argv + labelsLoc, // the LABELS clause, unchanged
+                                          postArgc);
+                } else {
+                    const size_t replArgc = argc - 1;
+                    RedisModule_Replicate(
+                        ctx, replCmd, "vcl", argv + 1, replArgc, "TIMESTAMP", currentUpdatedTime);
+                }
+            } else {
+                // number of args, until the TIMESTAMP argument (included)
+                const size_t preArgc = timestampLoc;
+                // number of args, after the TIMESTAMP argument
+                const size_t postArgc = argc - timestampLoc - 2;
+                RedisModule_Replicate(
+                    ctx,
+                    replCmd,
+                    "vlv",
+                    argv + 1, // start after the command name
+                    preArgc,
+                    currentUpdatedTime, // the timestamp value
+                    argv + timestampLoc +
+                        2, // start after the TIMESTAMP argument, rest of the arguments
+                    postArgc);
+            }
+        } else {
+            RedisModule_ReplicateVerbatim(ctx);
+        }
+    }
     RedisModule_CloseKey(key);
 
     RedisModule_NotifyKeyspaceEvent(
