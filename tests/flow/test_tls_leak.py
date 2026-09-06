@@ -10,8 +10,6 @@ from test_clusterset_noop import _long_form_clusterset
 def test_tls_initialization_failure():
     """Run with --tls -V: Valgrind detects the SSL object lost on REDIS_ERR."""
     env = Env(moduleArgs="ts-topology-events no")
-    env.skipOnCluster()
-    env.skipOnSlave()
     if not env.useTLS or not isinstance(env.debugger, Valgrind):
         env.skip()
 
