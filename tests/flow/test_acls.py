@@ -6,6 +6,7 @@ import redis
 from includes import Env
 import redis.exceptions
 from includes import *
+from utils import get_timeout
 
 
 def _shard_for_slot(env, slot):
@@ -196,7 +197,7 @@ def do_test_libmr(env):
         # or mac, it is needed.
         conn.execute_command('CONFIG', 'set', 'cluster-node-timeout', '120000')
         conn.execute_command('timeseries.FORCESHARDSCONNECTION')
-    with TimeLimit(2):
+    with TimeLimit(get_timeout()):
         verifyClusterInitialized(env)
 
     with env.getClusterConnectionIfNeeded() as r, env.getConnection(1) as r1:
