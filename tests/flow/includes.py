@@ -78,7 +78,7 @@ def verifyClusterInitialized(env):
     for conn in shardsConnections(env):
         try:
             conn.execute_command('debug', 'MARK-INTERNAL-CLIENT')
-        except Exception:
+        except redis.exceptions.ResponseError:
             pass # in case we run on older version of redis
         allConnected = False
         while not allConnected:
