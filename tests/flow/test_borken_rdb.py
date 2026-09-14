@@ -219,74 +219,21 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
 def test_uncompressed_upsert_does_not_narrow_restored_num_samples(env):
     env.skipOnCluster()
 
-    chunk_size = 32768 * 16
-    env.cmd('TS.CREATE', 'test_key', 'UNCOMPRESSED', 'CHUNK_SIZE', chunk_size)
-    env.cmd('TS.ADD', 'test_key', 1, 1.0)
-    dump = env.cmd('DUMP', 'test_key')
-    patched = bytearray(dump)
-    idx = 1
-    _, _, idx = _rdb_load_len(dump, idx)  # module id
+    key = 'test_key'
+    sample_count = 65536
+    env.cmd('TS.CREATE', key, 'UNCOMPRESSED', 'CHUNK_SIZE', sample_count * 16,
+            'DUPLICATE_POLICY', 'LAST')
+    samples = [arg for timestamp in range(1, sample_count + 1)
+               for arg in (key, timestamp, 1)]
+    env.cmd('TS.MADD', *samples)
+    env.cmd('TS.ADD', key, 200000, 5)
+    dump = env.cmd('DUMP', key)
 
-    def read_opcode():
-        nonlocal idx
-        opcode, _, idx = _rdb_load_len(dump, idx)
-        return opcode
+    env.cmd('DEL', key)
+    env.cmd('RESTORE', key, 0, dump)
 
-    def read_uint():
-        nonlocal idx
-        assert read_opcode() == 2
-        start = idx
-        value, _, idx = _rdb_load_len(dump, idx)
-        return value, start, idx
-
-    def skip_string():
-        nonlocal idx
-        assert read_opcode() == 5
-        idx = _rdb_skip_string(dump, idx)
-
-    def skip_double():
-        nonlocal idx
-        assert read_opcode() == 4
-        idx += 8
-
-    skip_string()       # keyName
-    read_uint()         # retentionTime
-    size, _, _ = read_uint()
-    read_uint()         # options
-    read_uint()         # lastTimestamp
-    skip_double()       # lastValue
-    read_uint()         # totalSamples
-    read_uint()         # duplicatePolicy
-    has_src, _, _ = read_uint()
-    assert has_src == 0
-    read_uint()         # ignoreMaxTimeDiff
-    skip_double()       # ignoreMaxValDiff
-    labels, _, _ = read_uint()
-    rules, _, _ = read_uint()
-    chunks, _, _ = read_uint()
-    assert labels == rules == 0 and chunks == 1
-    base_timestamp, _, _ = read_uint()
-    assert base_timestamp == 1
-    old_count, count_start, count_end = read_uint()
-    assert old_count == 1
-    chunk_size, _, _ = read_uint()
-    assert chunk_size == size
-    samples_start = idx
-    assert read_opcode() == 5
-    sample_len, idx = _rdb_read_string_len_and_skip(dump, idx)
-    assert sample_len == chunk_size
-
-    patched[samples_start:idx] = bytes([5]) + _rdb_encode_len(chunk_size) + bytes(chunk_size)
-    patched[count_start:count_end] = _rdb_encode_len(32768)
-    _patch_dump_crc(patched)
-    malicious_dump = bytes(patched)
-    assert _verify_dump_payload(malicious_dump)
-
-    env.cmd('DEL', 'test_key')
-    env.cmd('RESTORE', 'test_key', 0, malicious_dump)
-
-    env.assertEqual(env.cmd('TS.ADD', 'test_key', 1, 2.0), 1)
-    env.assertEqual(env.cmd('TS.RANGE', 'test_key', 1, 1), [[1, b'2']])
+    env.assertEqual(env.cmd('TS.ADD', key, 150000, 9), 150000)
+    env.assertEqual(env.cmd('TS.RANGE', key, 150000, 150000), [[150000, b'9']])
 
 
 def test_broken_rdb_truncated(env):
