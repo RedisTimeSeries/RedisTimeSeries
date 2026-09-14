@@ -216,6 +216,26 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
     return bytes(b)
 
 
+def test_uncompressed_upsert_does_not_narrow_restored_num_samples(env):
+    env.skipOnCluster()
+
+    key = 'test_key'
+    sample_count = 65536
+    env.cmd('TS.CREATE', key, 'UNCOMPRESSED', 'CHUNK_SIZE', sample_count * 16,
+            'DUPLICATE_POLICY', 'LAST')
+    samples = [arg for timestamp in range(1, sample_count + 1)
+               for arg in (key, timestamp, 1)]
+    env.cmd('TS.MADD', *samples)
+    env.cmd('TS.ADD', key, 200000, 5)
+    dump = env.cmd('DUMP', key)
+
+    env.cmd('DEL', key)
+    env.cmd('RESTORE', key, 0, dump)
+
+    env.assertEqual(env.cmd('TS.ADD', key, 150000, 9), 150000)
+    env.assertEqual(env.cmd('TS.RANGE', key, 150000, 150000), [[150000, b'9']])
+
+
 def test_broken_rdb_truncated(env):
     """
     Test that a truncated RDB file fails to load.
