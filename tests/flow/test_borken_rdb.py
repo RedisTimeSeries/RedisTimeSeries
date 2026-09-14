@@ -354,26 +354,28 @@ def test_broken_rdb_invalid_uncompressed_chunk_metadata(env):
 def test_broken_rdb_rejects_compressed_chunk_size_len_mismatch(env):
     env.skipOnCluster()
 
-    rdb_payload = (b'\x07\x81M \xc1\xf96\x0f\x10\x08\x05\tts_retest\x02\x00\x02@@\x02\x00\x02C\xe8'
-                   b'\x04\x00\x00\x00\x00\x00\x00E@\x02\x01\x02\x00\x02\x00\x02\x00'
-                   b'\x04\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x02\x00\x02\x01\x02P\x00\x02\x00'
-                   b'\x02\x00\x02\x81@E\x00\x00\x00\x00\x00\x00\x02C\xe8\x02C\xe8\x02\x00'
-                   b'\x02\x81@E\x00\x00\x00\x00\x00\x00\x02 \x02 '
-                   b'\x05\x10\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f'
-                   b'\x00\x0c\x004\n\xe3@\x86\xf3\x15\xe1')
+    env.cmd('TS.CREATE', 'ts_retest', 'CHUNK_SIZE', '48')
+    env.cmd('TS.ADD', 'ts_retest', 1000, 1.0)
 
-    env.expect('RESTORE', 'ts_retest', 0, rdb_payload).error()
+    valid_dump = env.cmd('DUMP', 'ts_retest')
+    rdb_payload = _patch_first_compressed_chunk_misalign_size(valid_dump, update_size=False)
+
+    env.cmd('DEL', 'ts_retest')
+
+    env.expect('RESTORE', 'ts_retest', 0, rdb_payload).error().contains("Bad data format")
 
     pong = env.cmd('PING')
     assert pong in (b'PONG', 'PONG', True)
     env.assertEqual(env.cmd('EXISTS', 'ts_retest'), 0)
 
 
-def _patch_first_compressed_chunk_misalign_size(dump: bytes) -> bytes:
+def _patch_first_compressed_chunk_misalign_size(dump: bytes, update_size: bool = True) -> bytes:
     """
     Shrinks the first compressed chunk's data buffer by 1 byte and updates
     chunk->size to match (so the size==len check still passes), producing a
     buffer length that isn't a multiple of 8.
+
+    With update_size=False, keep the original chunk->size to test a size/length mismatch.
     """
     b = bytearray(dump)
     assert _verify_dump_payload(dump), "baseline DUMP payload should have valid checksum"
@@ -457,7 +459,8 @@ def _patch_first_compressed_chunk_misalign_size(dump: bytes) -> bytes:
     # Replace data-string field first (rightmost span), then chunk->size
     # (leftmost span) -- editing right-to-left keeps the earlier offset valid.
     b[string_field_start:data_field_end] = new_field
-    b[size_start:size_end] = _rdb_encode_len(new_len)
+    if update_size:
+        b[size_start:size_end] = _rdb_encode_len(new_len)
 
     _patch_dump_crc(b)
     assert _verify_dump_payload(bytes(b)), "patched DUMP payload should have valid checksum"
@@ -546,7 +549,7 @@ def test_broken_rdb_rejects_compressed_chunk_size_not_word_aligned(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, malicious_dump).error()
+    env.expect('RESTORE', 'test_key', 0, malicious_dump).error().contains("Bad data format")
 
 
 def test_broken_rdb_rejects_compressed_chunk_count_exceeds_encoded_bits(env):
@@ -560,7 +563,7 @@ def test_broken_rdb_rejects_compressed_chunk_count_exceeds_encoded_bits(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, malicious_dump).error()
+    env.expect('RESTORE', 'test_key', 0, malicious_dump).error().contains("Bad data format")
 
 
 def test_broken_rdb_rejects_compressed_chunk_count_overflow_bypass(env):
@@ -574,4 +577,4 @@ def test_broken_rdb_rejects_compressed_chunk_count_overflow_bypass(env):
 
     env.cmd('DEL', 'test_key')
 
-    env.expect('RESTORE', 'test_key', 0, malicious_dump).error()
+    env.expect('RESTORE', 'test_key', 0, malicious_dump).error().contains("Bad data format")
