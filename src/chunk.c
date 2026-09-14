@@ -169,7 +169,7 @@ ChunkResult Uncompressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolic
     *size = 0;
     Chunk *regChunk = (Chunk *)uCtx->inChunk;
     timestamp_t ts = uCtx->sample.timestamp;
-    short numSamples = regChunk->num_samples;
+    const unsigned int numSamples = regChunk->num_samples;
     // find sample location
     size_t i = 0;
     Sample *sample = NULL;
