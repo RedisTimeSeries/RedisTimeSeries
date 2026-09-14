@@ -94,6 +94,34 @@ MU_TEST(test_Uncompressed_Uncompressed_UpsertSample) {
     Uncompressed_FreeChunk(chunk);
 }
 
+MU_TEST(test_Uncompressed_UpsertSample_large_sample_count) {
+    const unsigned int sample_counts[] = { 32768, 65536 };
+
+    for (size_t count_index = 0; count_index < 2; ++count_index) {
+        const unsigned int sample_count = sample_counts[count_index];
+        Chunk *chunk = Uncompressed_NewChunk((size_t)sample_count * SAMPLE_SIZE);
+        mu_assert(chunk != NULL, "create large uncompressed chunk");
+
+        for (unsigned int i = 0; i < sample_count; ++i) {
+            Sample sample = { .timestamp = i + 1, .value = 1.0 };
+            mu_assert(Uncompressed_AddSample(chunk, &sample) == CR_OK, "fill large chunk");
+        }
+
+        UpsertCtx upsert = {
+            .inChunk = chunk,
+            .sample = { .timestamp = sample_count + 1, .value = 2.0 },
+        };
+        int size = 0;
+
+        mu_assert(Uncompressed_UpsertSample(&upsert, &size, DP_LAST) == CR_OK,
+                  "upsert into large chunk");
+        mu_assert_int_eq(1, size);
+        mu_assert_int_eq(sample_count + 1, chunk->num_samples);
+        mu_assert_int_eq(sample_count + 1, chunk->samples[sample_count].timestamp);
+        Uncompressed_FreeChunk(chunk);
+    }
+}
+
 MU_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy) {
     srand((unsigned int)time(NULL));
     const size_t chunk_size = 4096; // 4096 bytes (data) chunck
@@ -203,6 +231,7 @@ MU_TEST_SUITE(uncompressed_chunk_test_suite) {
     MU_RUN_TEST(test_Uncompressed_NewChunk);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_AddSample);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample);
+    MU_RUN_TEST(test_Uncompressed_UpsertSample_large_sample_count);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy);
     MU_RUN_TEST(test_reverseEnrichedChunk_multi_values_per_sample);
     MU_RUN_TEST(test_reverseEnrichedChunk_single_value_per_sample);
