@@ -510,16 +510,16 @@ static void Compressed_Serialize(Chunk_t *chunk,
             goto err; /* Buffer size must be non-zero */                                           \
         if (compchunk->idx > len * 8)                                                              \
             goto err; /* Bit index can't exceed buffer size in bits */                             \
-        if (compchunk->size != len)                                                               \
-            goto err; /* size metadata must match actual buffer length */                         \
-        if (compchunk->size % sizeof(binary_t) != 0)                                              \
-            goto err; /* gorilla.c reads/writes data in binary_t (8-byte) words */                \
-        /* Every sample after the first costs >=2 bits to encode (appendInteger/appendFloat       \
-         * in gorilla.c), so idx must be able to cover count-1 appended samples.                  \
-         * Written as idx/2 < count-1 (equivalent to idx < 2*(count-1) for non-negative           \
-         * integers) to avoid overflow when count is attacker-inflated near UINT64_MAX. */        \
-        if (compchunk->count > 0 && compchunk->idx / 2 < compchunk->count - 1)                    \
-            goto err;                                                                             \
+        if (compchunk->size != len)                                                                \
+            goto err; /* size metadata must match actual buffer length */                          \
+        if (compchunk->size % sizeof(binary_t) != 0)                                               \
+            goto err; /* gorilla.c reads/writes data in binary_t (8-byte) words */                 \
+        /* Every sample after the first costs >=2 bits to encode (appendInteger/appendFloat        \
+         * in gorilla.c), so idx must be able to cover count-1 appended samples.                   \
+         * Written as idx/2 < count-1 (equivalent to idx < 2*(count-1) for non-negative            \
+         * integers) to avoid overflow when count is attacker-inflated near UINT64_MAX. */         \
+        if (compchunk->count > 0 && compchunk->idx / 2 < compchunk->count - 1)                     \
+            goto err;                                                                              \
         *chunk = (Chunk_t *)compchunk;                                                             \
         return TSDB_OK;                                                                            \
                                                                                                    \
