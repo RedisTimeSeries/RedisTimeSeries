@@ -151,9 +151,16 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
                 err = true;
                 return NULL;
             }
+            if (dictOperator(series->chunks,
+                             chunk,
+                             series->funcs->GetFirstTimestamp(chunk),
+                             DICT_OP_SET) == REDISMODULE_ERR) {
+                RedisModule_LogIOError(io, "error", "duplicate chunk start timestamp");
+                series->funcs->FreeChunk(chunk);
+                err = true;
+                return NULL;
+            }
             loadedSamples += chunkSamples;
-            dictOperator(
-                series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
         }
         if (loadedSamples != totalSamples) {
             RedisModule_LogIOError(io, "error", "totalSamples does not match loaded chunks");

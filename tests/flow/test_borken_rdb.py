@@ -3,6 +3,8 @@ Test that verifies RDB load failure handling for corrupted/broken RDB files.
 This test creates various types of broken RDB files and ensures they fail to load properly.
 """
 
+import struct
+
 from includes import Env
 from includes import *
 
@@ -238,6 +240,30 @@ def test_total_samples_mismatch_does_not_crash_on_delete_then_add(env):
 
     env.assertEqual(env.cmd('TS.DEL', key, 0, 1000), 1)
     env.assertEqual(env.cmd('TS.ADD', key, 2000, 43), 2000)
+    assert env.cmd('PING')
+
+
+def test_duplicate_chunk_start_timestamp_is_rejected(env):
+    env.skipOnCluster()
+
+    key = 'test_key'
+    rdbcompression = env.cmd('CONFIG', 'GET', 'rdbcompression')[1]
+    env.cmd('CONFIG', 'SET', 'rdbcompression', 'no')
+    try:
+        env.cmd('TS.CREATE', key, 'UNCOMPRESSED', 'CHUNK_SIZE', 48)
+        for timestamp in range(1, 8):
+            env.cmd('TS.ADD', key, timestamp, timestamp + 42)
+        dump = bytearray(env.cmd('DUMP', key))
+    finally:
+        env.cmd('CONFIG', 'SET', 'rdbcompression', rdbcompression)
+
+    sample = struct.pack('=Qd', 4, 46)
+    offset = dump.index(sample)
+    dump[offset:offset + 8] = struct.pack('=Q', 1)
+    _patch_dump_crc(dump)
+
+    env.cmd('DEL', key)
+    env.expect('RESTORE', key, 0, bytes(dump)).error()
     assert env.cmd('PING')
 
 
