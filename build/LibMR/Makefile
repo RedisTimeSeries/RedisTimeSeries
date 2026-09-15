@@ -59,6 +59,10 @@ define CC_DEFS +=
 	MODULE_NAME=$(MODULE_NAME)
 endef
 
+ifeq ($(VG),1)
+CC_DEFS += _VALGRIND EXECUTION_DEFAULT_MAX_IDLE_MS=10000
+endif
+
 define CC_INCLUDES +=
 	$(SRCDIR)
 	$(BINDIR)
