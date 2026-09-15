@@ -3,6 +3,8 @@ Test that verifies RDB load failure handling for corrupted/broken RDB files.
 This test creates various types of broken RDB files and ensures they fail to load properly.
 """
 
+import struct
+
 from includes import Env
 from includes import *
 
@@ -117,7 +119,8 @@ def _rdb_encode_len(v: int) -> bytes:
         return bytes([0x80]) + int(v).to_bytes(4, "big", signed=False)
     return bytes([0x81]) + int(v).to_bytes(8, "big", signed=False)
 
-def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: int) -> bytes:
+def _patch_uncompressed_sample_counts(dump: bytes, new_num_samples: int,
+                                      new_total_samples: int = None) -> bytes:
     # We keep the same encoding width by ensuring new_num_samples fits in 6-bit len (0..63).
     assert 0 <= new_num_samples <= 63
     b = bytearray(dump)
@@ -164,7 +167,7 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
     options, _ = read_uint_capture_offset()           # options
     read_uint_capture_offset()         # lastTimestamp
     read_double_skip()                 # lastValue
-    read_uint_capture_offset()         # totalSamples
+    old_total_samples, total_samples_off = read_uint_capture_offset()
     read_uint_capture_offset()         # duplicatePolicy
     has_src, _ = read_uint_capture_offset()
     assert has_src == 0
@@ -208,12 +211,60 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
     # samples buffer is binary and large enough that it should never be integer-encoded.
     assert decoded_len == size_bytes
 
-    # Patch the single byte directly.
+    if new_total_samples is not None:
+        assert old_total_samples <= 63 and 0 <= new_total_samples <= 63
+        b[total_samples_off] = new_total_samples & 0x3F
+
     b[num_samples_off] = new_num_samples & 0x3F
 
     _patch_dump_crc(b)
     assert _verify_dump_payload(bytes(b)), "patched DUMP payload should have valid checksum"
     return bytes(b)
+
+
+def test_total_samples_mismatch_does_not_crash_on_delete_then_add(env):
+    env.skipOnCluster()
+
+    key = 'test_key'
+    env.cmd('TS.CREATE', key, 'UNCOMPRESSED')
+    env.cmd('TS.ADD', key, 1, 42)
+    dump = _patch_uncompressed_sample_counts(
+        env.cmd('DUMP', key), new_num_samples=1, new_total_samples=0)
+
+    env.cmd('DEL', key)
+    try:
+        env.cmd('RESTORE', key, 0, dump)
+    except Exception:
+        assert env.cmd('PING')
+        return
+
+    env.assertEqual(env.cmd('TS.DEL', key, 0, 1000), 1)
+    env.assertEqual(env.cmd('TS.ADD', key, 2000, 43), 2000)
+    assert env.cmd('PING')
+
+
+def test_duplicate_chunk_start_timestamp_is_rejected(env):
+    env.skipOnCluster()
+
+    key = 'test_key'
+    rdbcompression = env.cmd('CONFIG', 'GET', 'rdbcompression')[1]
+    env.cmd('CONFIG', 'SET', 'rdbcompression', 'no')
+    try:
+        env.cmd('TS.CREATE', key, 'UNCOMPRESSED', 'CHUNK_SIZE', 48)
+        for timestamp in range(1, 8):
+            env.cmd('TS.ADD', key, timestamp, timestamp + 42)
+        dump = bytearray(env.cmd('DUMP', key))
+    finally:
+        env.cmd('CONFIG', 'SET', 'rdbcompression', rdbcompression)
+
+    sample = struct.pack('=Qd', 4, 46)
+    offset = dump.index(sample)
+    dump[offset:offset + 8] = struct.pack('=Q', 1)
+    _patch_dump_crc(dump)
+
+    env.cmd('DEL', key)
+    env.expect('RESTORE', key, 0, bytes(dump)).error()
+    assert env.cmd('PING')
 
 
 def test_uncompressed_upsert_does_not_narrow_restored_num_samples(env):
