@@ -2,6 +2,7 @@
 #include "libmr_commands.h"
 
 #include "LibMR/src/mr.h"
+#include "LibMR/src/record.h"
 #include "LibMR/src/utils/arr.h"
 #include "consts.h"
 #include "libmr_integration.h"
