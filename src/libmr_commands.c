@@ -2,6 +2,7 @@
 
 #include "LibMR/src/utils/arr.h"
 #include "LibMR/src/mr.h"
+#include "LibMR/src/record.h"
 #include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "libmr_integration.h"
@@ -58,6 +59,49 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
         RedisModule_ReplyWithError(rctx, buf);
     }
     return true;
+}
+
+static bool check_and_reply_on_mrange_record_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+
+    for (size_t i = 0; i < len; i++) {
+        Record *raw_list_record = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_list_record->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected MRANGE record type: %s",
+                            raw_list_record->recordType->type.type);
+            if (MR_IsError(raw_list_record)) {
+                raw_list_record->recordType->sendReply(rctx, raw_list_record);
+            } else {
+                RedisModule_ReplyWithError(rctx,
+                                           "Multi-shard command failed with an unexpected reply.");
+            }
+            return true;
+        }
+
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_list_record);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_list_record, j);
+            if (raw_record->recordType == GetSeriesRecordType()) {
+                continue;
+            }
+
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected MRANGE list record type: %s",
+                            raw_record->recordType->type.type);
+            if (MR_IsError(raw_record)) {
+                raw_record->recordType->sendReply(rctx, raw_record);
+            } else {
+                RedisModule_ReplyWithError(rctx,
+                                           "Multi-shard command failed with an unexpected reply.");
+            }
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // This function used for calling freeing the blocked client context
@@ -265,6 +309,10 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
 
     if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        goto __done;
+    }
+
+    if (unlikely(check_and_reply_on_mrange_record_error(eCtx, ctx))) {
         goto __done;
     }
 
