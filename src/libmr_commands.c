@@ -246,20 +246,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
     } else {
-        size_t total_len = 0;
-        for (int i = 0; i < len; i++) {
-            Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-            if (raw_listRecord->recordType != GetListRecordType()) {
-                RedisModule_Log(rctx,
-                                "warning",
-                                "Unexpected record type: %s",
-                                raw_listRecord->recordType->type.type);
-                continue;
-            }
-            total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
-        }
-        RedisModule_ReplyWithMapOrArray(rctx, total_len, false);
+        RedisModule_ReplyWithMapOrArray(rctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     }
+
+    long long replylen = 0;
 
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
@@ -292,8 +282,13 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                                     &data->args.rangeArgs,
                                     data->args.reverse,
                                     false);
+                replylen++;
             }
         }
+    }
+
+    if (!data->args.groupByLabel) {
+        RedisModule_ReplySetMapOrArrayLength(rctx, replylen, false);
     }
 
     if (data->args.groupByLabel) {
