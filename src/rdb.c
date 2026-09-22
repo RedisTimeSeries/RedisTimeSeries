@@ -145,8 +145,10 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
                 return NULL;
             }
             const uint64_t chunkSamples = series->funcs->GetNumOfSample(chunk);
+            // Reject a count that would wrap the running total.
             if (chunkSamples > UINT64_MAX - loadedSamples) {
                 RedisModule_LogIOError(io, "error", "totalSamples overflow");
+                // The dictionary does not own this chunk until insertion succeeds.
                 series->funcs->FreeChunk(chunk);
                 err = true;
                 return NULL;
@@ -155,12 +157,15 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
                     series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET) ==
                 REDISMODULE_ERR) {
                 RedisModule_LogIOError(io, "error", "duplicate chunk start timestamp");
+                // Insertion failed, so FreeSeries will not release this chunk.
                 series->funcs->FreeChunk(chunk);
                 err = true;
                 return NULL;
             }
+            // Count each successfully loaded chunk once.
             loadedSamples += chunkSamples;
         }
+        // The serialized total must match the counts stored in the loaded chunks.
         if (loadedSamples != totalSamples) {
             RedisModule_LogIOError(io, "error", "totalSamples does not match loaded chunks");
             err = true;
