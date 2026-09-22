@@ -2,6 +2,7 @@
 #include "libmr_commands.h"
 
 #include "LibMR/src/mr.h"
+#include "LibMR/src/record.h"
 #include "LibMR/src/utils/arr.h"
 #include "consts.h"
 #include "libmr_integration.h"
@@ -119,6 +120,64 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
             RedisModule_ReplyWithError(rctx, buf);
         }
         return true;
+    }
+
+    return false;
+}
+
+static bool check_and_reply_on_mrange_record_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+
+    for (size_t i = 0; i < len; i++) {
+        Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_env->recordType != GetShardEnvelopeRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected MRANGE record type: %s",
+                            raw_env->recordType->type.type);
+            if (MR_IsError(raw_env)) {
+                raw_env->recordType->sendReply(rctx, raw_env);
+            } else {
+                RedisModule_ReplyWithError(rctx,
+                                           "Multi-shard command failed with an unexpected reply.");
+            }
+            return true;
+        }
+
+        Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
+        if (payload->recordType != GetListRecordType()) {
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected MRANGE payload record type: %s",
+                            payload->recordType->type.type);
+            if (MR_IsError(payload)) {
+                payload->recordType->sendReply(rctx, payload);
+            } else {
+                RedisModule_ReplyWithError(rctx,
+                                           "Multi-shard command failed with an unexpected reply.");
+            }
+            return true;
+        }
+
+        size_t list_len = ListRecord_GetLen((ListRecord *)payload);
+        for (size_t j = 0; j < list_len; j++) {
+            Record *raw_record = ListRecord_GetRecord((ListRecord *)payload, j);
+            if (raw_record->recordType == GetSeriesRecordType()) {
+                continue;
+            }
+
+            RedisModule_Log(rctx,
+                            "warning",
+                            "Unexpected MRANGE list record type: %s",
+                            raw_record->recordType->type.type);
+            if (MR_IsError(raw_record)) {
+                raw_record->recordType->sendReply(rctx, raw_record);
+            } else {
+                RedisModule_ReplyWithError(rctx,
+                                           "Multi-shard command failed with an unexpected reply.");
+            }
+            return true;
+        }
     }
 
     return false;
@@ -327,13 +386,15 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         goto __done;
     }
 
+    if (unlikely(check_and_reply_on_mrange_record_error(eCtx, rctx))) {
+        goto __done;
+    }
+
     long long len = MR_ExecutionCtxGetResultsLen(eCtx);
 
     TS_ResultSet *resultset = NULL;
 
-    // First pass: validate slot ownership metadata and compute total length if needed
-    // (non-groupby).
-    size_t total_len = 0;
+    // First pass: validate slot ownership metadata before starting the response.
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
@@ -354,9 +415,6 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                             payload->recordType->type.type);
             continue;
         }
-        if (!data->args.groupByLabel) {
-            total_len += ListRecord_GetLen((ListRecord *)payload);
-        }
     }
     if (!validate_slot_coverage_or_reply(rctx, &acc)) {
         SlotRangeAccum_Free(&acc);
@@ -367,8 +425,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
     } else {
-        RedisModule_ReplyWithMapOrArray(rctx, total_len, false);
+        RedisModule_ReplyWithMapOrArray(rctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     }
+
+    long long replylen = 0;
 
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
@@ -403,8 +463,13 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                                     &data->args.rangeArgs,
                                     data->args.reverse,
                                     false);
+                replylen++;
             }
         }
+    }
+
+    if (!data->args.groupByLabel) {
+        RedisModule_ReplySetMapOrArrayLength(rctx, replylen, false);
     }
 
     if (data->args.groupByLabel) {
