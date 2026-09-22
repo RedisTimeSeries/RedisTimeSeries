@@ -125,37 +125,45 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
     return false;
 }
 
+static void reply_on_unexpected_mrange_record(RedisModuleCtx *rctx,
+                                              Record *record,
+                                              const char *location) {
+    const char *record_type = record->recordType->type.type;
+
+    if (MR_IsError(record)) {
+        RedisModule_Log(rctx,
+                        "warning",
+                        "Unexpected MRANGE %s error record: %s",
+                        location,
+                        MR_ErrorRecordGetError(record));
+        record->recordType->sendReply(rctx, record);
+        return;
+    }
+
+    RedisModule_Log(rctx, "warning", "Unexpected MRANGE %s record type: %s", location, record_type);
+
+    char error[256];
+    snprintf(error,
+             sizeof(error),
+             "Multi-shard command failed with an unexpected MRANGE %s record type: %s.",
+             location,
+             record_type);
+    RedisModule_ReplyWithError(rctx, error);
+}
+
 static bool check_and_reply_on_mrange_record_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
 
     for (size_t i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected MRANGE record type: %s",
-                            raw_env->recordType->type.type);
-            if (MR_IsError(raw_env)) {
-                raw_env->recordType->sendReply(rctx, raw_env);
-            } else {
-                RedisModule_ReplyWithError(rctx,
-                                           "Multi-shard command failed with an unexpected reply.");
-            }
+            reply_on_unexpected_mrange_record(rctx, raw_env, "envelope");
             return true;
         }
 
         Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
         if (payload->recordType != GetListRecordType()) {
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected MRANGE payload record type: %s",
-                            payload->recordType->type.type);
-            if (MR_IsError(payload)) {
-                payload->recordType->sendReply(rctx, payload);
-            } else {
-                RedisModule_ReplyWithError(rctx,
-                                           "Multi-shard command failed with an unexpected reply.");
-            }
+            reply_on_unexpected_mrange_record(rctx, payload, "payload");
             return true;
         }
 
@@ -166,16 +174,7 @@ static bool check_and_reply_on_mrange_record_error(ExecutionCtx *eCtx, RedisModu
                 continue;
             }
 
-            RedisModule_Log(rctx,
-                            "warning",
-                            "Unexpected MRANGE list record type: %s",
-                            raw_record->recordType->type.type);
-            if (MR_IsError(raw_record)) {
-                raw_record->recordType->sendReply(rctx, raw_record);
-            } else {
-                RedisModule_ReplyWithError(rctx,
-                                           "Multi-shard command failed with an unexpected reply.");
-            }
+            reply_on_unexpected_mrange_record(rctx, raw_record, "list entry");
             return true;
         }
     }
