@@ -133,13 +133,43 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         }
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         const uint64_t numChunks = LoadUnsigned_IOError(io, err, NULL);
-        for (int i = 0; i < numChunks; ++i) {
+        if (numChunks == 0) {
+            RedisModule_LogIOError(io, "error", "time series must contain a chunk");
+            err = true;
+            return NULL;
+        }
+        uint64_t loadedSamples = 0;
+        for (uint64_t i = 0; i < numChunks; ++i) {
             if (series->funcs->LoadFromRDB(&chunk, io)) {
                 err = true;
                 return NULL;
             }
-            dictOperator(
-                series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
+            const uint64_t chunkSamples = series->funcs->GetNumOfSample(chunk);
+            // Reject a count that would wrap the running total.
+            if (chunkSamples > UINT64_MAX - loadedSamples) {
+                RedisModule_LogIOError(io, "error", "totalSamples overflow");
+                // The dictionary does not own this chunk until insertion succeeds.
+                series->funcs->FreeChunk(chunk);
+                err = true;
+                return NULL;
+            }
+            if (dictOperator(
+                    series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET) ==
+                REDISMODULE_ERR) {
+                RedisModule_LogIOError(io, "error", "duplicate chunk start timestamp");
+                // Insertion failed, so FreeSeries will not release this chunk.
+                series->funcs->FreeChunk(chunk);
+                err = true;
+                return NULL;
+            }
+            // Count each successfully loaded chunk once.
+            loadedSamples += chunkSamples;
+        }
+        // The serialized total must match the counts stored in the loaded chunks.
+        if (loadedSamples != totalSamples) {
+            RedisModule_LogIOError(io, "error", "totalSamples does not match loaded chunks");
+            err = true;
+            return NULL;
         }
         series->totalSamples = totalSamples;
         series->duplicatePolicy = duplicatePolicy;
