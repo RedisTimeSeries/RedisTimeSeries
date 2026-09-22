@@ -12,7 +12,7 @@ import pytest
 import signal
 import time
 import tempfile
-from functools import wraps
+from functools import lru_cache, wraps
 
 try:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../deps/readies"))
@@ -92,12 +92,40 @@ def verifyClusterInitialized(env):
             if not allConnected:
                 time.sleep(0.1)
 
+@lru_cache(maxsize=None)
+def _supports_cluster_bus_protection(redis_binary):
+    # Probe the actual binary: unstable builds do not have a reliable version
+    # boundary for new configuration options. Port 0 exits without listening.
+    result = subprocess.run(
+        [redis_binary, '--port', '0', '--save', '', '--appendonly', 'no',
+         '--cluster-bus-port-protected-mode', 'no'],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=10)
+    return 'Configured to not listen anywhere' in result.stdout
+
+
+@lru_cache(maxsize=None)
+def _local_cluster_config(config_file):
+    content = ''
+    if config_file:
+        with open(config_file) as config:
+            content = config.read()
+    # These test clusters communicate only over loopback. Keep plain TCP
+    # coverage when Redis requires an explicit opt-out for a non-TLS bus.
+    return create_config_file(content + '\nbind 127.0.0.1\ncluster-bus-port-protected-mode no\n')
+
+
 def Env(*args, **kwargs):
     if 'testName' not in kwargs:
         kwargs['testName'] = '%s.%s' % (inspect.getmodule(inspect.currentframe().f_back).__name__, inspect.currentframe().f_back.f_code.co_name)
     if 'redisConfigFileContent' in kwargs:
         kwargs['redisConfigFile'] = create_config_file(kwargs['redisConfigFileContent'])
         del kwargs['redisConfigFileContent']
+
+    if ((kwargs.get('env') or Defaults.env) == 'oss-cluster'
+            and not (kwargs.get('useTLS') or Defaults.use_TLS)
+            and _supports_cluster_bus_protection(kwargs.get('redisBinaryPath') or Defaults.binary)):
+        kwargs['redisConfigFile'] = _local_cluster_config(
+            kwargs.get('redisConfigFile') or Defaults.redis_config_file)
 
     temp_no_log = Defaults.no_log
     no_capture_output = Defaults.no_capture_output
