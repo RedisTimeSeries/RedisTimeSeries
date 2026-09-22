@@ -331,7 +331,9 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 
     TS_ResultSet *resultset = NULL;
 
-    // First pass: validate slot ownership metadata before starting the response.
+    // First pass: validate slot ownership metadata and compute total length if needed
+    // (non-groupby).
+    size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
@@ -352,6 +354,9 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                             payload->recordType->type.type);
             continue;
         }
+        if (!data->args.groupByLabel) {
+            total_len += ListRecord_GetLen((ListRecord *)payload);
+        }
     }
     if (!validate_slot_coverage_or_reply(rctx, &acc)) {
         SlotRangeAccum_Free(&acc);
@@ -362,10 +367,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
     } else {
-        RedisModule_ReplyWithMapOrArray(rctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+        RedisModule_ReplyWithMapOrArray(rctx, total_len, false);
     }
-
-    long long replylen = 0;
 
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
@@ -400,13 +403,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
                                     &data->args.rangeArgs,
                                     data->args.reverse,
                                     false);
-                replylen++;
             }
         }
-    }
-
-    if (!data->args.groupByLabel) {
-        RedisModule_ReplySetMapOrArrayLength(rctx, replylen, false);
     }
 
     if (data->args.groupByLabel) {
