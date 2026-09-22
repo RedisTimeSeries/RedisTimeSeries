@@ -151,10 +151,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
                 err = true;
                 return NULL;
             }
-            if (dictOperator(series->chunks,
-                             chunk,
-                             series->funcs->GetFirstTimestamp(chunk),
-                             DICT_OP_SET) == REDISMODULE_ERR) {
+            if (dictOperator(
+                    series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET) ==
+                REDISMODULE_ERR) {
                 RedisModule_LogIOError(io, "error", "duplicate chunk start timestamp");
                 series->funcs->FreeChunk(chunk);
                 err = true;
