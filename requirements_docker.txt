@@ -2,5 +2,5 @@ setuptools<81
 pip
 jinja2
 ramp-packer
-RLTest @ git+https://github.com/RedisLabsModules/RLTest@b6277948f262562a486d7c5efca032d69bba7f75
+RLTest @ git+https://github.com/LiranAbir/RLTest@1424af4f34b25bfcd282ed330498a66c8a83d076
 statistics
