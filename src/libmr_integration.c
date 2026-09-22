@@ -53,10 +53,6 @@ MRRecordType *GetListRecordType() {
     return listRecordType;
 }
 
-MRRecordType *GetStringRecordType() {
-    return stringRecordType;
-}
-
 MRRecordType *GetSeriesRecordType() {
     return SeriesRecordType;
 }
