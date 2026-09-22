@@ -80,14 +80,16 @@ def testLibmrFail():
         ('TS.QUERYINDEX', 'name=bob'),
     ]
     for command in multishard_commands:
+        error = None
         try:
             env.getConnection(1).execute_command(*command)
-            assert False, "%s unexpectedly succeeded while a shard was down" % command[0]
         except Exception as e:
-            assert str(e) == (
-                "A multi-shard command failed because at least one shard did not reply "
-                "within the given timeframe."
-            )
+            error = e
+        assert error is not None, "%s unexpectedly succeeded while a shard was down" % command[0]
+        assert str(error) == (
+            "A multi-shard command failed because at least one shard did not reply "
+            "within the given timeframe."
+        )
 
     env.envRunner.shards[2].startEnv()
     _waitCluster(env)
