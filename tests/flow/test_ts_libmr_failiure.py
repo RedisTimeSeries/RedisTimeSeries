@@ -74,12 +74,20 @@ def testLibmrFail():
             env.envRunner.shards[2].stopEnv()
         except Exception as e:
             pass
-    try:
-        actual_result = env.getConnection(1).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
-                                'name=bob')
-        assert(False)
-    except Exception as e:
-        assert str(e) == "A multi-shard command failed because at least one shard did not reply within the given timeframe."
+    multishard_commands = [
+        ('TS.MRANGE', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER', 'name=bob'),
+        ('TS.MGET', 'WITHLABELS', 'FILTER', 'name=bob'),
+        ('TS.QUERYINDEX', 'name=bob'),
+    ]
+    for command in multishard_commands:
+        try:
+            env.getConnection(1).execute_command(*command)
+            assert False, "%s unexpectedly succeeded while a shard was down" % command[0]
+        except Exception as e:
+            assert str(e) == (
+                "A multi-shard command failed because at least one shard did not reply "
+                "within the given timeframe."
+            )
 
     env.envRunner.shards[2].startEnv()
     _waitCluster(env)
@@ -89,6 +97,14 @@ def testLibmrFail():
     actual_result = env.getConnection(1).execute_command('TS.mrange', start_ts, start_ts + samples_count, 'WITHLABELS', 'FILTER',
                         'name=bob')
     env.assertEqual(actual_result, expected_res)
+    env.assertEqual(
+        env.getConnection(1).execute_command('TS.MGET', 'WITHLABELS', 'FILTER', 'name=bob'),
+        [[b'tester1{1}', [[b'name', b'bob']], [10, b'1']]],
+    )
+    env.assertEqual(
+        env.getConnection(1).execute_command('TS.QUERYINDEX', 'name=bob'),
+        [b'tester1{1}'],
+    )
 
 def libmr_query(con, env, start_ts, samples_count):
     expected_res = [[b'tester1{1}', [[b'name', b'bob']], [[1, b'1'], [2, b'1'], [3, b'1'], [4, b'1'], [5, b'1'], [6, b'1'], [7, b'1'], [8, b'1'], [9, b'1'], [10, b'1']]]]

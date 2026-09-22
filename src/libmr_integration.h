@@ -87,6 +87,7 @@ typedef struct ShardEnvelopeRecord
 
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
+MRRecordType *GetStringRecordType();
 MRRecordType *GetSeriesRecordType();
 MRRecordType *GetShardEnvelopeRecordType();
 

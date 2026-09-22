@@ -125,61 +125,135 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
     return false;
 }
 
-static void reply_on_unexpected_mrange_record(RedisModuleCtx *rctx,
-                                              Record *record,
-                                              const char *location) {
+static void reply_on_unexpected_multishard_record(RedisModuleCtx *rctx,
+                                                  const char *command,
+                                                  Record *record,
+                                                  const char *location) {
     const char *record_type = record->recordType->type.type;
 
     if (MR_IsError(record)) {
         RedisModule_Log(rctx,
                         "warning",
-                        "Unexpected MRANGE %s error record: %s",
+                        "Unexpected %s %s error record: %s",
+                        command,
                         location,
                         MR_ErrorRecordGetError(record));
         record->recordType->sendReply(rctx, record);
         return;
     }
 
-    RedisModule_Log(rctx, "warning", "Unexpected MRANGE %s record type: %s", location, record_type);
+    RedisModule_Log(
+        rctx, "warning", "Unexpected %s %s record type: %s", command, location, record_type);
 
     char error[256];
     snprintf(error,
              sizeof(error),
-             "Multi-shard command failed with an unexpected MRANGE %s record type: %s.",
+             "Multi-shard command failed with an unexpected %s %s record type: %s.",
+             command,
              location,
              record_type);
     RedisModule_ReplyWithError(rctx, error);
 }
 
-static bool check_and_reply_on_mrange_record_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
+static void reply_on_invalid_multishard_collection(RedisModuleCtx *rctx,
+                                                   const char *command,
+                                                   const char *location,
+                                                   size_t length) {
+    RedisModule_Log(rctx, "warning", "Invalid %s %s record length: %zu", command, location, length);
+
+    char error[256];
+    snprintf(error,
+             sizeof(error),
+             "Multi-shard command failed with an invalid %s %s record length: %zu.",
+             command,
+             location,
+             length);
+    RedisModule_ReplyWithError(rctx, error);
+}
+
+static Record *find_nested_error_record(Record *record) {
+    if (MR_IsError(record)) {
+        return record;
+    }
+
+    if (record->recordType == GetShardEnvelopeRecordType()) {
+        return find_nested_error_record(
+            ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)record));
+    }
+
+    if (record->recordType == GetListRecordType()) {
+        size_t len = ListRecord_GetLen((ListRecord *)record);
+        for (size_t i = 0; i < len; i++) {
+            Record *error = find_nested_error_record(ListRecord_GetRecord((ListRecord *)record, i));
+            if (error) {
+                return error;
+            }
+        }
+    } else if (record->recordType == GetMapRecordType()) {
+        size_t len = MapRecord_GetLen((MapRecord *)record);
+        for (size_t i = 0; i < len; i++) {
+            Record *error = find_nested_error_record(MapRecord_GetRecord((MapRecord *)record, i));
+            if (error) {
+                return error;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static bool validate_multishard_results_or_reply(ExecutionCtx *eCtx,
+                                                 RedisModuleCtx *rctx,
+                                                 const char *command,
+                                                 MRRecordType *payload_type,
+                                                 MRRecordType *first_item_type,
+                                                 MRRecordType *second_item_type) {
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
 
     for (size_t i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
+        Record *error = find_nested_error_record(raw_env);
+        if (error) {
+            reply_on_unexpected_multishard_record(rctx, command, error, "result");
+            return false;
+        }
+
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            reply_on_unexpected_mrange_record(rctx, raw_env, "envelope");
-            return true;
+            reply_on_unexpected_multishard_record(rctx, command, raw_env, "envelope");
+            return false;
         }
 
         Record *payload = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
-        if (payload->recordType != GetListRecordType()) {
-            reply_on_unexpected_mrange_record(rctx, payload, "payload");
-            return true;
+        if (payload->recordType != payload_type) {
+            reply_on_unexpected_multishard_record(rctx, command, payload, "payload");
+            return false;
         }
 
-        size_t list_len = ListRecord_GetLen((ListRecord *)payload);
-        for (size_t j = 0; j < list_len; j++) {
-            Record *raw_record = ListRecord_GetRecord((ListRecord *)payload, j);
-            if (raw_record->recordType == GetSeriesRecordType()) {
-                continue;
+        size_t payload_len;
+        if (payload_type == GetListRecordType()) {
+            payload_len = ListRecord_GetLen((ListRecord *)payload);
+        } else {
+            payload_len = MapRecord_GetLen((MapRecord *)payload);
+            if (second_item_type && payload_len % 2 != 0) {
+                reply_on_invalid_multishard_collection(rctx, command, "payload", payload_len);
+                return false;
             }
+        }
 
-            reply_on_unexpected_mrange_record(rctx, raw_record, "list entry");
-            return true;
+        for (size_t j = 0; j < payload_len; j++) {
+            Record *item = payload_type == GetListRecordType()
+                               ? ListRecord_GetRecord((ListRecord *)payload, j)
+                               : MapRecord_GetRecord((MapRecord *)payload, j);
+            MRRecordType *expected_type =
+                second_item_type && j % 2 != 0 ? second_item_type : first_item_type;
+            if (item->recordType != expected_type) {
+                reply_on_unexpected_multishard_record(rctx, command, item, "payload entry");
+                return false;
+            }
         }
     }
 
-    return false;
+    return true;
 }
 
 // This function used for calling freeing the blocked client context
@@ -197,6 +271,15 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
     SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+        goto __done;
+    }
+
+    if (unlikely(!validate_multishard_results_or_reply(eCtx,
+                                                       rctx,
+                                                       "TS.MGET",
+                                                       GetMapRecordType(),
+                                                       GetStringRecordType(),
+                                                       GetListRecordType()))) {
         goto __done;
     }
 
@@ -262,6 +345,11 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         goto __done;
     }
 
+    if (unlikely(!validate_multishard_results_or_reply(
+            eCtx, rctx, "TS.MGET", GetListRecordType(), GetListRecordType(), NULL))) {
+        goto __done;
+    }
+
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
@@ -316,12 +404,17 @@ __done:
     RTS_UnblockClient(bc, rctx);
 }
 
-static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
+static void queryindex_done_impl(ExecutionCtx *eCtx, void *privateData, bool resp3) {
     RedisModuleBlockedClient *bc = privateData;
     RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
     SlotRangeAccum acc = (SlotRangeAccum){ 0 };
 
     if (unlikely(check_and_reply_on_error(eCtx, rctx))) {
+        goto __done;
+    }
+
+    if (unlikely(!validate_multishard_results_or_reply(
+            eCtx, rctx, "TS.QUERYINDEX", GetListRecordType(), GetStringRecordType(), NULL))) {
         goto __done;
     }
 
@@ -349,7 +442,11 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
         SlotRangeAccum_Free(&acc);
         goto __done;
     }
-    RedisModule_ReplyWithSet(rctx, total_len);
+    if (resp3) {
+        RedisModule_ReplyWithSet(rctx, total_len);
+    } else {
+        RedisModule_ReplyWithArray(rctx, total_len);
+    }
 
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
@@ -375,6 +472,14 @@ __done:
     RTS_UnblockClient(bc, rctx);
 }
 
+static void queryindex_done(ExecutionCtx *eCtx, void *privateData) {
+    queryindex_done_impl(eCtx, privateData, false);
+}
+
+static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
+    queryindex_done_impl(eCtx, privateData, true);
+}
+
 static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     MRangeData *data = privateData;
     RedisModuleBlockedClient *bc = data->bc;
@@ -385,7 +490,8 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         goto __done;
     }
 
-    if (unlikely(check_and_reply_on_mrange_record_error(eCtx, rctx))) {
+    if (unlikely(!validate_multishard_results_or_reply(
+            eCtx, rctx, "TS.MRANGE", GetListRecordType(), GetSeriesRecordType(), NULL))) {
         goto __done;
     }
 
@@ -633,7 +739,8 @@ int TSDB_queryindex_RG(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     }
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
-    MR_ExecutionSetOnDoneHandler(exec, queryArg->resp3 ? queryindex_resp3_done : mget_done, bc);
+    MR_ExecutionSetOnDoneHandler(
+        exec, queryArg->resp3 ? queryindex_resp3_done : queryindex_done, bc);
 
     MR_Run(exec);
 
