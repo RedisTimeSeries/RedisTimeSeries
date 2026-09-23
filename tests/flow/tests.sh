@@ -580,15 +580,15 @@ E=0
 [[ $AOF == 1 ]]         && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof" run_tests "tests with AOF"); (( E |= $? )); } || true
 [[ $AOF_SLAVES == 1 ]]  && { (RLTEST_ARGS="${RLTEST_ARGS} --use-aof --use-slaves" run_tests "tests with AOF and slaves"); (( E |= $? )); } || true
 if [[ $OSS_CLUSTER == 1 ]]; then
-	RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000 $CLUSTER_BUS_ARGS"
+	RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000"
 	if [[ -z $TEST || $TEST != test_ts_password ]]; then
-		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
+		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS $CLUSTER_BUS_ARGS" \
 			run_tests "tests on OSS cluster"); (( E |= $? )); } || true
 	fi
 	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
 		RLTEST_ARGS_1="$RLTEST_ARGS"
 		RLTEST_TEST_ARGS_1=" --test test_ts_password"
-		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
+		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password $CLUSTER_BUS_ARGS" \
 		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
 		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
 	fi
