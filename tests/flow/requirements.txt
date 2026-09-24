@@ -1,4 +1,8 @@
-RLTest @ git+https://github.com/RedisLabsModules/RLTest@b6277948f262562a486d7c5efca032d69bba7f75
+RLTest @ git+https://github.com/RedisLabsModules/RLTest@abc312868
 statistics
+# Capped below redis-py 6: from 6 on, the client negotiates RESP3 by default, and RLTest's
+# requirement is uncapped, so pip picks the newest. Under RESP3 TS.MRANGE ... GROUPBY replies
+# with a map instead of rows and the suite's reply assertions fail (MOD-18913).
+redis ~= 5.0.8
 # hiredis==2.0.0  # disabled until RESP3-related problem is resolved
 #gevent~=22.10.1

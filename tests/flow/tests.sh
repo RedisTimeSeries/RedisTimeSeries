@@ -566,6 +566,14 @@ if [[ $CLEAR_LOGS != 0 ]]; then
 	rm -rf $HERE/logs
 fi
 
+# cluster-bus-port-protected-mode is rejected by a redis that does not have it,
+# and a rejected directive stops the server from starting. It exists in redis 8.12
+# and up, where it also defaults to enabled and so refuses an unauthenticated
+# cluster bus, and in the 8.2.10/8.4.7/8.6.7/8.8.3/8.10.2 backports, where it
+# defaults to disabled. Set CLUSTER_BUS_PROTECTED_MODE= to omit it for an older redis.
+CLUSTER_BUS_ARGS="--cluster_bus_port_protected_mode ${CLUSTER_BUS_PROTECTED_MODE-no}"
+[[ -z ${CLUSTER_BUS_PROTECTED_MODE-no} ]] && CLUSTER_BUS_ARGS=""
+
 E=0
 [[ $GEN == 1 ]]         && { (run_tests "general tests"); (( E |= $? )); } || true
 [[ $SLAVES == 1 ]]      && { (RLTEST_ARGS="${RLTEST_ARGS} --use-slaves" run_tests "tests with slaves"); (( E |= $? )); } || true
@@ -574,13 +582,13 @@ E=0
 if [[ $OSS_CLUSTER == 1 ]]; then
 	RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000"
 	if [[ -z $TEST || $TEST != test_ts_password ]]; then
-		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
+		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS $CLUSTER_BUS_ARGS" \
 			run_tests "tests on OSS cluster"); (( E |= $? )); } || true
 	fi
 	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
 		RLTEST_ARGS_1="$RLTEST_ARGS"
 		RLTEST_TEST_ARGS_1=" --test test_ts_password"
-		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
+		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password $CLUSTER_BUS_ARGS" \
 		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
 		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
 	fi
