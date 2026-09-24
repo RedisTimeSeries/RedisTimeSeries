@@ -1,4 +1,7 @@
-RLTest @ git+https://github.com/RedisLabsModules/RLTest@abc312868
+# Pinned to the fix for the escaped-semicolon regression in fix_modulesArgs, which makes
+# test_globalconfigs fail to start its own Env (MOD-18913). Move this to the upstream sha
+# once https://github.com/RedisLabsModules/RLTest/pull/256 merges.
+RLTest @ git+https://github.com/LiranAbir/RLTest@8dc964e
 statistics
 # Capped below redis-py 6: from 6 on, the client negotiates RESP3 by default, and RLTest's
 # requirement is uncapped, so pip picks the newest. Under RESP3 TS.MRANGE ... GROUPBY replies
