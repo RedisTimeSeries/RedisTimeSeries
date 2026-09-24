@@ -330,6 +330,11 @@ void Uncompressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
                                   (SaveStringBufferFunc)RedisModule_SaveStringBuffer);
 }
 
+static bool Uncompressed_ValidateLoadedChunk(const Chunk *chunk, size_t len) {
+    return chunk->samples != NULL && chunk->size == len &&
+           chunk->num_samples <= len / SAMPLE_SIZE;
+}
+
 int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     bool err = false;
     errdefer(err, *chunk = NULL);
@@ -348,13 +353,9 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     size_t string_buffer_size;
     uncompchunk->samples =
         (Sample *)LoadStringBuffer_IOError(io, &string_buffer_size, err, TSDB_ERROR);
-    if (uncompchunk->num_samples * SAMPLE_SIZE > uncompchunk->size) {
+    if (!Uncompressed_ValidateLoadedChunk(uncompchunk, string_buffer_size)) {
         err = true;
-        return TSDB_ERROR; /* num_samples can't exceed capacity */
-    }
-    if (uncompchunk->size != string_buffer_size) {
-        err = true;
-        return TSDB_ERROR; /* Size must match buffer */
+        return TSDB_ERROR;
     }
     *chunk = (Chunk_t *)uncompchunk;
 
@@ -376,6 +377,11 @@ int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
     uncompchunk->size = MR_SerializationCtxReadLongLongWrapper(sctx);
     size_t string_buffer_size;
     uncompchunk->samples = (Sample *)MR_ownedBufferFrom(sctx, &string_buffer_size);
+    if (!Uncompressed_ValidateLoadedChunk(uncompchunk, string_buffer_size)) {
+        Uncompressed_FreeChunk(uncompchunk);
+        *chunk = NULL;
+        return TSDB_ERROR;
+    }
     *chunk = (Chunk_t *)uncompchunk;
     return TSDB_OK;
 }

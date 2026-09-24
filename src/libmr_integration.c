@@ -1698,7 +1698,14 @@ static void *ListRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **erro
     size_t size = (size_t)MR_SerializationCtxReadLongLong(sctx, error);
     Record *r = ListRecord_Create(size);
     for (size_t i = 0; i < size; ++i) {
-        ListRecord_Add(r, MR_RecordDeSerialize(sctx));
+        Record *element = MR_RecordDeSerialize(sctx);
+        ListRecord_Add(r, element);
+        if (MR_IsError(element)) {
+            const char *message = MR_ErrorRecordGetError(element);
+            *error = MR_ErrorCreate(message, strlen(message));
+            ListRecord_Free(r);
+            return NULL;
+        }
     }
     return r;
 }
@@ -1809,7 +1816,12 @@ void *SeriesRecord_Deserialize(ReaderSerializationCtx *sctx, MRError **error) {
     series->chunkCount = MR_SerializationCtxReadLongLong(sctx, error);
     series->chunks = calloc(series->chunkCount, sizeof(Chunk_t *));
     for (int i = 0; i < series->chunkCount; i++) {
-        series->funcs->MRDeserialize(&series->chunks[i], sctx);
+        if (series->funcs->MRDeserialize(&series->chunks[i], sctx) != TSDB_OK) {
+            series->chunkCount = i;
+            SeriesRecord_ObjectFree(series);
+            *error = MR_ErrorCreate("Invalid chunk", sizeof("Invalid chunk") - 1);
+            return NULL;
+        }
     }
     return &series->base;
 }

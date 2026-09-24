@@ -7,6 +7,7 @@
  * GNU Affero General Public License v3 (AGPLv3).
  */
 #include "chunk.h"
+#include "../deps/LibMR/src/utils/buffer.h"
 #include "compaction.h"
 #include "enriched_chunk.h"
 #include "minunit.h"
@@ -227,7 +228,35 @@ MU_TEST(test_reverseEnrichedChunk_single_value_per_sample) {
     FreeEnrichedChunk(ec);
 }
 
+MU_TEST(test_Uncompressed_MRDeserialize_validation) {
+    Sample sample = { .timestamp = 1, .value = 2 };
+    const size_t counts[] = { 1, 2, 1, SIZE_MAX };
+    const size_t sizes[] = { SAMPLE_SIZE, SAMPLE_SIZE, 2 * SAMPLE_SIZE, SAMPLE_SIZE };
+    for (size_t i = 0; i < 4; ++i) {
+        mr_Buffer *buffer = mr_BufferNew(64);
+        mr_BufferWriter writer;
+        mr_BufferWriterInit(&writer, buffer);
+        mr_BufferWriterWriteLongLong(&writer, sample.timestamp);
+        mr_BufferWriterWriteLongLong(&writer, counts[i]);
+        mr_BufferWriterWriteLongLong(&writer, sizes[i]);
+        mr_BufferWriterWriteBuff(&writer, (const char *)&sample, sizeof(sample));
+        mr_BufferReader reader;
+        mr_BufferReaderInit(&reader, buffer);
+        Chunk_t *chunk = NULL;
+        mu_assert_int_eq(i == 0 ? TSDB_OK : TSDB_ERROR,
+                         Uncompressed_MRDeserialize(&chunk, &reader));
+        if (i == 0) {
+            mu_assert(chunk != NULL, "valid chunk accepted");
+            Uncompressed_FreeChunk(chunk);
+        } else {
+            mu_assert(chunk == NULL, "invalid chunk rejected");
+        }
+        mr_BufferFree(buffer);
+    }
+}
+
 MU_TEST_SUITE(uncompressed_chunk_test_suite) {
+    MU_RUN_TEST(test_Uncompressed_MRDeserialize_validation);
     MU_RUN_TEST(test_Uncompressed_NewChunk);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_AddSample);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample);
