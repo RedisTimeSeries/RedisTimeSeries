@@ -1320,6 +1320,66 @@ def test_aggreataion_alignment():
         assert expected_data == \
                decode_if_needed(r1.execute_command('TS.range', 'tester', '-', end_ts, 'ALIGN', '+', 'AGGREGATION', 'count', agg_size))
 
+def test_keyword_named_key_not_misparsed():
+    # Regression for MOD-15893 / PR #2052 ("Scope TS.RANGE/NRANGE option parsing
+    # past the key block"). Option keywords used to be located by scanning the
+    # entire argv, so a single-key TS.RANGE/TS.REVRANGE whose series key was
+    # NAMED like an option keyword (ALIGN, COUNT, LATEST, AGGREGATION,
+    # FILTER_BY_VALUE, FILTER_BY_TS) had its key matched as that option and the
+    # following token consumed as the option's value -- e.g. a key named 'align'
+    # matched ALIGN and ate the fromTimestamp as the alignment value. The shared
+    # parseRangeArguments now scopes option scanning to argv+start_index, so the
+    # key name must no longer affect parsing.
+    #
+    # The guard is an equivalence check: a series keyed by an option keyword must
+    # return exactly what an identically populated control series returns. Before
+    # the fix the no-ALIGN query on key 'align' returned [[1,'2'],[11,'1'],[21,'1']]
+    # (aligned to from=1) while the control returned [[0,'2'],[10,'1'],[20,'1']],
+    # so this would have failed.
+    keyword_keys = ['align', 'count', 'latest', 'aggregation', 'filter_by_value', 'filter_by_ts']
+    samples = [(1, 10), (3, 5), (11, 10), (25, 11)]
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        def populate(key):
+            assert r.execute_command('TS.CREATE', key)
+            for ts, val in samples:
+                r.execute_command('TS.ADD', key, ts, val)
+        populate('control')
+        for k in keyword_keys:
+            populate(k)
+
+        # Every query must parse identically regardless of the key's name.
+        queries = [
+            ('1', '30'),                                                  # no options
+            ('1', '30', 'AGGREGATION', 'count', '10'),                    # no ALIGN -> default align 0
+            ('1', '30', 'ALIGN', 'start', 'AGGREGATION', 'count', '10'),
+            ('1', '30', 'ALIGN', 'end', 'AGGREGATION', 'count', '10'),
+            ('1', '30', 'ALIGN', '5', 'AGGREGATION', 'count', '10'),
+            ('1', '30', 'COUNT', '2'),
+            ('1', '30', 'FILTER_BY_TS', '1', '11'),
+            ('1', '30', 'FILTER_BY_VALUE', '5', '10'),
+            ('1', '30', 'LATEST'),
+        ]
+        for cmd in ('TS.RANGE', 'TS.REVRANGE'):
+            for q in queries:
+                expected = decode_if_needed(r.execute_command(cmd, 'control', *q))
+                for k in keyword_keys:
+                    got = decode_if_needed(r.execute_command(cmd, k, *q))
+                    assert got == expected, \
+                        f"{cmd} on key '{k}' parsed differently than control for args {q}: {got} != {expected}"
+
+        # Lock in the correct (post-fix) values for the 'align'-named key, the
+        # exact scenario the Jedis #align test hit.
+        align_expected = {
+            ('1', '30', 'AGGREGATION', 'count', '10'):                   [[0, '2'], [10, '1'], [20, '1']],
+            ('1', '30', 'ALIGN', 'start', 'AGGREGATION', 'count', '10'): [[1, '2'], [11, '1'], [21, '1']],
+            ('1', '30', 'ALIGN', 'end', 'AGGREGATION', 'count', '10'):   [[0, '2'], [10, '1'], [20, '1']],
+            ('1', '30', 'ALIGN', '5', 'AGGREGATION', 'count', '10'):     [[0, '2'], [5, '1'], [25, '1']],
+        }
+        for q, exp in align_expected.items():
+            assert decode_if_needed(r.execute_command('TS.RANGE', 'align', *q)) == exp, \
+                f"TS.RANGE align {q}"
+
 def test_empty():
     agg_size = 10
     env = Env(decodeResponses=True)
