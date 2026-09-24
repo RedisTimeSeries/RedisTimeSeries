@@ -432,10 +432,6 @@ def added_slaves_to_cluster(env):
             replica_log = master_log.replace("master-", "slave-", 1) if "master-" in master_log else f"replica-{replica_port}.log"
             replica_rdb = master_rdb.replace("master-", "slave-", 1) if "master-" in master_rdb else f"replica-{replica_port}.rdb"
             enable_debug_command = "no" if shard.enableDebugCommand is False else "yes"
-            # Since redis/redis#15722 a cluster node whose bus port is not authenticated by tls-cluster
-            # refuses to start unless protection is waived, so mirror the master's value. The config is
-            # absent on older redis (empty dict), where passing it at all would be fatal instead.
-            protected_mode = shard.getConnection().config_get("cluster-bus-port-protected-mode")
             cmd = [shard.redisBinaryPath, "--port", str(replica_port),
                    "--cluster-enabled", "yes",
                    "--cluster-config-file", cluster_config_file,
@@ -444,8 +440,6 @@ def added_slaves_to_cluster(env):
                    "--dir", shard.dbDirPath,
                    "--dbfilename", replica_rdb,
                    "--logfile", replica_log]
-            for option, value in protected_mode.items():
-                cmd += [f"--{option}", value]
             for pos, module in enumerate(shard.modulePath or []):
                 cmd += ["--loadmodule", module]
                 module_args = shard.moduleArgs[pos] if shard.moduleArgs else None
@@ -454,27 +448,14 @@ def added_slaves_to_cluster(env):
                         if arg.strip():
                             cmd += arg.split(" ")
             # Not mirrored from the masters yet: tls-*, masterauth/requirepass, appendonly, etc.
-            process = subprocess.Popen(cmd)
-            spawned.append((process, replica_port, cluster_config_file))
+            spawned.append((subprocess.Popen(cmd), replica_port, cluster_config_file))
 
             replica_conn = redis.Redis(port=replica_port, decode_responses=True)
-            start_time = time.time()
             while True:
                 try:
                     replica_conn.ping()
                     break
                 except redis.ConnectionError:
-                    # Bounded: a replica that dies at startup (a config redis refuses, a port clash)
-                    # never answers, and an unbounded wait would report only the test timeout - with
-                    # the cause nowhere in the output, since a rejected config leaves an empty log.
-                    if process.poll() is not None:
-                        raise RuntimeError(
-                            f"Replica on port {replica_port} exited with code {process.returncode} "
-                            f"before serving; its log is {replica_log}, empty if redis rejected the "
-                            f"config, in which case the error went to this process' stderr"
-                        )
-                    if time.time() - start_time > get_timeout():
-                        raise TimeoutError(f"Replica on port {replica_port} did not serve in {get_timeout()}s")
                     time.sleep(0.1)
             replica_conn.execute_command("cluster", "meet", "127.0.0.1", shard.getMasterPort())
             while master_id not in replica_conn.execute_command("cluster", "nodes"):
