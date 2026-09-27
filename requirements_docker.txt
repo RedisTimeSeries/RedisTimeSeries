@@ -2,7 +2,10 @@ setuptools<81
 pip
 jinja2
 ramp-packer
-RLTest @ git+https://github.com/RedisLabsModules/RLTest@abc312868
+# Pinned to the fix for the escaped-semicolon regression in fix_modulesArgs, which makes
+# test_globalconfigs fail to start its own Env (MOD-18913) -
+# https://github.com/RedisLabsModules/RLTest/pull/256.
+RLTest @ git+https://github.com/RedisLabsModules/RLTest@7e9f69ac1a8551d1d46ddbf53d96df7aac60e164
 statistics
 # Capped below redis-py 6: from 6 on, the client negotiates RESP3 by default, and RLTest's
 # requirement is uncapped, so pip picks the newest. Under RESP3 TS.MRANGE ... GROUPBY replies
