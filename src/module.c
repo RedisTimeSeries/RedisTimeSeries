@@ -652,9 +652,15 @@ static int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, in
     return result;
 }
 
+// LOCAL is positional: immediately after fromTimestamp and toTimestamp.
+// Do not search the entire argv: SELECTED_LABELS and GROUPBY can name a label LOCAL.
+static bool MRangeIsLocal(RedisModuleString **argv, int argc) {
+    return argc > 3 && RMUtil_StringEqualsCaseC(argv[3], "LOCAL");
+}
+
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-    if (IsMRCluster()) {
+    if (!MRangeIsLocal(argv, argc) && IsMRCluster()) {
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
@@ -672,7 +678,7 @@ int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
 int TSDB_mrevrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-    if (IsMRCluster()) {
+    if (!MRangeIsLocal(argv, argc) && IsMRCluster()) {
         int ctxFlags = RedisModule_GetContextFlags(ctx);
 
         if (ctxFlags & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI |
