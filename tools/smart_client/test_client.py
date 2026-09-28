@@ -2,7 +2,7 @@ import asyncio
 import unittest
 
 from client import (CoordinationError, LocalMRClient, Series, merge_series,
-                    reduce_series, supports_local, topology)
+                    reduce_series, supports_local, topology, validate_local_replies)
 
 
 SLOTS = [[0, 8191, ['a', 7000, 'id-a']], [8192, 16383, ['b', 7001, 'id-b']]]
@@ -11,6 +11,30 @@ DOCS = [name for command in ('ts.mrange', 'ts.mrevrange') for name in (
 
 
 class MergeTests(unittest.TestCase):
+    def test_slot_coverage_fragmented_unsorted_and_empty_shards(self):
+        replies = [[1, [[8192, 12000], [0, 4095]], []],
+                   [1, [[12001, 16383], [4096, 8191]], []], [1, [], []]]
+        self.assertEqual(validate_local_replies(replies), [[], [], []])
+
+    def test_slot_gaps_overlaps_and_empty_coverage_rejected(self):
+        for ranges in ([], [[0, 8190], [8192, 16383]],
+                       [[0, 8192], [8192, 16383]], [[1, 16383]],
+                       [[0, 16382]], [[0, 16383], [0, 16383]]):
+            with self.subTest(ranges=ranges), self.assertRaises(CoordinationError):
+                validate_local_replies([[1, ranges, []]])
+
+    def test_slot_envelope_validation(self):
+        for reply in ([], [2, [[0, 16383]], []], [True, [[0, 16383]], []],
+                      [1, [[-1, 16383]], []], [1, [[0, 16384]], []],
+                      [1, [[10, 0]], []], [1, [[0, '16383']], []],
+                      [1, [], [['key', [], []]]]):
+            with self.subTest(reply=reply), self.assertRaises(CoordinationError):
+                validate_local_replies([reply])
+
+    def test_nested_shard_error_propagates(self):
+        with self.assertRaisesRegex(RuntimeError, 'denied'):
+            validate_local_replies([[1, [[0, 16383]], RuntimeError('denied')]])
+
     def test_average_weights_series_not_shards(self):
         replies = [
             [['a', [['site', 'x']], [[0, '0']]],
@@ -63,6 +87,7 @@ class Node:
         self.calls = []
         self.error = None
         self.closed = False
+        self.ranges = [[0, 8191]] if key == 'a' else [[8192, 16383]]
 
     async def execute_command(self, *args):
         self.calls.append(args)
@@ -74,7 +99,7 @@ class Node:
         await self.rendezvous['event'].wait()
         if self.error:
             raise self.error
-        return [[self.key, [['g', 'x']], [[0, str(self.value)]]]]
+        return [1, self.ranges, [[self.key, [['g', 'x']], [[0, str(self.value)]]]]]
 
     async def aclose(self):
         self.closed = True
@@ -123,6 +148,12 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         self.nodes[1].error = RuntimeError('shard unavailable')
         with self.assertRaisesRegex(RuntimeError, 'shard unavailable'):
             await self.client.mrange('-', '+', filters=['g=x'])
+
+    async def test_slot_overlap_rejected_before_grouping(self):
+        self.nodes[1].ranges = [[8191, 16383]]
+        self.client.check_topology = False
+        with self.assertRaisesRegex(CoordinationError, 'unavailable slots'):
+            await self.client.mrange('-', '+', filters=['g=x'], groupby='g', reducer='sum')
 
     async def test_topology_change_after_query_rejected(self):
         changed = [[0, 8191, ['a', 7000, 'new-id']], SLOTS[1]]

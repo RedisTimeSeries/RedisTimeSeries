@@ -9,6 +9,11 @@ commands' `LOCAL` metadata, and maintains one connection pool per primary.
 Each logical query fans out concurrently to all primaries. No label/key index
 is copied and no shards are pruned. ACL credentials and TLS options are reused
 on each connection; all advertised primary endpoints must be directly reachable.
+Each response must be `[1, slot_ranges, results]`. Before any merge or grouping,
+the client validates that reply-time ranges cover all 16384 slots exactly once,
+using LibMR's gap/overlap rejection rule. This check is always enabled, including
+when `--static-topology` disables the separate seed topology checks. Old
+unversioned LOCAL responses are rejected.
 
 ```sh
 python -m pip install -r tools/smart_client/requirements.txt
@@ -58,6 +63,9 @@ They cannot detect all migrations, transient changes, module reloads or stale
 topology views, and do not provide a cross-shard snapshot. Initialization validates
 capabilities once; reconnect after module changes. After topology errors, discard
 the query and recreate the client when topology is stable.
+Slot coverage is necessary but is not equivalent to LibMR's event-driven abort
+of in-flight executions on topology change. See `LIBMR_PARITY.md` for the audit
+and the work still required in redis-py's native cluster integration.
 
 Any shard error, timeout or duplicate series rejects the entire query; pending
 requests are cancelled. There are no automatic retries or partial-success replies.

@@ -75,6 +75,43 @@ def merge_series(replies):
     return [result[key] for key in sorted(result)]
 
 
+def validate_local_replies(replies):
+    """LibMR rule: reply-time ownership must cover 0..16383 exactly once.
+
+    Do not discard overlapping contributions: reject the entire query before
+    merging, especially before irreversible cross-series reductions.
+    """
+    ranges = []
+    payloads = []
+    for reply in replies:
+        if not isinstance(reply, (list, tuple)) or len(reply) != 3:
+            raise CoordinationError('Expected versioned LOCAL reply')
+        version, owned, payload = reply
+        if type(version) is not int or version != 1:
+            raise CoordinationError('Unsupported LOCAL reply version')
+        if not isinstance(owned, (list, tuple)):
+            raise CoordinationError('Invalid LOCAL slot ranges')
+        for pair in owned:
+            if (not isinstance(pair, (list, tuple)) or len(pair) != 2 or
+                    any(type(slot) is not int for slot in pair) or
+                    not 0 <= pair[0] <= pair[1] <= 16383):
+                raise CoordinationError('Invalid LOCAL slot range')
+            ranges.append(tuple(pair))
+        if isinstance(payload, Exception):
+            raise payload
+        if not isinstance(payload, list) or (not owned and payload):
+            raise CoordinationError('Invalid LOCAL result payload')
+        payloads.append(payload)
+    expected = 0
+    for start, end in sorted(ranges):
+        if start != expected:
+            raise CoordinationError('Query requires unavailable slots')
+        expected = end + 1
+    if expected != 16384:
+        raise CoordinationError('Query requires unavailable slots')
+    return payloads
+
+
 REDUCERS = {'sum', 'min', 'max', 'avg', 'count'}
 
 
@@ -232,7 +269,7 @@ class LocalMRClient:
                 node.execute_command(*args) for node in self._nodes.values()])
             if self.check_topology and await self._discover() != self._topology:
                 raise CoordinationError('Topology changed during query; discard result')
-            series = merge_series(replies)
+            series = merge_series(validate_local_replies(replies))
             if groupby is not None:
                 return reduce_series(series, groupby, reducer, count, reverse)
             return series

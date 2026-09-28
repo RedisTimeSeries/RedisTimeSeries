@@ -621,6 +621,50 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
     return REDISMODULE_OK;
 }
 
+// LOCAL is positional: immediately after fromTimestamp and toTimestamp.
+// Do not search the entire argv: SELECTED_LABELS and GROUPBY can name a label LOCAL.
+static bool MRangeIsLocal(RedisModuleString **argv, int argc) {
+    return argc > 3 && RMUtil_StringEqualsCaseC(argv[3], "LOCAL");
+}
+
+// Versioned LOCAL response: [1, [[start, end], ...], normal_mrange_reply].
+// Use the same ownership API as TS.INTERNAL_SLOT_RANGES. This command is
+// synchronous, so ranges and QueryIndex's ASM ownership filtering run in the
+// same command execution without yielding to a topology change.
+static int ReplyLocalMRangeHeader(RedisModuleCtx *ctx) {
+    const bool clustered = RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER;
+    RedisModuleSlotRangeArray *ranges = NULL;
+    if (clustered) {
+        if (!RedisModule_ClusterGetLocalSlotRanges || !RedisModule_ClusterFreeSlotRanges) {
+            RTS_ReplyGeneralError(ctx, "TSDB: LOCAL requires the cluster slot ranges API");
+            return REDISMODULE_ERR;
+        }
+        ranges = RedisModule_ClusterGetLocalSlotRanges(ctx);
+        if (ranges == NULL) {
+            RTS_ReplyGeneralError(ctx, "TSDB: local slot ranges unavailable");
+            return REDISMODULE_ERR;
+        }
+    }
+
+    RedisModule_ReplyWithArray(ctx, 3);
+    RedisModule_ReplyWithLongLong(ctx, 1);
+    RedisModule_ReplyWithArray(ctx, clustered ? ranges->num_ranges : 1);
+    if (clustered) {
+        for (int i = 0; i < ranges->num_ranges; i++) {
+            RedisModule_ReplyWithArray(ctx, 2);
+            RedisModule_ReplyWithLongLong(ctx, ranges->ranges[i].start);
+            RedisModule_ReplyWithLongLong(ctx, ranges->ranges[i].end);
+        }
+        RedisModule_ClusterFreeSlotRanges(ctx, ranges);
+    } else {
+        // Standalone owns the entire logical keyspace.
+        RedisModule_ReplyWithArray(ctx, 2);
+        RedisModule_ReplyWithLongLong(ctx, 0);
+        RedisModule_ReplyWithLongLong(ctx, 16383);
+    }
+    return REDISMODULE_OK;
+}
+
 static int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool rev) {
     MRangeArgs args;
     if (parseMRangeCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
@@ -638,6 +682,11 @@ static int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, in
         return REDISMODULE_ERR;
     }
 
+    if (MRangeIsLocal(argv, argc) && ReplyLocalMRangeHeader(ctx) != REDISMODULE_OK) {
+        MRangeArgs_Free(&args);
+        return REDISMODULE_ERR;
+    }
+
     int result = REDISMODULE_OK;
     if (args.groupByLabel) {
         TS_ResultSet *resultset = ResultSet_Create();
@@ -650,12 +699,6 @@ static int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
     MRangeArgs_Free(&args);
     return result;
-}
-
-// LOCAL is positional: immediately after fromTimestamp and toTimestamp.
-// Do not search the entire argv: SELECTED_LABELS and GROUPBY can name a label LOCAL.
-static bool MRangeIsLocal(RedisModuleString **argv, int argc) {
-    return argc > 3 && RMUtil_StringEqualsCaseC(argv[3], "LOCAL");
 }
 
 int TSDB_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
