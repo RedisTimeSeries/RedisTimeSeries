@@ -9,7 +9,7 @@
 # TimeSeries one: TS.INCRBY without TIMESTAMP was replicated verbatim, so the
 # replica stamped the sample with its own clock.
 
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from includes import *
 
 MODULE_NAME = 'timeseries'
@@ -106,15 +106,17 @@ def _verify_row(env, master, slave, cmd, setup, write, reads):
     for spec in (setup or []):
         master.execute_command(*spec)
 
-    lag = threading.Thread(target=env.getSlaveConnection().execute_command,
-                           args=('DEBUG', 'SLEEP', REPLICA_LAG_S))
-    lag.start()
-    time.sleep(REPLICA_LAG_S / 5)  # let the replica enter the sleep first
-    master.execute_command(*write)
-
-    acked = master.execute_command('WAIT', 1, WAIT_TIMEOUT_MS)
-    lag.join()
+    with ThreadPoolExecutor(1) as pool:
+        lag = pool.submit(env.getSlaveConnection().execute_command, 'DEBUG', 'SLEEP', REPLICA_LAG_S)
+        time.sleep(REPLICA_LAG_S / 5)  # let the replica enter the sleep first
+        master.execute_command(*write)
+        start = time.monotonic()
+        acked = master.execute_command('WAIT', 1, WAIT_TIMEOUT_MS)
+        waited = time.monotonic() - start
+        lag.result()  # re-raises a rejected DEBUG SLEEP instead of silently running without the lag
     env.assertEqual(acked, 1, message=f'{cmd}: replica did not ack the write')
+    # A replica that applied the write before the sleep took hold acks at once.
+    env.assertGreaterEqual(waited, REPLICA_LAG_S / 2, message=f'{cmd}: replica applied the write before the lag')
     keys = _keys(master)
     env.assertEqual(keys, _keys(slave), message=f'{cmd}: key set diverged')
     env.assertEqual(_dumps(master, keys), _dumps(slave, keys), message=f'{cmd}: DUMP diverged')
