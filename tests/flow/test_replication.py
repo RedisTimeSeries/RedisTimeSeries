@@ -9,10 +9,17 @@
 # TimeSeries one: TS.INCRBY without TIMESTAMP was replicated verbatim, so the
 # replica stamped the sample with its own clock.
 
+import threading
 from includes import *
 
 MODULE_NAME = 'timeseries'
 WAIT_TIMEOUT_MS = 1000
+# How long the replica is kept busy while the primary runs the write. A command
+# replicated verbatim re-resolves '*' / a missing TIMESTAMP from the replica's
+# clock when it is applied; without this lag the replica applies it within the
+# same millisecond and the timestamps match anyway (MOD-16873 slipped through
+# 10/10 runs with no lag).
+REPLICA_LAG_S = 0.1
 
 READ_K = [['TS.RANGE', 'k', '-', '+'], ['TS.INFO', 'k']]
 
@@ -98,9 +105,15 @@ def _verify_row(env, master, slave, cmd, setup, write, reads):
     master.execute_command('FLUSHALL')
     for spec in (setup or []):
         master.execute_command(*spec)
+
+    lag = threading.Thread(target=env.getSlaveConnection().execute_command,
+                           args=('DEBUG', 'SLEEP', REPLICA_LAG_S))
+    lag.start()
+    time.sleep(REPLICA_LAG_S / 5)  # let the replica enter the sleep first
     master.execute_command(*write)
 
     acked = master.execute_command('WAIT', 1, WAIT_TIMEOUT_MS)
+    lag.join()
     env.assertEqual(acked, 1, message=f'{cmd}: replica did not ack the write')
     keys = _keys(master)
     env.assertEqual(keys, _keys(slave), message=f'{cmd}: key set diverged')
@@ -114,7 +127,7 @@ def _verify_row(env, master, slave, cmd, setup, write, reads):
 
 def test_write_commands_replicate():
     skip_on_rlec()
-    env = Env(useSlaves=True, protocol=2)
+    env = Env(useSlaves=True, protocol=2, enableDebugCommand=True)
     env.skipOnCluster()  # a cluster env has no replica connection to read
     master, slave = env.getConnection(), env.getSlaveConnection()
     _wait_link_up(env)
@@ -125,7 +138,7 @@ def test_write_commands_replicate():
 def test_every_write_command_is_covered():
     """The command table is only as good as its coverage of the real command set."""
     skip_on_rlec()
-    env = Env(useSlaves=True, protocol=2)
+    env = Env(useSlaves=True, protocol=2, enableDebugCommand=True)
     con = env.getConnection()
     if is_redis_version_lower_than(con, '7.0'):
         env.skip()
