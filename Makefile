@@ -5,6 +5,14 @@ endif
 
 ROOT=.
 
+# Homebrew's unversioned openssl alias tracks the latest major release, while
+# RedisTimeSeries currently builds against openssl@3. Resolve the versioned
+# formula explicitly and export it for the hiredis, LibMR, and libevent builds.
+ifeq ($(shell uname -s),Darwin)
+openssl_prefix ?= $(shell brew --prefix openssl@3)
+export openssl_prefix
+endif
+
 # Standalone `make bootstrap` on a host with no python3 yet: skip Readies (which
 # errors during Makefile parse) and run install_script.sh first. The
 # installer detects OSNICK, installs system packages via .install/os/<osnick>.sh,
