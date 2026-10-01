@@ -1,14 +1,11 @@
 #include "generic_chunk.h"
 
-/* Bound the stack buffer by the longest valid policy name (BLOCK/FIRST).
- * Update this limit when adding a longer policy name. */
-#define DUPLICATE_POLICY_MAX_LEN (sizeof("BLOCK") - 1)
-
 #include "chunk.h"
 #include "compressed_chunk.h"
 
 #include <ctype.h>
 #include <math.h>
+#include <strings.h> // strncasecmp
 #include "rmutil/alloc.h"
 
 static const ChunkFuncs regChunk = {
@@ -118,29 +115,23 @@ int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr) {
 }
 
 DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
-    if (len > DUPLICATE_POLICY_MAX_LEN) {
-        return DP_INVALID;
-    }
-    char input_lower[len];
-    for (int i = 0; i < len; i++) {
-        input_lower[i] = tolower(input[i]);
-    }
+    // Compare in place after checking the length to avoid a client-sized stack buffer.
     if (len == 3) {
-        if (strncmp(input_lower, "min", len) == 0) {
+        if (strncasecmp(input, "min", len) == 0) {
             return DP_MIN;
-        } else if (strncmp(input_lower, "max", len) == 0) {
+        } else if (strncasecmp(input, "max", len) == 0) {
             return DP_MAX;
-        } else if (strncmp(input_lower, "sum", len) == 0) {
+        } else if (strncasecmp(input, "sum", len) == 0) {
             return DP_SUM;
         }
     } else if (len == 4) {
-        if (strncmp(input_lower, "last", len) == 0) {
+        if (strncasecmp(input, "last", len) == 0) {
             return DP_LAST;
         }
     } else if (len == 5) {
-        if (strncmp(input_lower, "block", len) == 0) {
+        if (strncasecmp(input, "block", len) == 0) {
             return DP_BLOCK;
-        } else if (strncmp(input_lower, "first", len) == 0) {
+        } else if (strncasecmp(input, "first", len) == 0) {
             return DP_FIRST;
         }
     }
