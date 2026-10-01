@@ -9,12 +9,14 @@
 #include "compaction.h"
 #include "compressed_chunk.h"
 #include "gorilla.h"
+#include "generic_chunk.h"
 #include "minunit.h"
 #include "parse_policies.h"
 #include "tsdb.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "rmutil/alloc.h"
 
 MU_TEST(test_valid_policy) {
@@ -128,9 +130,18 @@ MU_TEST(test_StringLenAggTypeToEnum) {
     mu_check(StringAggTypeToEnum("range") == TS_AGG_RANGE);
 }
 
+MU_TEST(test_oversized_duplicate_policy) {
+    const size_t len = 9 * 1024 * 1024;
+    char *policy = malloc(len);
+    memset(policy, 'A', len);
+    mu_check(DuplicatePolicyFromString(policy, len) == DP_INVALID);
+    free(policy);
+}
+
 MU_TEST_SUITE(parse_policies_test_suite) {
     MU_RUN_TEST(test_valid_policy);
     MU_RUN_TEST(test_invalid_policy);
     MU_RUN_TEST(test_StringLenAggTypeToEnum);
+    MU_RUN_TEST(test_oversized_duplicate_policy);
     MU_RUN_TEST(test_PolicyToString);
 }

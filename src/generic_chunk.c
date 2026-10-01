@@ -1,5 +1,9 @@
 #include "generic_chunk.h"
 
+/* Bound the stack buffer by the longest valid policy name (BLOCK/FIRST).
+ * Update this limit when adding a longer policy name. */
+#define DUPLICATE_POLICY_MAX_LEN (sizeof("BLOCK") - 1)
+
 #include "chunk.h"
 #include "compressed_chunk.h"
 
@@ -114,6 +118,9 @@ int RMStringLenDuplicationPolicyToEnum(RedisModuleString *aggTypeStr) {
 }
 
 DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
+    if (len > DUPLICATE_POLICY_MAX_LEN) {
+        return DP_INVALID;
+    }
     char input_lower[len];
     for (int i = 0; i < len; i++) {
         input_lower[i] = tolower(input[i]);
