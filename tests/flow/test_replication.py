@@ -151,8 +151,13 @@ def _verify_row(env, master, slave, cmd, setup, write, reads):
 
 def test_write_commands_replicate():
     skip_on_rlec()
-    env = Env(useSlaves=True, protocol=2)
+    # Under --use-aof the replica below would run with AOF, and RLTest intermittently hangs
+    # stopping such a replica (it ignores SIGTERM; RLTest then waits on it with no timeout).
+    # Replication is covered by the other env groups, so skip rather than add it here.
+    env = Env()
     env.skipOnCluster()  # a cluster env has no replica connection to read
+    env.skipOnAOF()
+    env = Env(useSlaves=True, protocol=2)
     master, slave = env.getConnection(), env.getSlaveConnection()
     _wait_link_up(env)
     for cmd, setup, write, reads in ROWS:
@@ -162,7 +167,7 @@ def test_write_commands_replicate():
 def test_every_write_command_is_covered():
     """The command table is only as good as its coverage of the real command set."""
     skip_on_rlec()
-    env = Env(useSlaves=True, protocol=2)
+    env = Env(protocol=2)  # no replica needed: this only reads the command table
     con = env.getConnection()
     if is_redis_version_lower_than(con, '7.0'):
         env.skip()
