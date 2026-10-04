@@ -17,6 +17,9 @@ inputs:
     type: string
     description: "Specify whether to use the environment or not"
     default: '0'
+  macos-test-timeout:
+    description: 'Optional GNU timeout duration for macOS tests with resource diagnostics'
+    default: ''
 
 
 runs:
@@ -29,6 +32,7 @@ runs:
         INPUT_RUN_SANITIZER: ${{ inputs.run_sanitizer }}
         INPUT_QUICK: ${{ inputs.quick }}
         INPUT_USE_VENV: ${{ inputs.use-venv }}
+        MACOS_TEST_TIMEOUT: ${{ inputs.macos-test-timeout }}
       run: |
         if command -v scl_source &> /dev/null
         then
@@ -39,7 +43,11 @@ runs:
         fi
         # Capture test output to file for parsing by capture-test-results action
         TEST_OUTPUT_FILE="$GITHUB_WORKSPACE/test_output.log"
-        make test VG="$INPUT_RUN_VALGRIND" SAN="$INPUT_RUN_SANITIZER" QUICK="$INPUT_QUICK" \
-          REDIS_SERVER="$GITHUB_WORKSPACE/redis/src/redis-server" 2>&1 | tee "$TEST_OUTPUT_FILE"
         echo "TEST_OUTPUT_FILE=$TEST_OUTPUT_FILE" >> $GITHUB_ENV
+        test_command=(make test)
+        if [[ -n "$MACOS_TEST_TIMEOUT" ]]; then
+          test_command=(bash "$GITHUB_WORKSPACE/.github/scripts/run-macos-tests.sh" "$MACOS_TEST_TIMEOUT" make test)
+        fi
+        "${test_command[@]}" VG="$INPUT_RUN_VALGRIND" SAN="$INPUT_RUN_SANITIZER" QUICK="$INPUT_QUICK" \
+          REDIS_SERVER="$GITHUB_WORKSPACE/redis/src/redis-server" 2>&1 | tee "$TEST_OUTPUT_FILE"
         exit ${PIPESTATUS[0]}

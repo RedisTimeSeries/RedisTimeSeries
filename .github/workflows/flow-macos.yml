@@ -176,10 +176,23 @@ jobs:
           use-venv: '1'
       - name: Run tests
         if: ${{ !inputs.build_only }}
+        # Healthy macos-26-intel runs take ~82 minutes. Leave headroom and
+        # let the inner 120-minute deadline finish before Actions cancels it.
+        timeout-minutes: 130
         uses: ./.github/actions/run-tests
         with:
           use-venv: '1'
           quick: ${{inputs.quick && '1' || '0'}}
+          macos-test-timeout: '120m'
+      - name: Upload macOS test diagnostics
+        if: ${{ always() && !inputs.build_only }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: macos-test-diagnostics-${{ matrix.os }}
+          path: |
+            test_output.log
+            macos-test-diagnostics.log
+          if-no-files-found: warn
       - name: Capture test results
         if: ${{ always() && !inputs.build_only }}
         uses: ./.github/actions/capture-test-results
