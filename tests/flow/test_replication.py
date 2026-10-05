@@ -9,17 +9,17 @@
 # TimeSeries one: TS.INCRBY without TIMESTAMP was replicated verbatim, so the
 # replica stamped the sample with its own clock.
 
-from concurrent.futures import ThreadPoolExecutor
 from includes import *
 
 MODULE_NAME = 'timeseries'
 WAIT_TIMEOUT_MS = 1000
-# How long the replica is kept busy while the primary runs the write. A command
-# replicated verbatim re-resolves '*' / a missing TIMESTAMP from the replica's
-# clock when it is applied; without this lag the replica applies it within the
-# same millisecond and the timestamps match anyway (MOD-16873 slipped through
-# 10/10 runs with no lag).
-REPLICA_LAG_S = 0.1
+MARKER = 'mod18948-end-of-write'
+
+# Rows whose timestamp the primary resolves from its own clock ('*', or no
+# TIMESTAMP). The replica must receive it already resolved. Comparing the data
+# alone is not enough: a replica that re-resolves the clock (MOD-16873) usually
+# lands on the same millisecond, so the samples still match.
+CLOCK_ROWS = {'ts.add', 'ts.madd', 'ts.incrby', 'ts.decrby'}
 
 READ_K = [['TS.RANGE', 'k', '-', '+'], ['TS.INFO', 'k']]
 
@@ -93,6 +93,32 @@ def _read_slave(con, spec):
         return f'error: {e}'
 
 
+def _received(env, mon):
+    """The TS.* commands the replica has executed since MONITOR started.
+
+    WAIT already returned, so the replica executed the write; the marker it runs
+    next marks the end of everything it received before.
+    """
+    env.getSlaveConnection().execute_command('ECHO', MARKER)
+    received = []
+    while True:
+        command = mon.next_command()['command']
+        if command == f'ECHO {MARKER}':
+            return received
+        if command.upper().startswith('TS.'):
+            received.append(command.split())
+
+
+def _assert_clock_resolved(env, cmd, received):
+    mine = [c for c in received if c[0].lower() == cmd]
+    env.assertTrue(mine, message=f'{cmd}: the replica never received it')
+    for c in mine:
+        env.assertFalse('*' in c, message=f'{cmd}: replica got an unresolved timestamp: {c}')
+        if cmd in ('ts.incrby', 'ts.decrby'):
+            env.assertTrue('TIMESTAMP' in (a.upper() for a in c),
+                           message=f'{cmd}: replica got no TIMESTAMP and stamps its own clock: {c}')
+
+
 def _keys(con):
     return sorted(con.execute_command('KEYS', '*'))
 
@@ -106,17 +132,13 @@ def _verify_row(env, master, slave, cmd, setup, write, reads):
     for spec in (setup or []):
         master.execute_command(*spec)
 
-    with ThreadPoolExecutor(1) as pool:
-        lag = pool.submit(env.getSlaveConnection().execute_command, 'DEBUG', 'SLEEP', REPLICA_LAG_S)
-        time.sleep(REPLICA_LAG_S / 5)  # let the replica enter the sleep first
+    with slave.monitor() as mon:
         master.execute_command(*write)
-        start = time.monotonic()
         acked = master.execute_command('WAIT', 1, WAIT_TIMEOUT_MS)
-        waited = time.monotonic() - start
-        lag.result()  # re-raises a rejected DEBUG SLEEP instead of silently running without the lag
+        received = _received(env, mon)
     env.assertEqual(acked, 1, message=f'{cmd}: replica did not ack the write')
-    # A replica that applied the write before the sleep took hold acks at once.
-    env.assertGreaterEqual(waited, REPLICA_LAG_S / 2, message=f'{cmd}: replica applied the write before the lag')
+    if cmd in CLOCK_ROWS:
+        _assert_clock_resolved(env, cmd, received)
     keys = _keys(master)
     env.assertEqual(keys, _keys(slave), message=f'{cmd}: key set diverged')
     env.assertEqual(_dumps(master, keys), _dumps(slave, keys), message=f'{cmd}: DUMP diverged')
@@ -129,8 +151,13 @@ def _verify_row(env, master, slave, cmd, setup, write, reads):
 
 def test_write_commands_replicate():
     skip_on_rlec()
-    env = Env(useSlaves=True, protocol=2, enableDebugCommand=True)
+    # Under --use-aof the replica below would run with AOF, and RLTest intermittently hangs
+    # stopping such a replica (it ignores SIGTERM; RLTest then waits on it with no timeout).
+    # Replication is covered by the other env groups, so skip rather than add it here.
+    env = Env()
     env.skipOnCluster()  # a cluster env has no replica connection to read
+    env.skipOnAOF()
+    env = Env(useSlaves=True, protocol=2)
     master, slave = env.getConnection(), env.getSlaveConnection()
     _wait_link_up(env)
     for cmd, setup, write, reads in ROWS:
@@ -140,7 +167,7 @@ def test_write_commands_replicate():
 def test_every_write_command_is_covered():
     """The command table is only as good as its coverage of the real command set."""
     skip_on_rlec()
-    env = Env(useSlaves=True, protocol=2, enableDebugCommand=True)
+    env = Env(protocol=2)  # no replica needed: this only reads the command table
     con = env.getConnection()
     if is_redis_version_lower_than(con, '7.0'):
         env.skip()
