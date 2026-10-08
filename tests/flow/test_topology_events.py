@@ -1,6 +1,7 @@
 import time
 import random
 import functools
+from contextlib import ExitStack
 from includes import *
 from utils import (
     fill_ts_data,
@@ -151,8 +152,15 @@ def test_failover():
         env.skip()
 
     def post_failover(env):
-        wait_for_valid_cluster(env)
-        wait_for_valid_ts_infocluster(env)
+        cluster = wait_for_valid_cluster(env)
+        # Replicas added by added_slaves_to_cluster are outside env.shardsCount.
+        # After promotion they can serve strict_validation, so check their LibMR
+        # views too, against Redis' current masters rather than mere agreement.
+        masters = {node_id: node for node_id, node in cluster.items() if "master" in node.flags}
+        with ExitStack() as stack:
+            connections = [stack.enter_context(redis.Redis(host=node.ip, port=node.port, decode_responses=True))
+                           for node in cluster.values()]
+            wait_for_valid_ts_infocluster(env, connections=connections, expected=masters)
 
     with added_slaves_to_cluster(env):
         fill_some_data(env)
@@ -375,20 +383,24 @@ def ts_cluster_from_conn(conn):
     return nodes
 
 
-def wait_for_valid_ts_infocluster(env):
+def wait_for_valid_ts_infocluster(env, connections=None, expected=None):
     # Wait until every node's timeseries.INFOCLUSTER reports full coverage and all nodes agree.
     # Returns the agreed topology as a {node_id: ClusterNode} dict (the first polled node's view).
     timeout = get_timeout()
     deadline = time.time() + timeout
+    if connections is None:
+        connections = [env.getConnection(i) for i in range(env.shardsCount)]
     while True:
         try:
-            clusters = [ts_cluster_from_conn(env.getConnection(i)) for i in range(env.shardsCount)]
+            clusters = [ts_cluster_from_conn(conn) for conn in connections]
         except redis.exceptions.ResponseError as x:
             # A just-rejoined master's cluster state is transiently 'fail', so INFOCLUSTER is rejected;
             # keep polling until it turns healthy.
             assert str(x) == CLUSTERDOWN_ERROR, str(x)
             clusters = None
-        if clusters is not None and all(clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
+        if (clusters is not None and all(clusters)
+                and all(compare_clusters(clusters[0], c) for c in clusters[1:])
+                and (expected is None or compare_clusters(expected, clusters[0]))):
             return clusters[0]
         assert time.time() < deadline, "timeseries.INFOCLUSTER did not reach a valid, agreed state in time"
         time.sleep(0.2)
