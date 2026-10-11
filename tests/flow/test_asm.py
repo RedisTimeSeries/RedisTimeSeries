@@ -1,6 +1,7 @@
 import time
 import json
 import random
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import redis
@@ -89,13 +90,17 @@ def test_asm_with_data_and_queries_during_migrations():
         assert all(int(sample[1]) == number_of_keys for sample in samples)
 
     validate_queries_during_migrations(
-        env, post_migration=wait_for_valid_cluster, command=command, validate_result=validate_result
+        env, post_migration=wait_for_valid_cluster, command=command, validate_result=validate_result,
+        rounds=5 if sys.platform.startswith("linux") and not (VALGRIND or SANITIZER) else 1
     )
 
 
-def validate_queries_during_migrations(env, post_migration, command, validate_result):
+def validate_queries_during_migrations(env, post_migration, command, validate_result, rounds=1):
     with runner_samples() as resources:
-        return _validate_queries_during_migrations(env, post_migration, command, validate_result, resources)
+        for attempt in range(1, rounds + 1):
+            print(f"MOD-17216 ASM workload round {attempt}/{rounds} start", flush=True)
+            _validate_queries_during_migrations(env, post_migration, command, validate_result, resources)
+            print(f"MOD-17216 ASM workload round {attempt}/{rounds} passed", flush=True)
 
 
 def _validate_queries_during_migrations(env, post_migration, command, validate_result, resources):
