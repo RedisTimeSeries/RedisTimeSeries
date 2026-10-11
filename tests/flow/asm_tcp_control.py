@@ -112,5 +112,12 @@ if __name__ == '__main__':
                 for chunk in (16384, 65536, 1048576):
                     for pause in (0, 0.01):
                         trial(chunk, pause, 0, contexts=contexts, reply_bytes=3 * 1024 * 1024)
+            # Independent processes remove shared interpreter scheduling; short
+            # receiver pauses/small reads exercise queue buildup without buffer setters.
+            from asm_burst_control import trial as burst_trial
+            for tls in (False, True):
+                for read_size in (1024, 4096, 16384):
+                    for pause in (0, 0.001):
+                        burst_trial(tls, read_size, pause, cert, key)
     except Exception as error:
         print(json.dumps({'tls_control_setup_error': repr(error)}), flush=True)
