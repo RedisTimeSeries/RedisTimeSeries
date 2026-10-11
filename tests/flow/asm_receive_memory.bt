@@ -15,8 +15,18 @@ kretprobe:tcp_try_rmem_schedule
   $sk = (struct sock *)@sk[tid, cpu];
   $before = @before[tid, cpu];
   $after = $sk->sk_rcvbuf;
-  if ($after < $before && @events < 100) {
-    @events = @events + 1;
+  $emit = 0;
+  if ($after < $before) {
+    @shrinks = count();
+    // Reserve a separate budget below the observed CI default (131072 bytes).
+    if ($after < 131072) {
+      @small_shrinks = count();
+      if (@small_events < 100) { @small_events = @small_events + 1; $emit = 1; }
+    } else {
+      if (@ordinary_events < 20) { @ordinary_events = @ordinary_events + 1; $emit = 1; }
+    }
+  }
+  if ($emit) {
     $remote = $sk->__sk_common.skc_dport;
     printf("MOD-17216 kernel shrink mono_ns=%llu socket=%p local=%u remote=%u before=%d after=%d\n", nsecs, $sk, $sk->__sk_common.skc_num, ($remote >> 8) | (($remote & 255) << 8), $before, $after);
     print(kstack(12));
