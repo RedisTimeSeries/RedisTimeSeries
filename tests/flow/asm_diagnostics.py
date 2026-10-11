@@ -30,7 +30,6 @@ def runner_samples():
                 snapshot[name] = Path(name).read_text()
             except OSError as error:
                 snapshot[name] = {"unavailable": str(error)}
-        snapshot["tcp_windows"] = tcp_window_snapshot()
         samples.append(snapshot)
 
     def observe():
@@ -45,9 +44,16 @@ def runner_samples():
     finally:
         done.set()
         worker.join(timeout=2)
+        # Keep the runner network baseline even when the test passes.
+        baseline = {key: value for key, value in samples[0].items()
+                    if key.startswith('/proc/sys/') or key == 'cpu_count'}
+        print('MOD-17216 network baseline: ' + json.dumps(baseline), flush=True)
 
 
 def log_runner_samples(samples):
+    # Query socket diagnostics only after failure: periodic SOCK_DIAG dumps may
+    # perturb the timing of the race we are trying to observe.
+    print('MOD-17216 TCP at timeout: ' + json.dumps(tcp_window_snapshot()), flush=True)
     print("MOD-17216 runner samples: " + json.dumps(list(samples)), flush=True)
 
 
