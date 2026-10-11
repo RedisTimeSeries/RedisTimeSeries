@@ -1,11 +1,13 @@
 import time
 import random
 import functools
+from contextlib import ExitStack
 from includes import *
 from utils import (
     fill_ts_data,
     wait_for_valid_cluster,
     compare_clusters,
+    validate_cluster,
     ClusterNode,
     SlotRange,
     NUMBER_OF_SLOTS,
@@ -144,15 +146,36 @@ def test_asm():
     validate_queries_during_migrations(env, post_migration, COMMAND, validate_result)
 
 
+def post_failover(env):
+    cluster = wait_for_valid_cluster(env)
+    # Added replicas can become query coordinators after promotion. Read both
+    # Redis and LibMR views from every node on every poll, including round two's
+    # demoted added node. Never freeze a transient slotless-master topology.
+    with ExitStack() as stack:
+        connections = [stack.enter_context(redis.Redis(host=node.ip, port=node.port, decode_responses=True))
+                       for node in cluster.values()]
+        deadline = time.monotonic() + get_timeout()
+        while True:
+            views = [validate_cluster(conn) for conn in connections]
+            if (all(views) and all(compare_clusters(views[0], view) for view in views[1:])):
+                masters = {node_id: node for node_id, node in views[0].items() if "master" in node.flags}
+                if masters and all(node.slots for node in masters.values()):
+                    try:
+                        module_views = [ts_cluster_from_conn(conn) for conn in connections]
+                    except redis.exceptions.ResponseError as error:
+                        assert str(error) == CLUSTERDOWN_ERROR, str(error)
+                        module_views = []
+                    if module_views and all(view and compare_clusters(masters, view) for view in module_views):
+                        return
+            assert time.monotonic() < deadline, "Redis and timeseries.INFOCLUSTER did not converge after failover"
+            time.sleep(0.2)
+
+
 def test_failover():
     env = Env(shardsCount=3, decodeResponses=True, skipRefreshCluster=True)
     skip_if_needed(env)
     if env.useTLS:  # The added slaves do support TLS (for now; will be resolved by MOD-17386)
         env.skip()
-
-    def post_failover(env):
-        wait_for_valid_cluster(env)
-        wait_for_valid_ts_infocluster(env)
 
     with added_slaves_to_cluster(env):
         fill_some_data(env)
@@ -380,15 +403,17 @@ def wait_for_valid_ts_infocluster(env):
     # Returns the agreed topology as a {node_id: ClusterNode} dict (the first polled node's view).
     timeout = get_timeout()
     deadline = time.time() + timeout
+    connections = [env.getConnection(i) for i in range(env.shardsCount)]
     while True:
         try:
-            clusters = [ts_cluster_from_conn(env.getConnection(i)) for i in range(env.shardsCount)]
+            clusters = [ts_cluster_from_conn(conn) for conn in connections]
         except redis.exceptions.ResponseError as x:
             # A just-rejoined master's cluster state is transiently 'fail', so INFOCLUSTER is rejected;
             # keep polling until it turns healthy.
             assert str(x) == CLUSTERDOWN_ERROR, str(x)
             clusters = None
-        if clusters is not None and all(clusters) and all(compare_clusters(clusters[0], c) for c in clusters[1:]):
+        if (clusters is not None and all(clusters)
+                and all(compare_clusters(clusters[0], c) for c in clusters[1:])):
             return clusters[0]
         assert time.time() < deadline, "timeseries.INFOCLUSTER did not reach a valid, agreed state in time"
         time.sleep(0.2)
