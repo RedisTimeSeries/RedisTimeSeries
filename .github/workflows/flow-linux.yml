@@ -127,9 +127,13 @@ jobs:
         id: set-runner
         env:
           ARCH: ${{ inputs.arch }}
+          MOD17216_FOCUSED: ${{ inputs.mod17216_focused }}
         run: |
           if [ "$ARCH" == "arm64" ]; then
             echo "runner=ubuntu-24.04-arm" >> "$GITHUB_OUTPUT"
+          elif [ "$MOD17216_FOCUSED" == "true" ]; then
+            # Diagnostic environment comparison; container/workload stay identical.
+            echo "runner=ubuntu-22.04" >> "$GITHUB_OUTPUT"
           else
             echo "runner=ubuntu-latest" >> "$GITHUB_OUTPUT"
           fi
