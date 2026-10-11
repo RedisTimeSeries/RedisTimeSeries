@@ -11,6 +11,17 @@ if ! command -v strace >/dev/null; then
     timeout 120 apt-get update -qq
     timeout 120 apt-get install -y -qq strace
 fi
+if [ -n "${MOD17216_KERNEL_GATE:-}" ]; then
+    for i in $(seq 1 190); do
+        [ -f "$MOD17216_KERNEL_GATE/ready" ] && break
+        [ -f "$MOD17216_KERNEL_GATE/failed" ] && break
+        sleep 1
+    done
+    if [ ! -f "$MOD17216_KERNEL_GATE/ready" ]; then
+        echo 'MOD-17216 kernel observer unavailable; workload not started' >&2
+        exit 2
+    fi
+fi
 destination="$(pwd)/tests/flow/logs/mod17216-setsockopt.log"
 # tests.sh removes its logs at startup; keep the open trace outside that tree.
 trace=$(mktemp /tmp/mod17216-setsockopt.XXXXXX)
