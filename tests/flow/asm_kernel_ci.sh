@@ -7,8 +7,11 @@ name=mod17216-workload-$$
 observer=mod17216-observer-$$
 cleanup() {
     docker rm -f "$observer" "$name" >/dev/null 2>&1 || true
-    mkdir -p tests/flow/logs
-    cp "$gate/observer.log" tests/flow/logs/mod17216-kernel.log 2>/dev/null || true
+    # Host-owned path survives root-owned workload logs and launcher cleanup.
+    if ! cp "$gate/observer.log" tests/flow/mod17216-kernel.log; then
+        echo "MOD-17216 kernel artifact copy failed; preserving $gate" >&2
+        return
+    fi
     rm -rf "$gate"
 }
 trap cleanup EXIT

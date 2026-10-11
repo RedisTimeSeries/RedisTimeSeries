@@ -10,9 +10,8 @@ uname -r
 bpftrace --version
 ns=$(readlink /proc/self/ns/net | tr -cd 0-9)
 target=tcp_try_rmem_schedule
-if grep -q '^tcp_clamp_window\([[:space:]]\|$\)' /sys/kernel/tracing/available_filter_functions; then
-    target=tcp_clamp_window
-fi
+# The probe reads arg1 as sk_buff; do not substitute a one-argument function.
+grep -q '^tcp_try_rmem_schedule\([[:space:]]\|$\)' /sys/kernel/tracing/available_filter_functions
 echo "MOD-17216 kernel target=$target netns=$ns"
 sed "s/tcp_try_rmem_schedule/$target/g" /workspace/tests/flow/asm_receive_memory.bt > "$gate/probe.bt"
 export BPFTRACE_BTF=/sys/kernel/btf/vmlinux

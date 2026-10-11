@@ -1,4 +1,4 @@
-// Local prototype: namespace-filtered, bounded receive-memory path observation.
+// Diagnostic probe: namespace-filtered, bounded receive-memory path observation.
 // $1 = network namespace inode of the workload. No payload reads or mutations.
 kprobe:tcp_try_rmem_schedule
 {
@@ -6,6 +6,12 @@ kprobe:tcp_try_rmem_schedule
   if ($sk->__sk_common.skc_net.net->ns.inum == $1) {
     @sk[tid, cpu] = arg0;
     @before[tid, cpu] = $sk->sk_rcvbuf;
+    @rmem[tid, cpu] = $sk->sk_backlog.rmem_alloc.counter;
+    @qlen[tid, cpu] = $sk->sk_receive_queue.qlen;
+    @locks[tid, cpu] = $sk->sk_userlocks;
+    $skb = (struct sk_buff *)arg1;
+    @len[tid, cpu] = $skb->len;
+    @truesize[tid, cpu] = $skb->truesize;
     @calls = count();
   }
 }
@@ -29,11 +35,14 @@ kretprobe:tcp_try_rmem_schedule
   if ($emit) {
     $remote = $sk->__sk_common.skc_dport;
     printf("MOD-17216 kernel shrink mono_ns=%llu socket=%p local=%u remote=%u before=%d after=%d\n", nsecs, $sk, $sk->__sk_common.skc_num, ($remote >> 8) | (($remote & 255) << 8), $before, $after);
+    printf("MOD-17216 shrink inputs rmem_before=%d rmem_after=%d queue_before=%u queue_after=%u locks=%u skb_len=%u skb_truesize=%u result=%d\n", @rmem[tid,cpu], $sk->sk_backlog.rmem_alloc.counter, @qlen[tid,cpu], $sk->sk_receive_queue.qlen, @locks[tid,cpu], @len[tid,cpu], @truesize[tid,cpu], (int32)retval);
     print(kstack(12));
   }
   delete(@sk[tid,cpu]);
   delete(@before[tid,cpu]);
+  delete(@rmem[tid,cpu]); delete(@qlen[tid,cpu]); delete(@locks[tid,cpu]);
+  delete(@len[tid,cpu]); delete(@truesize[tid,cpu]);
 }
 BEGIN { printf("MOD-17216 kernel probe ready\n"); }
 interval:s:300 { exit(); }
-END { clear(@sk); clear(@before); }
+END { clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
