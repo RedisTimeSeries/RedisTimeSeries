@@ -23,6 +23,12 @@ for i in $(seq 1 30); do
     kill -0 "$workload" 2>/dev/null || { wait "$workload"; exit $?; }
     sleep 1
 done
+# The MTU experiment must never operate in the host or another container's netns.
+network_mode=$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$name")
+case "$network_mode" in
+    default|bridge|none) ;;
+    *) echo "MOD-17216 requires a private workload network namespace: $network_mode" >&2; exit 2 ;;
+esac
 docker run --name "$observer" --privileged --network "container:$name" \
     -v "$PWD:/workspace" -w /workspace ubuntu:24.04 \
     bash tests/flow/asm_kernel_observer.sh "$container_gate" \
