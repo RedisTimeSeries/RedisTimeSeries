@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import redis
 
 from includes import Env, VALGRIND, SANITIZER, RUNNER_LABEL
-from asm_diagnostics import runner_samples, log_runner_samples
+from asm_diagnostics import runner_samples, log_runner_samples, process_transport_snapshot
 from utils import migrate_slots_back_and_forth, fill_ts_data, wait_for_valid_cluster, get_timeout
 
 
@@ -29,6 +29,7 @@ def log_query_timeout(env):
                 # Older Redis exposes INFOCLUSTER without internal clients.
                 snapshot["internal_client_error"] = str(error)
             for name, fetch in (
+                ("transport", lambda: process_transport_snapshot(conn.info("server")["process_id"])),
                 ("clients", conn.client_list),
                 ("commandstats", lambda: conn.info("commandstats")),
                 ("libmr", lambda: conn.execute_command("timeseries.INFOCLUSTER")),
