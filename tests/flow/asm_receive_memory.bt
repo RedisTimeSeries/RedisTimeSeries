@@ -39,6 +39,9 @@ kretprobe:tcp_try_rmem_schedule
     // Reserve a separate budget below the observed CI default (131072 bytes).
     if ($after < 131072) {
       @small_shrinks = count();
+      // Watch the sender counterpart for ten seconds after this reduction.
+      $rp = $sk->__sk_common.skc_dport;
+      @ack_watch[$sk->__sk_common.skc_num, ($rp >> 8) | (($rp & 255) << 8)] = nsecs + 10000000000;
       if (@small_events < 100) { @small_events = @small_events + 1; $emit = 1; }
     } else {
       if (@ordinary_events < 20) { @ordinary_events = @ordinary_events + 1; $emit = 1; }
@@ -60,7 +63,7 @@ kretprobe:tcp_try_rmem_schedule
 }
 BEGIN { printf("MOD-17216 kernel probe ready\n"); }
 interval:s:300 { exit(); }
-END { clear(@grow_sk); clear(@grow_before); clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
+END { clear(@ack_watch); clear(@ack_sk); clear(@ack_id); clear(@ack_per_pair); clear(@grow_sk); clear(@grow_before); clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
 
 // Observe receive autotuning recovery, paired by thread/CPU like shrink events.
 kprobe:tcp_rcv_space_adjust
@@ -92,4 +95,39 @@ kretprobe:tcp_rcv_space_adjust
     }
   }
   delete(@grow_sk[tid,cpu]); delete(@grow_before[tid,cpu]);
+}
+
+// tcp_ack is not every TCP fast path. Records show acceptance state at this call.
+// Reverse ports identify the sender peer in the same isolated network namespace.
+// Correlate pointer/ports/timestamps; a recently reused port pair can also match.
+kprobe:tcp_ack
+{
+  $sk = (struct sock *)arg0;
+  if ($sk->__sk_common.skc_net.net->ns.inum == $1) {
+    $rp = $sk->__sk_common.skc_dport;
+    $remote = ($rp >> 8) | (($rp & 255) << 8);
+    $local = $sk->__sk_common.skc_num;
+    if (@ack_watch[$remote, $local] > nsecs) {
+      @ack_candidates = count();
+      if (@ack_events < 1000 && @ack_per_pair[$local,$remote] < 200) {
+        @ack_events = @ack_events + 1;
+        @ack_per_pair[$local,$remote] = @ack_per_pair[$local,$remote] + 1;
+        @ack_id[tid,cpu] = nsecs;
+        @ack_sk[tid,cpu] = arg0;
+        $tp = (struct tcp_sock *)$sk;
+        $skb = (struct sk_buff *)arg1;
+        $cb = (struct tcp_skb_cb *)((uint64)$skb + offsetof(struct sk_buff,cb));
+        $th = (uint8 *)($skb->head + $skb->transport_header);
+        $win = (*(uint8 *)($th+14) << 8) | *(uint8 *)($th+15);
+        printf("MOD-17216 ACK id=%llu socket=%p local=%u remote=%u seq=%u ack=%u raw_win=%u flags=%u scale=%u una=%u nxt=%u wl1=%u wnd=%u\n", @ack_id[tid,cpu], $sk, $local, $remote, $cb->seq, $cb->ack_seq, $win, *(uint8 *)($th+13), $tp->rx_opt.snd_wscale, $tp->snd_una, $tp->snd_nxt, $tp->snd_wl1, $tp->snd_wnd);
+      } else { @ack_omitted = count(); }
+    }
+  }
+}
+kretprobe:tcp_ack
+/@ack_sk[tid,cpu]/
+{
+  $tp = (struct tcp_sock *)@ack_sk[tid,cpu];
+  printf("MOD-17216 ACK return id=%llu mono_ns=%llu socket=%p result=%d una=%u wl1=%u wnd=%u\n", @ack_id[tid,cpu], nsecs, $tp, (int32)retval, $tp->snd_una, $tp->snd_wl1, $tp->snd_wnd);
+  delete(@ack_sk[tid,cpu]); delete(@ack_id[tid,cpu]);
 }
