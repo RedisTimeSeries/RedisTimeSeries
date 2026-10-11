@@ -9,15 +9,15 @@ mount -t tracefs tracefs /sys/kernel/tracing
 uname -r
 bpftrace --version
 ns=$(readlink /proc/self/ns/net | tr -cd 0-9)
-# Controlled ARM64 intervention; x64 remains the existing reference.
+# Controlled ARM64 reversal to the original loopback MTU; x64 stays unchanged.
 # This observer shares only the disposable workload container's network namespace.
 mtu_before=$(cat /sys/class/net/lo/mtu)
 if [ "$(uname -m)" = aarch64 ]; then
-    ip link set dev lo mtu 1500
+    ip link set dev lo mtu 65536
 fi
 mtu_after=$(cat /sys/class/net/lo/mtu)
 echo "MOD-17216 loopback MTU experiment arch=$(uname -m) netns=$ns before=$mtu_before after=$mtu_after"
-if [ "$(uname -m)" = aarch64 ] && [ "$mtu_after" != 1500 ]; then exit 2; fi
+if [ "$(uname -m)" = aarch64 ] && [ "$mtu_after" != 65536 ]; then exit 2; fi
 target=tcp_try_rmem_schedule
 # The probe reads arg1 as sk_buff; do not substitute a one-argument function.
 grep -q '^tcp_try_rmem_schedule\([[:space:]]\|$\)' /sys/kernel/tracing/available_filter_functions
