@@ -423,7 +423,7 @@ test: mod17216_tests
 mod17216_tests:
 	@if [ "$$(uname -s)" = Linux ] && [ -z "$(SAN)" ] && [ "$(VG)" != 1 ] && \
 	    { [ "$(OSS_CLUSTER)" = 1 ] || [ "$(TLS_CLUSTER)" = 1 ]; }; then \
-	    $(MAKE) flow_tests TEST=test_asm.py:test_asm_with_data_and_queries_during_migrations \
+	    bash tests/flow/asm_trace.sh $(MAKE) flow_tests TEST=test_asm.py:test_asm_with_data_and_queries_during_migrations \
 	        GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0; \
 	else \
 	    echo "MOD-17216 diagnostic branch: unrelated test topology skipped"; \
