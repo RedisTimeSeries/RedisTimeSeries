@@ -12,6 +12,18 @@ kprobe:tcp_try_rmem_schedule
     $skb = (struct sk_buff *)arg1;
     @len[tid, cpu] = $skb->len;
     @truesize[tid, cpu] = $skb->truesize;
+    $cb = (struct tcp_skb_cb *)((uint64)$skb + offsetof(struct sk_buff, cb));
+    $tp = (struct tcp_sock *)$sk;
+    @seq[tid,cpu] = $cb->seq;
+    @endseq[tid,cpu] = $cb->end_seq;
+    @nxt[tid,cpu] = $tp->rcv_nxt;
+    @wup[tid,cpu] = $tp->rcv_wup;
+    @wnd[tid,cpu] = $tp->rcv_wnd;
+    @ratio[tid,cpu] = $tp->scaling_ratio;
+    if (@sequence_samples < 1) {
+      @sequence_samples = 1;
+      printf("MOD-17216 sequence baseline seq=%u end=%u nxt=%u wup=%u wnd=%u ratio=%u\n", $cb->seq, $cb->end_seq, $tp->rcv_nxt, $tp->rcv_wup, $tp->rcv_wnd, $tp->scaling_ratio);
+    }
     @calls = count();
   }
 }
@@ -36,13 +48,16 @@ kretprobe:tcp_try_rmem_schedule
     $remote = $sk->__sk_common.skc_dport;
     printf("MOD-17216 kernel shrink mono_ns=%llu socket=%p local=%u remote=%u before=%d after=%d\n", nsecs, $sk, $sk->__sk_common.skc_num, ($remote >> 8) | (($remote & 255) << 8), $before, $after);
     printf("MOD-17216 shrink inputs rmem_before=%d rmem_after=%d queue_before=%u queue_after=%u locks=%u skb_len=%u skb_truesize=%u result=%d\n", @rmem[tid,cpu], $sk->sk_backlog.rmem_alloc.counter, @qlen[tid,cpu], $sk->sk_receive_queue.qlen, @locks[tid,cpu], @len[tid,cpu], @truesize[tid,cpu], (int32)retval);
+    $tp = (struct tcp_sock *)$sk;
+    printf("MOD-17216 shrink sequence seq=%u end=%u nxt_before=%u wup_before=%u wnd_before=%u ratio_before=%u nxt_after=%u wup_after=%u wnd_after=%u ratio_after=%u\n", @seq[tid,cpu], @endseq[tid,cpu], @nxt[tid,cpu], @wup[tid,cpu], @wnd[tid,cpu], @ratio[tid,cpu], $tp->rcv_nxt, $tp->rcv_wup, $tp->rcv_wnd, $tp->scaling_ratio);
     print(kstack(12));
   }
   delete(@sk[tid,cpu]);
   delete(@before[tid,cpu]);
   delete(@rmem[tid,cpu]); delete(@qlen[tid,cpu]); delete(@locks[tid,cpu]);
+  delete(@seq[tid,cpu]); delete(@endseq[tid,cpu]); delete(@nxt[tid,cpu]); delete(@wup[tid,cpu]); delete(@wnd[tid,cpu]); delete(@ratio[tid,cpu]);
   delete(@len[tid,cpu]); delete(@truesize[tid,cpu]);
 }
 BEGIN { printf("MOD-17216 kernel probe ready\n"); }
 interval:s:300 { exit(); }
-END { clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
+END { clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
