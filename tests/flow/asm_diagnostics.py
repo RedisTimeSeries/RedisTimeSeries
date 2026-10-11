@@ -3,6 +3,8 @@ import json
 import os
 import socket
 import struct
+import subprocess
+import sys
 import time
 from collections import deque
 from contextlib import contextmanager
@@ -48,6 +50,22 @@ def runner_samples():
         baseline = {key: value for key, value in samples[0].items()
                     if key.startswith('/proc/sys/') or key == 'cpu_count'}
         print('MOD-17216 network baseline: ' + json.dumps(baseline), flush=True)
+        # Run only after the ASM workload, so this control cannot perturb it.
+        # A separate process bounds even a blocked worker thread to 30 seconds.
+        if sys.platform.startswith('linux'):
+            try:
+                control = subprocess.run(
+                    [sys.executable, str(Path(__file__).with_name('asm_tcp_control.py'))],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    timeout=30, check=False)
+                result = {'returncode': control.returncode,
+                          'output': control.stdout.decode(errors='replace')[:65536]}
+            except subprocess.TimeoutExpired as error:
+                result = {'diagnostic_error': 'TCP control exceeded 30 seconds',
+                          'output': (error.stdout or b'').decode(errors='replace')[:65536]}
+            except Exception as error:
+                result = {'diagnostic_error': str(error)}
+            print('MOD-17216 plain TCP control: ' + json.dumps(result), flush=True)
 
 
 def log_runner_samples(samples):
