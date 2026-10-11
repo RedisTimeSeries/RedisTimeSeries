@@ -167,6 +167,13 @@ def _validate_queries_during_migrations(env, post_migration, command, validate_r
     # First validate the result on the "static" cluster
     strict_validation(env)
 
+    # LibMR connections are opened lazily by the first fan-out query, so the
+    # before-round snapshot may predate the socket we later see at timeout.
+    try:
+        print("MOD-17216 TCP after baseline: " + json.dumps(tcp_window_snapshot()), flush=True)
+    except Exception as error:
+        print(f"MOD-17216 baseline diagnostics failed: {error}", flush=True)
+
     # Now validate the command's result in a loop during the back and forth migrations
     done = threading.Event()
 
