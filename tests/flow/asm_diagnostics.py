@@ -65,7 +65,7 @@ def runner_samples():
                           'output': (error.stdout or b'').decode(errors='replace')[:65536]}
             except Exception as error:
                 result = {'diagnostic_error': str(error)}
-            print('MOD-17216 plain TCP control: ' + json.dumps(result), flush=True)
+            print('MOD-17216 transport controls: ' + json.dumps(result), flush=True)
 
 
 def log_runner_samples(samples):
