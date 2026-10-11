@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import redis
 
 from includes import Env, VALGRIND, SANITIZER, RUNNER_LABEL
-from asm_diagnostics import runner_samples, log_runner_samples, process_transport_snapshot
+from asm_diagnostics import runner_samples, log_runner_samples, process_transport_snapshot, tcp_window_snapshot
 from utils import migrate_slots_back_and_forth, fill_ts_data, wait_for_valid_cluster, get_timeout
 
 
@@ -98,6 +98,14 @@ def test_asm_with_data_and_queries_during_migrations():
 def validate_queries_during_migrations(env, post_migration, command, validate_result, rounds=1):
     with runner_samples() as resources:
         for attempt in range(1, rounds + 1):
+            # Boundary snapshots let us compare a socket's buffer before a failing
+            # round without polling netlink during migration/query execution.
+            if rounds > 1:
+                try:
+                    snapshot = {"round": attempt, "tcp": tcp_window_snapshot()}
+                    print("MOD-17216 TCP before round: " + json.dumps(snapshot), flush=True)
+                except Exception as error:
+                    print(f"MOD-17216 round diagnostics failed: {error}", flush=True)
             print(f"MOD-17216 ASM workload round {attempt}/{rounds} start", flush=True)
             _validate_queries_during_migrations(env, post_migration, command, validate_result, resources)
             print(f"MOD-17216 ASM workload round {attempt}/{rounds} passed", flush=True)
