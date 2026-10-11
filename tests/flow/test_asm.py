@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import redis
 
 from includes import Env, VALGRIND, SANITIZER, RUNNER_LABEL
+from asm_diagnostics import runner_samples, log_runner_samples
 from utils import migrate_slots_back_and_forth, fill_ts_data, wait_for_valid_cluster, get_timeout
 
 
@@ -92,6 +93,11 @@ def test_asm_with_data_and_queries_during_migrations():
 
 
 def validate_queries_during_migrations(env, post_migration, command, validate_result):
+    with runner_samples() as resources:
+        return _validate_queries_during_migrations(env, post_migration, command, validate_result, resources)
+
+
+def _validate_queries_during_migrations(env, post_migration, command, validate_result, resources):
     """
     Runs command from random shards in a loop while slots migrate back and forth, validating every result.
 
@@ -116,6 +122,7 @@ def validate_queries_during_migrations(env, post_migration, command, validate_re
         except redis.exceptions.ResponseError as error:
             if "at least one shard did not reply within the given timeframe" in str(error):
                 try:
+                    log_runner_samples(resources)
                     log_query_timeout(env)
                 except Exception as diagnostic_error:
                     print(f"MOD-17216 diagnostics failed: {diagnostic_error}", flush=True)
