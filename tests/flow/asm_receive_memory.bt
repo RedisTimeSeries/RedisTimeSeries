@@ -63,7 +63,7 @@ kretprobe:tcp_try_rmem_schedule
 }
 BEGIN { printf("MOD-17216 kernel probe ready\n"); }
 interval:s:300 { exit(); }
-END { clear(@ack_watch); clear(@ack_sk); clear(@ack_id); clear(@ack_per_pair); clear(@grow_sk); clear(@grow_before); clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
+END { clear(@ack_last); clear(@ack_watch); clear(@ack_sk); clear(@ack_id); clear(@ack_per_pair); clear(@grow_sk); clear(@grow_before); clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
 
 // Observe receive autotuning recovery, paired by thread/CPU like shrink events.
 kprobe:tcp_rcv_space_adjust
@@ -109,7 +109,11 @@ kprobe:tcp_ack
     $local = $sk->__sk_common.skc_num;
     if (@ack_watch[$remote, $local] > nsecs) {
       @ack_candidates = count();
-      if (@ack_events < 1000 && @ack_per_pair[$local,$remote] < 200) {
+      // Keep the budget useful throughout a multi-second stall.
+      if (nsecs - @ack_last[$local,$remote] < 50000000) {
+        @ack_sampled_out = count();
+      } else if (@ack_events < 1000 && @ack_per_pair[$local,$remote] < 200) {
+        @ack_last[$local,$remote] = nsecs;
         @ack_events = @ack_events + 1;
         @ack_per_pair[$local,$remote] = @ack_per_pair[$local,$remote] + 1;
         @ack_id[tid,cpu] = nsecs;
