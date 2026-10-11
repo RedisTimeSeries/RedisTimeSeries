@@ -41,6 +41,11 @@ on:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
         default: false
+      mod17216_focused:
+        description: 'Diagnostic branch only: TLS and plain cluster jobs'
+        type: boolean
+        required: false
+        default: false
       beta-version:
         description: 'Beta version for S3 uploads'
         type: string
@@ -84,6 +89,11 @@ on:
       shard_topologies:
         description: 'Run each test topology as a separate parallel job (one per topology)'
         type: boolean
+        default: false
+      mod17216_focused:
+        description: 'Diagnostic branch only: TLS and plain cluster jobs'
+        type: boolean
+        required: false
         default: false
       beta-version:
         description: 'Beta version for S3 uploads'
@@ -132,6 +142,7 @@ jobs:
           RUN_VALGRIND: ${{ inputs.run_valgrind }}
           RUN_SANITIZER: ${{ inputs.run_sanitizer }}
           SHARD_TOPOLOGIES: ${{ inputs.shard_topologies }}
+          MOD17216_FOCUSED: ${{ inputs.mod17216_focused }}
         run: |
           OS="$OS_INPUT"
           if [ -z "${OS}" ]; then
@@ -148,11 +159,15 @@ jobs:
           # full runs: QUICK=1 forces GEN-only in tests.sh, so sharding a quick run
           # would just duplicate the GEN topology. Non-sharded runs keep a single
           # entry per OS.
+          TOPOLOGIES="gen slaves aof aof_slaves oss_cluster tls_cluster"
+          if [ "$MOD17216_FOCUSED" = true ]; then
+            TOPOLOGIES="oss_cluster tls_cluster"
+          fi
           MATRIX="["
           read -r -a OS_LIST <<< "$OS"
           if [ "$QUICK" != "true" ] && { [ "$RUN_VALGRIND" == "true" ] || [ "$RUN_SANITIZER" == "true" ] || [ "$SHARD_TOPOLOGIES" == "true" ]; }; then
             for os in "${OS_LIST[@]}"; do
-              for topo in gen slaves aof aof_slaves oss_cluster tls_cluster; do
+              for topo in $TOPOLOGIES; do
                 MATRIX="${MATRIX}{\"os\": \"${os}\", \"topo\": \"${topo}\"},"
               done
             done
