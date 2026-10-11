@@ -1,4 +1,5 @@
 import time
+import json
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -9,6 +10,36 @@ from utils import migrate_slots_back_and_forth, fill_ts_data, wait_for_valid_clu
 
 
 MIGRATION_CYCLES = 10
+
+
+def log_query_timeout(env):
+    """Capture pending fan-out messages before RLTest tears down the shards."""
+    for shard in range(1, env.shardsCount + 1):
+        original_pool = env.getConnection(shard).connection_pool
+        options = dict(original_pool.connection_kwargs)
+        options.update(socket_timeout=1, socket_connect_timeout=1, retry_on_timeout=False)
+        pool = redis.ConnectionPool(connection_class=original_pool.connection_class, **options)
+        conn = redis.Redis(connection_pool=pool)
+        snapshot = {"shard": shard, "time": time.time()}
+        try:
+            try:
+                conn.execute_command("DEBUG", "MARK-INTERNAL-CLIENT")
+            except Exception as error:
+                # Older Redis exposes INFOCLUSTER without internal clients.
+                snapshot["internal_client_error"] = str(error)
+            for name, fetch in (
+                ("clients", conn.client_list),
+                ("commandstats", lambda: conn.info("commandstats")),
+                ("libmr", lambda: conn.execute_command("timeseries.INFOCLUSTER")),
+            ):
+                try:
+                    snapshot[name] = fetch()
+                except Exception as error:
+                    snapshot[name] = {"diagnostic_error": str(error)}
+            print("MOD-17216 query timeout: " + json.dumps(snapshot, default=str), flush=True)
+        finally:
+            conn.close()
+            pool.disconnect()
 
 
 def test_asm_without_data():
@@ -79,6 +110,17 @@ def validate_queries_during_migrations(env, post_migration, command, validate_re
     SLOT_RANGES_ERROR = "Query requires unavailable slots"
     TOPOLOGY_CHANGED_ERROR = "A multi-shard command failed because the cluster topology has changed"
 
+    def execute_query(conn):
+        try:
+            return conn.execute_command(command)
+        except redis.exceptions.ResponseError as error:
+            if "at least one shard did not reply within the given timeframe" in str(error):
+                try:
+                    log_query_timeout(env)
+                except Exception as diagnostic_error:
+                    print(f"MOD-17216 diagnostics failed: {diagnostic_error}", flush=True)
+            raise
+
     # Two flavors of the same query check, both hitting a random shard:
     # - strict: used when the topology is settled (baseline + right after each migration
     #   completes) -> the query must succeed and be correct; no transient error tolerated.
@@ -86,12 +128,12 @@ def validate_queries_during_migrations(env, post_migration, command, validate_re
     #   SLOT_RANGES_ERROR is expected and skipped, otherwise the result is validated.
     def strict_validation(env):
         conn = env.getConnection(random.randrange(env.shardsCount))
-        validate_result(conn.execute_command(command))
+        validate_result(execute_query(conn))
 
     def tolerable_validation(env):
         conn = env.getConnection(random.randrange(env.shardsCount))
         try:
-            result = conn.execute_command(command)
+            result = execute_query(conn)
         except redis.exceptions.ResponseError as x:
             assert str(x) in (SLOT_RANGES_ERROR, TOPOLOGY_CHANGED_ERROR), str(x)
             return
