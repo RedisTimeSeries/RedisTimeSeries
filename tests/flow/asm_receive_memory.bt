@@ -60,4 +60,36 @@ kretprobe:tcp_try_rmem_schedule
 }
 BEGIN { printf("MOD-17216 kernel probe ready\n"); }
 interval:s:300 { exit(); }
-END { clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
+END { clear(@grow_sk); clear(@grow_before); clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
+
+// Observe receive autotuning recovery, paired by thread/CPU like shrink events.
+kprobe:tcp_rcv_space_adjust
+{
+  $sk = (struct sock *)arg0;
+  if ($sk->__sk_common.skc_net.net->ns.inum == $1) {
+    @grow_sk[tid,cpu] = arg0;
+    @grow_before[tid,cpu] = $sk->sk_rcvbuf;
+  }
+}
+kretprobe:tcp_rcv_space_adjust
+/@grow_sk[tid,cpu]/
+{
+  $sk = (struct sock *)@grow_sk[tid,cpu];
+  $before = @grow_before[tid,cpu];
+  if ($sk->sk_rcvbuf > $before) {
+    @growths = count();
+    $emit = 0;
+    if ($before < 131072) {
+      @small_growths = count();
+      if (@small_growth_events < 100) { @small_growth_events = @small_growth_events + 1; $emit = 1; }
+    } else {
+      if (@growth_events < 20) { @growth_events = @growth_events + 1; $emit = 1; }
+    }
+    if ($emit) {
+      $tp = (struct tcp_sock *)$sk;
+      $remote = $sk->__sk_common.skc_dport;
+      printf("MOD-17216 kernel growth mono_ns=%llu socket=%p local=%u remote=%u before=%d after=%d copied_seq=%u rcv_nxt=%u wnd=%u\n", nsecs, $sk, $sk->__sk_common.skc_num, ($remote >> 8) | (($remote & 255) << 8), $before, $sk->sk_rcvbuf, $tp->copied_seq, $tp->rcv_nxt, $tp->rcv_wnd);
+    }
+  }
+  delete(@grow_sk[tid,cpu]); delete(@grow_before[tid,cpu]);
+}
