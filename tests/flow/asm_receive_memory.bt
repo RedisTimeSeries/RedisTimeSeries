@@ -63,7 +63,7 @@ kretprobe:tcp_try_rmem_schedule
 }
 BEGIN { printf("MOD-17216 kernel probe ready\n"); }
 interval:s:300 { exit(); }
-END { clear(@ack_last); clear(@ack_watch); clear(@ack_sk); clear(@ack_id); clear(@ack_per_pair); clear(@grow_sk); clear(@grow_before); clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
+END { clear(@wake_sk); clear(@wake_id); clear(@wake_per_pair); clear(@ack_last); clear(@ack_watch); clear(@ack_sk); clear(@ack_id); clear(@ack_per_pair); clear(@grow_sk); clear(@grow_before); clear(@seq); clear(@endseq); clear(@nxt); clear(@wup); clear(@wnd); clear(@ratio); clear(@sk); clear(@before); clear(@rmem); clear(@qlen); clear(@locks); clear(@len); clear(@truesize); }
 
 // Observe receive autotuning recovery, paired by thread/CPU like shrink events.
 kprobe:tcp_rcv_space_adjust
@@ -134,4 +134,33 @@ kretprobe:tcp_ack
   $tp = (struct tcp_sock *)@ack_sk[tid,cpu];
   printf("MOD-17216 ACK return id=%llu mono_ns=%llu socket=%p result=%d una=%u wl1=%u wnd=%u\n", @ack_id[tid,cpu], nsecs, $tp, (int32)retval, $tp->snd_una, $tp->snd_wl1, $tp->snd_wnd);
   delete(@ack_sk[tid,cpu]); delete(@ack_id[tid,cpu]);
+}
+
+// Observe actual window-probe sends, including the caller stack.
+// This path is rare; retain a separate budget from ACK sampling.
+kprobe:tcp_write_wakeup
+{
+  $sk = (struct sock *)arg0;
+  if ($sk->__sk_common.skc_net.net->ns.inum == $1) {
+    $tp = (struct tcp_sock *)$sk;
+    $rp = $sk->__sk_common.skc_dport;
+    $remote = ($rp >> 8) | (($rp & 255) << 8);
+    $local = $sk->__sk_common.skc_num;
+    @wake_candidates = count();
+    if (@wake_events < 1000 && @wake_per_pair[$local,$remote] < 200) {
+      @wake_events = @wake_events + 1;
+      @wake_per_pair[$local,$remote] = @wake_per_pair[$local,$remote] + 1;
+      @wake_sk[tid,cpu] = arg0;
+      @wake_id[tid,cpu] = nsecs;
+      printf("MOD-17216 WAKE id=%llu socket=%p local=%u remote=%u mss_cache=%u wnd=%u una=%u nxt=%u write_seq=%u packets_out=%u\n", @wake_id[tid,cpu], $sk, $local, $remote, $tp->mss_cache, $tp->snd_wnd, $tp->snd_una, $tp->snd_nxt, $tp->write_seq, $tp->packets_out);
+      if (@wake_stacks < 10) { @wake_stacks = @wake_stacks + 1; print(kstack(12)); }
+    } else { @wake_omitted = count(); }
+  }
+}
+kretprobe:tcp_write_wakeup
+/@wake_sk[tid,cpu]/
+{
+  $tp = (struct tcp_sock *)@wake_sk[tid,cpu];
+  printf("MOD-17216 WAKE return id=%llu mono_ns=%llu socket=%p result=%d una=%u nxt=%u wnd=%u packets_out=%u\n", @wake_id[tid,cpu], nsecs, $tp, (int32)retval, $tp->snd_una, $tp->snd_nxt, $tp->snd_wnd, $tp->packets_out);
+  delete(@wake_sk[tid,cpu]); delete(@wake_id[tid,cpu]);
 }
