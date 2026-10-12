@@ -42,9 +42,8 @@ def test_asm_with_data_and_queries_during_migrations():
     if RUNNER_LABEL == "macos-15-intel":
         env.skip()
 
-    # Exercise migration/query correctness without large inter-shard replies.
-    number_of_keys = 100
-    samples_per_key = 10
+    number_of_keys = 1000 if not (VALGRIND or SANITIZER or env.useTLS) else 100
+    samples_per_key = 150
     fill_ts_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
     command = "TS.MRANGE - + FILTER label1=17 GROUPBY label1 REDUCE count"
