@@ -15,7 +15,7 @@
 
 // Allow large shard replies to complete over slow connections. This is the
 // execution idle limit, not a total command deadline.
-#define MULTI_SHARD_MAX_IDLE_MS 60000
+#define MULTI_SHARD_MAX_IDLE_MS 10000
 
 // RedisModule_GetCurrentUserName allocates a copy but registers it on the context's auto-memory,
 // so it gets freed when the context ends. We re-copy with NULL ctx to detach from auto-memory,
