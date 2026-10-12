@@ -13,12 +13,6 @@
 
 #include "rmutil/alloc.h"
 
-// Allow large shard replies to complete over slow connections. This is the
-// execution idle limit, not a total command deadline.
-#define MULTI_SHARD_MAX_IDLE_MS 10000
-#define MRANGE_RESPONSE_PROGRESS_MS 5000
-#define MRANGE_RESPONSE_DEADLINE_MS 60000
-
 // RedisModule_GetCurrentUserName allocates a copy but registers it on the context's auto-memory,
 // so it gets freed when the context ends. We re-copy with NULL ctx to detach from auto-memory,
 // since the string must survive serialization to other shards via LibMR.
@@ -614,7 +608,6 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, mget_done, bc);
 
-    MR_ExecutionSetMaxIdle(exec, MULTI_SHARD_MAX_IDLE_MS);
     MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
@@ -705,8 +698,6 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
 
     MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
 
-    RedisModule_Assert(MR_ExecutionSetResponseTimeouts(
-        exec, MRANGE_RESPONSE_PROGRESS_MS, MRANGE_RESPONSE_DEADLINE_MS));
     MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
@@ -759,7 +750,6 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
 
-    MR_ExecutionSetMaxIdle(exec, MULTI_SHARD_MAX_IDLE_MS);
     MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
@@ -884,7 +874,6 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, querylabels_done, bc);
 
-    MR_ExecutionSetMaxIdle(exec, MULTI_SHARD_MAX_IDLE_MS);
     MR_Run(exec);
     MR_FreeExecution(exec);
     MR_FreeExecutionBuilder(builder);
