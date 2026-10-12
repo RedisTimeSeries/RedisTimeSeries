@@ -42,7 +42,7 @@ def test_asm_with_data_and_queries_during_migrations():
     if RUNNER_LABEL == "macos-15-intel":
         env.skip()
 
-    number_of_keys = 1000 if not (VALGRIND or SANITIZER) else 100
+    number_of_keys = 1000 if not (VALGRIND or SANITIZER or env.useTLS) else 100
     samples_per_key = 150
     fill_ts_data(env, number_of_keys, samples_per_key, label1=17, label2=19)
 
