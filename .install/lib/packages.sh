@@ -121,6 +121,6 @@ ALPINE_BASE="
 BREW_BASE="
     autoconf automake libtool
     make cmake
-    llvm@18 openssl@3 libffi bzip2 zlib
+    llvm@18 openssl@4 libffi bzip2 zlib
     coreutils wget curl rsync jq lcov
 "
