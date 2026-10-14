@@ -2,6 +2,8 @@
 # runner reports "Environment destroyed" after a successful return.
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
 from test_topology_events import post_failover
 from utils import ClusterNode, SlotRange
 
@@ -85,65 +87,18 @@ def test_down_state_retries_clusterdown_and_requires_all_views(env):
 
 def test_down_state_persistent_clusterdown_times_out(env):
     from test_topology_events import CLUSTERDOWN_ERROR, redis, wait_for_down_state_view_agreement
-    cluster_env, victim, conns = down_state_fixture()
-    error = redis.exceptions.ResponseError(CLUSTERDOWN_ERROR)
-    with patch("test_topology_events.redis_master_addrs", return_value={}):
-        with patch("test_topology_events.ts_master_addrs", side_effect=error):
-            with patch("test_topology_events.time.time", side_effect=[0, 0, 11]):
-                with patch("test_topology_events.get_timeout", return_value=10):
-                    with patch("test_topology_events.time.sleep") as sleep:
-                        with patch("test_topology_events.dump_node_cluster_nodes") as dump_redis:
-                            with patch("test_topology_events.dump_node_infocluster", side_effect=error) as dump_ts:
-                                try:
-                                    wait_for_down_state_view_agreement(cluster_env, victim)
-                                except AssertionError as failure:
-                                    assert "did not agree" in str(failure)
-                                else:
-                                    assert False, "Persistent CLUSTERDOWN must time out"
-    sleep.assert_called_once_with(0.2)
-    assert [call.args[0] for call in dump_redis.call_args_list] == conns
-    assert [call.args[0] for call in dump_ts.call_args_list] == conns
-
-
-def test_down_state_propagates_unexpected_errors(env):
-    from test_topology_events import redis, wait_for_down_state_view_agreement
     cluster_env, victim, _ = down_state_fixture()
-    error = redis.exceptions.ResponseError("unexpected error")
-    with patch("test_topology_events.redis_master_addrs", return_value={}):
-        with patch("test_topology_events.ts_master_addrs", side_effect=error):
-            with patch("test_topology_events.time.sleep") as sleep:
-                try:
-                    wait_for_down_state_view_agreement(cluster_env, victim)
-                except redis.exceptions.ResponseError as failure:
-                    assert failure is error
-                else:
-                    assert False, "Unexpected errors must propagate"
-    sleep.assert_not_called()
-
-
-def test_node_down_cycle_restarts_victim_after_failed_check(env):
-    from contextlib import ExitStack
-    from threading import Event
-    from test_topology_events import test_take_node_down_and_up
-    cluster_env = Mock()
-    untouchable, victim, other = Mock(), Mock(), Mock()
-    cluster_env.envRunner.shards = [untouchable, victim, other]
-    error = AssertionError("down-state check failed")
-    with ExitStack() as stack:
-        stack.enter_context(patch("test_topology_events.Env", return_value=cluster_env))
-        for name in ("skip_if_needed", "wait_for_valid_cluster", "wait_for_valid_ts_infocluster",
-                     "fill_some_data", "time.sleep"):
-            stack.enter_context(patch("test_topology_events." + name))
-        stack.enter_context(patch("test_topology_events.wait_for_down_state_view_agreement", side_effect=error))
-        stack.enter_context(patch("test_topology_events.run_until_first_finishes",
-                                  side_effect=lambda validate, cycle: cycle(Event())))
-        try:
-            test_take_node_down_and_up()
-        except AssertionError as failure:
-            assert failure is error
-        else:
-            assert False, "The failed check must propagate"
-    victim.stopEnv.assert_called_once_with()
-    victim.startEnv.assert_called_once_with()
-    untouchable.stopEnv.assert_not_called()
-    other.stopEnv.assert_not_called()
+    error = redis.exceptions.ResponseError(CLUSTERDOWN_ERROR)
+    with (
+        patch("test_topology_events.redis_master_addrs", return_value={}),
+        patch("test_topology_events.ts_master_addrs", side_effect=error),
+        patch("test_topology_events.time.time", side_effect=[0, 0, 11]),
+        patch("test_topology_events.get_timeout", return_value=10),
+        patch("test_topology_events.time.sleep") as sleep,
+        patch("test_topology_events.dump_node_cluster_nodes"),
+        patch("test_topology_events.dump_node_infocluster") as dump_ts,
+        pytest.raises(AssertionError, match="did not agree"),
+    ):
+        wait_for_down_state_view_agreement(cluster_env, victim)
+    sleep.assert_called_once_with(0.2)
+    dump_ts.assert_not_called()

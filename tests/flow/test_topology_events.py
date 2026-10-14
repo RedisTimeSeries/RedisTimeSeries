@@ -351,9 +351,7 @@ def wait_for_down_state_view_agreement(env, victim):
         except redis.exceptions.ResponseError as error:
             if str(error) != CLUSTERDOWN_ERROR:
                 raise
-            # INFOCLUSTER blocks its client while reading LibMR's topology. Redis can
-            # unblock it with CLUSTERDOWN while the victim is down; retry the whole
-            # snapshot rather than treating an incomplete read as agreement.
+            # INFOCLUSTER can be interrupted while a shard is down; retry the snapshot.
             ts_views = None
         if (
             ts_views is not None
@@ -365,12 +363,8 @@ def wait_for_down_state_view_agreement(env, victim):
         if time.time() >= deadline:
             for conn in conns:
                 dump_node_cluster_nodes(conn)
-                try:
+                if ts_views is not None:
                     dump_node_infocluster(conn)
-                except redis.exceptions.ResponseError as error:
-                    if str(error) != CLUSTERDOWN_ERROR:
-                        raise
-                    print(f"timeseries.INFOCLUSTER unavailable: {error}")
             assert False, "redis and timeseries master views did not agree while a node was down"
         time.sleep(0.2)
 
