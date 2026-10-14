@@ -6,10 +6,10 @@ endif
 ROOT=.
 
 # Homebrew's unversioned openssl alias tracks the latest major release, while
-# RedisTimeSeries currently builds against openssl@3. Resolve the versioned
+# RedisTimeSeries currently builds against openssl@4. Resolve the versioned
 # formula explicitly and export it for the hiredis, LibMR, and libevent builds.
 ifeq ($(shell uname -s),Darwin)
-openssl_prefix ?= $(shell brew --prefix openssl@3)
+openssl_prefix ?= $(shell brew --prefix openssl@4)
 export openssl_prefix
 endif
 

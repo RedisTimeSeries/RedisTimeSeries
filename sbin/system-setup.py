@@ -24,7 +24,7 @@ class RedisTimeSeriesSetup(paella.Setup):
         self.run(f"{READIES}/bin/enable-utf8", sudo=self.os != 'macos')
 
         self.install("autoconf libtool m4 automake")
-        self.install("openssl")
+        self.install("openssl@4" if self.os == "macos" else "openssl")
 
     def debian_compat(self):
         self.run(f"{READIES}/bin/getgcc --modern")
