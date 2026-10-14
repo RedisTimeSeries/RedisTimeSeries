@@ -1163,6 +1163,12 @@
                 "type": "string"
             },
             {
+                "name": "local",
+                "type": "pure-token",
+                "token": "LOCAL",
+                "optional": true
+            },
+            {
                 "name": "LATEST",
                 "type": "string",
                 "optional": true,
@@ -1344,6 +1350,12 @@
             {
                 "name": "toTimestamp",
                 "type": "string"
+            },
+            {
+                "name": "local",
+                "type": "pure-token",
+                "token": "LOCAL",
+                "optional": true
             },
             {
                 "name": "latest",
