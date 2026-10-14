@@ -126,8 +126,10 @@ def test_take_node_down_and_up():
             victim = round_robin_on[cycle % len(round_robin_on)]
             time.sleep(1)  # let the node some time to work on subtasks
             victim.stopEnv()
-            wait_for_down_state_view_agreement(env, victim)
-            victim.startEnv()
+            try:
+                wait_for_down_state_view_agreement(env, victim)
+            finally:
+                victim.startEnv()
             wait_for_valid_cluster(env)
             wait_for_valid_ts_infocluster(env)
 
@@ -344,9 +346,18 @@ def wait_for_down_state_view_agreement(env, victim):
     while True:
         conns = [shard.getConnection() for shard in up_shards]
         redis_views = [redis_master_addrs(c) for c in conns]
-        ts_views = [ts_master_addrs(c) for c in conns]
+        try:
+            ts_views = [ts_master_addrs(c) for c in conns]
+        except redis.exceptions.ResponseError as error:
+            if str(error) != CLUSTERDOWN_ERROR:
+                raise
+            # INFOCLUSTER blocks its client while reading LibMR's topology. Redis can
+            # unblock it with CLUSTERDOWN while the victim is down; retry the whole
+            # snapshot rather than treating an incomplete read as agreement.
+            ts_views = None
         if (
-            all(v == redis_views[0] for v in redis_views[1:])
+            ts_views is not None
+            and all(v == redis_views[0] for v in redis_views[1:])
             and all(v == ts_views[0] for v in ts_views[1:])
             and redis_views[0] == ts_views[0]
         ):
@@ -354,7 +365,12 @@ def wait_for_down_state_view_agreement(env, victim):
         if time.time() >= deadline:
             for conn in conns:
                 dump_node_cluster_nodes(conn)
-                dump_node_infocluster(conn)
+                try:
+                    dump_node_infocluster(conn)
+                except redis.exceptions.ResponseError as error:
+                    if str(error) != CLUSTERDOWN_ERROR:
+                        raise
+                    print(f"timeseries.INFOCLUSTER unavailable: {error}")
             assert False, "redis and timeseries master views did not agree while a node was down"
         time.sleep(0.2)
 
