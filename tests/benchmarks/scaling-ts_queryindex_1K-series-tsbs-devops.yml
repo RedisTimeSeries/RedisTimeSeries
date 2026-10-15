@@ -27,7 +27,7 @@ dbconfig:
   - parameters:
     - file: "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tsbs/devops/bulk_data_redistimeseries/data_redistimeseries_cpu-only_100_2016-01-01T00:00:00Z_2016-01-01T00:01:00Z_10s_123.dat"
   - check:
-      keyspacelen: 100000
+      keyspacelen: 1000
   - module-configuration-parameters:
       redistimeseries:
         CHUNK_SIZE_BYTES: 128
