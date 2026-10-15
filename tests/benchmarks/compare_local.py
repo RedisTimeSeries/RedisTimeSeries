@@ -117,6 +117,9 @@ def run_one(spec, module, directory, datasets, redis_binary, runner, timeout):
     module_alias = directory / ("redistimeseries" + module.suffix)
     module_alias.symlink_to(module)
     config = yaml.safe_load(spec.read_text())
+    if spec.name == "scaling-ts_mrange_10K-series-tsbs-devops.yml":
+        # Large first replies need more time locally; AWS's older memtier lacks this option.
+        config["clientconfig"]["arguments"] += " --connection-stage-timeout 180"
     # AWS's absolute throughput floors do not apply to this runner.
     config.pop("kpis", None)
     # Each invocation is one fresh standalone instance, with no remote exporters.
