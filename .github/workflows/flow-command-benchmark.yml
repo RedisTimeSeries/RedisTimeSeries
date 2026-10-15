@@ -101,7 +101,7 @@ jobs:
               -o "benchmark-bundle/bin/$tool"
             chmod +x "benchmark-bundle/bin/$tool"
           done
-          cp -R benchmark-baseline/tests/benchmarks benchmark-bundle/suite
+          cp -R benchmark-pr/tests/benchmarks benchmark-bundle/suite
           cp benchmark-revisions.json benchmark-bundle/
           python benchmark-pr/tests/benchmarks/benchmark_jobs.py plan --bundle benchmark-bundle --shards 5
           tar -czf benchmark-bundle.tar.gz benchmark-bundle
