@@ -59,6 +59,19 @@ def _start_read(env, key, cursor, block_ms=None, min_count=None, max_count=None)
     return t, slot
 
 
+def _wait_for_parked_readers(conn, expected):
+    """Wait for server-side blocking; a live worker may not have sent TS.READ yet."""
+    deadline = time.monotonic() + WAKE_TIMEOUT_SECS
+    while time.monotonic() < deadline:
+        clients = conn.client_list()
+        parked = [c for c in clients if c["cmd"].lower() == "ts.read" and "b" in c["flags"]]
+        if len(parked) == expected:
+            return
+        time.sleep(0.01)
+    raise AssertionError("Expected %d parked TS.READ clients, got %d: %r" %
+                         (expected, len(parked), clients))
+
+
 def _seed(r, key, samples):
     assert r.execute_command("TS.CREATE", key)
     for ts, val in samples:
@@ -875,8 +888,7 @@ def test_read_flushdb_wakes_parked_client():
     _seed(r, "ts", [(100, "1.0")])
 
     t, slot = _start_read(env, "ts", 0, WAKE_TIMEOUT_SECS * 2 * 1000, min_count=5)
-    time.sleep(0.3)
-    env.assertTrue(t.is_alive(), message="READ should be parked")
+    _wait_for_parked_readers(r, 1)
 
     t0 = time.time()
     r.execute_command("FLUSHDB")
@@ -902,9 +914,7 @@ def test_read_multiple_parked_clients_all_wake_on_del():
     _seed(r, "ts", [(100, "1.0")])
 
     workers = [_start_read(env, "ts", 0, WAKE_TIMEOUT_SECS * 2 * 1000, min_count=5) for _ in range(4)]
-    time.sleep(0.3)
-    for t, _ in workers:
-        env.assertTrue(t.is_alive(), message="each READ should be parked")
+    _wait_for_parked_readers(r, len(workers))
 
     assert r.execute_command("DEL", "ts") == 1
 
