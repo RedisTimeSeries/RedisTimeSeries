@@ -420,24 +420,29 @@ static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModule
     if (unlikely(check_and_reply_on_error(eCtx, ctx)))
         return;
 
+    const bool resp3 = _ReplyMap(ctx);
+    MRRecordType *expectedType = resp3 ? GetMapRecordType() : GetListRecordType();
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
+        if (raw_listRecord->recordType != expectedType) {
             RedisModule_Log(ctx,
                             "warning",
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
         }
-        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+        total_len += resp3 ? MapRecord_GetLen((MapRecord *)raw_listRecord)
+                           : ListRecord_GetLen((ListRecord *)raw_listRecord);
     }
-    RedisModule_ReplyWithArray(ctx, total_len);
+    // RESP3 shard maps contain alternating keys and values; RESP2 lists contain
+    // one nested array per series. Preserve that distinction when merging them.
+    ReplyWithMapOrArray(ctx, total_len, true);
 
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
+        if (raw_listRecord->recordType != expectedType) {
             RedisModule_Log(ctx,
                             "warning",
                             "Unexpected record type: %s",
@@ -445,9 +450,11 @@ static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModule
             continue;
         }
 
-        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        size_t list_len = resp3 ? MapRecord_GetLen((MapRecord *)raw_listRecord)
+                                : ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            Record *r = resp3 ? MapRecord_GetRecord((MapRecord *)raw_listRecord, j)
+                              : ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
             r->recordType->sendReply(ctx, r);
         }
     }
