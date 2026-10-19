@@ -60,6 +60,38 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
     return true;
 }
 
+// Validate every shard before emitting any reply. A malformed later shard must
+// fail the whole query rather than return a partial result or an invalid RESP reply.
+static bool validate_gears_results(ExecutionCtx *eCtx,
+                                   RedisModuleCtx *ctx,
+                                   MRRecordType *containerType,
+                                   MRRecordType *elementType) {
+    const bool isMap = containerType == GetMapRecordType();
+    const size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    for (size_t i = 0; i < len; i++) {
+        Record *record = MR_ExecutionCtxGetResult(eCtx, i);
+        if (!record || record->recordType != containerType)
+            goto invalid;
+        const size_t count =
+            isMap ? MapRecord_GetLen((MapRecord *)record) : ListRecord_GetLen((ListRecord *)record);
+        if (isMap && count % 2 != 0)
+            goto invalid;
+        for (size_t j = 0; j < count; j++) {
+            Record *child = isMap ? MapRecord_GetRecord((MapRecord *)record, j)
+                                  : ListRecord_GetRecord((ListRecord *)record, j);
+            MRRecordType *expected = isMap && j % 2 == 0 ? GetStringRecordType() : elementType;
+            if (!child || child->recordType != expected)
+                goto invalid;
+        }
+    }
+    return true;
+
+invalid:
+    RedisModule_Log(ctx, "warning", "Unexpected shard result type in multi-key command");
+    RedisModule_ReplyWithError(ctx, "ERR Unexpected shard result type in multi-key command");
+    return false;
+}
+
 // This function used for calling freeing the blocked client context
 // in the main thread. It's needed cause there is a bug in RoF when calling
 // RedisModule_FreeThreadSafeContext from thread which is not the main one, see:
@@ -265,6 +297,10 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
         goto __done;
     }
 
+    if (!validate_gears_results(eCtx, ctx, GetListRecordType(), GetSeriesRecordType())) {
+        goto __done;
+    }
+
     long long len = MR_ExecutionCtxGetResultsLen(eCtx);
 
     TS_ResultSet *resultset = NULL;
@@ -283,20 +319,10 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
 
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
             Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
-            if (raw_record->recordType != GetSeriesRecordType()) {
-                continue;
-            }
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
             tempSeries = array_append(tempSeries, s);
 
@@ -419,17 +445,13 @@ static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModule
 
     const bool resp3 = _ReplyMap(ctx);
     MRRecordType *expectedType = resp3 ? GetMapRecordType() : GetListRecordType();
+    if (!validate_gears_results(eCtx, ctx, expectedType, GetListRecordType()))
+        return;
+
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != expectedType) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
         total_len += resp3 ? MapRecord_GetLen((MapRecord *)raw_listRecord)
                            : ListRecord_GetLen((ListRecord *)raw_listRecord);
     }
@@ -439,13 +461,6 @@ static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModule
 
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != expectedType) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
 
         size_t list_len = resp3 ? MapRecord_GetLen((MapRecord *)raw_listRecord)
                                 : ListRecord_GetLen((ListRecord *)raw_listRecord);
@@ -503,30 +518,20 @@ static void queryindex_done_gears(ExecutionCtx *eCtx,
     if (unlikely(check_and_reply_on_error(eCtx, ctx)))
         return;
 
+    if (!validate_gears_results(eCtx, ctx, GetListRecordType(), GetStringRecordType())) {
+        return;
+    }
+
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
         total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
     }
     RedisModule_ReplyWithSet(ctx, total_len);
 
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
 
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
@@ -765,17 +770,14 @@ static void querylabels_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
         return;
     }
 
+    if (!validate_gears_results(eCtx, ctx, GetListRecordType(), GetStringRecordType())) {
+        return;
+    }
+
     RedisModuleDict *agg = RedisModule_CreateDict(NULL);
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     for (size_t i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
             StringRecord *sr =

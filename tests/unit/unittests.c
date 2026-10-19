@@ -19,6 +19,7 @@
 #include "unittests_cmd_info.c"
 #include "unittests_rdb_load_oom.c"
 #include "unittests_chunk_contract.c"
+#include "unittests_libmr_results.c"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +35,7 @@ int main(int argc, char *argv[]) {
     MU_RUN_SUITE(command_info_test_suite);
     MU_RUN_SUITE(rdb_load_oom_test_suite);
     MU_RUN_SUITE(chunk_contract_test_suite);
+    MU_RUN_SUITE(libmr_results_test_suite);
     MU_REPORT();
     return minunit_fail;
 }

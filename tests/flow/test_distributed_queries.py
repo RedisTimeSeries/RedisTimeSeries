@@ -3,8 +3,13 @@
 These tests explicitly create a cluster even in the general test pass: selecting
 three shards without env='oss-cluster' still creates standalone Redis in QUICK=1.
 Small fixtures keep this contract test practical in both PR and nightly coverage.
+Enterprise runs use the configured proxy and its real topology; deploy each
+immutable LibMR protocol separately to cover both transports.
 """
 import os
+from contextlib import contextmanager
+
+import redis
 
 import pytest
 from redis.exceptions import NoPermissionError
@@ -29,25 +34,73 @@ def _samples(samples):
     return [[row[0], *[float(v) for v in row[1:]]] for row in samples]
 
 
+@contextmanager
+def _connection(env, shard, protocol):
+    # Existing Enterprise environments may ignore RLTest's protocol argument.
+    # Use a fresh pool so RESP3 is really negotiated and AUTH cannot leak to the
+    # administrator connection used by another check.
+    original = env.getConnection(shard)
+    options = dict(original.connection_pool.connection_kwargs, protocol=protocol,
+                   decode_responses=False)
+    pool = redis.ConnectionPool(connection_class=original.connection_pool.connection_class,
+                                **options)
+    original.close()
+    try:
+        with redis.Redis(connection_pool=pool) as connection:
+            yield connection
+    finally:
+        pool.disconnect()
+
+
+@contextmanager
+def _data_connection(env, protocol):
+    if RLEC_CLUSTER:
+        with _connection(env, 1, protocol) as connection:
+            yield connection
+    else:
+        with env.getClusterConnectionIfNeeded() as connection:
+            yield connection
+
+
 def _check_distributed_queries(protocol, transport):
     if RLEC_CLUSTER:
-        Env().skip()
-    env = Env(env='oss-cluster', shardsCount=3, protocol=protocol,
-              useSlaves=False, useAof=False,
-              redisConfigFileContent=f'ts-libmr-protocol {transport}\n',
-              clusterBusPortProtectedMode=os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None)
-    assert env.isCluster() and env.shardsCount == 3
+        # Keep the Enterprise runner's configured endpoint. An existing database
+        # cannot change its immutable LibMR protocol: run its matching cases and
+        # run the other two cases on a database started with the other protocol.
+        env = Env(protocol=protocol)
+        coordinators = (1,)  # the Enterprise proxy chooses the coordinator
+        with _connection(env, 1, protocol) as admin:
+            assert 'rlec_version' in admin.info('server'), 'Expected an Enterprise endpoint'
+            config = admin.execute_command('CONFIG', 'GET', 'ts-libmr-protocol')
+            actual = config[1] if protocol == 2 else config[b'ts-libmr-protocol']
+            if actual.lower() != transport.encode():
+                print(f'Enterprise database uses {actual.decode()}; {transport} requires a separate deployment')
+                env.skip()
+            topology = admin.execute_command('timeseries.INFOCLUSTER')
+            assert isinstance(topology, list) and len(topology) == 5, topology
+            nodes = [dict(zip(node[::2], node[1::2])) for node in topology[4]]
+            assert len(nodes) >= 3, 'Distributed coverage requires at least three Enterprise shards'
+            assert all(node[b'status'] == b'connected' for node in nodes), nodes
+            slots = sorted(node[b'minHslot'] for node in nodes)[:3]
+    else:
+        env = Env(env='oss-cluster', shardsCount=3, protocol=protocol,
+                  useSlaves=False, useAof=False,
+                  redisConfigFileContent=f'ts-libmr-protocol {transport}\n',
+                  clusterBusPortProtectedMode=os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None)
+        assert env.isCluster() and env.shardsCount == 3
+        coordinators = range(1, 4)
+        slots = (0, 8192, 16383)
     env.flush()
-    for shard in range(1, 4):
-        with env.getConnection(shard) as admin:
+    for shard in coordinators:
+        with _connection(env, shard, protocol) as admin:
             config = admin.execute_command('CONFIG', 'GET', 'ts-libmr-protocol')
             actual = config[1] if protocol == 2 else config[b'ts-libmr-protocol']
             assert actual.lower() == transport.encode(), (shard, config)
-    keys = [f'sensor:{{{slot_table[slot]}}}'.encode() for slot in (0, 8192, 16383)]
-    empty = f'empty:{{{slot_table[16383]}}}'.encode()
+    keys = [f'sensor:{{{slot_table[slot]}}}'.encode() for slot in slots]
+    empty = f'empty:{{{slot_table[slots[-1]]}}}'.encode()
     labels = [{b'metric': b'temp', b'site': b'shared', b'sensor': str(i).encode()}
               for i in range(3)]
-    with env.getClusterConnectionIfNeeded() as client:
+    with _data_connection(env, protocol) as client:
         for i, key in enumerate(keys):
             encoding = 'UNCOMPRESSED' if i == 1 else 'COMPRESSED'
             client.execute_command('TS.CREATE', key, 'ENCODING', encoding,
@@ -57,9 +110,10 @@ def _check_distributed_queries(protocol, transport):
                 client.execute_command('TS.ADD', key, timestamp, i * 10 + timestamp)
         client.execute_command('TS.CREATE', empty, 'LABELS', 'metric', 'empty')
 
-    # Each node must coordinate queries, including results from the other two nodes.
-    for shard in range(1, 4):
-        with env.getConnection(shard) as coordinator:
+    # Each OSS node coordinates queries. Enterprise exercises the proxy path.
+    # In both cases the selected keys live on three distinct shards.
+    for shard in coordinators:
+        with _connection(env, shard, protocol) as coordinator:
             assert set(coordinator.execute_command('TS.QUERYINDEX', 'metric=temp')) == set(keys)
             assert set(coordinator.execute_command('TS.QUERYINDEX', 'metric=temp', 'sensor!=(1)')) == {keys[0], keys[2]}
             assert not coordinator.execute_command('TS.QUERYINDEX', 'metric=absent')
@@ -127,48 +181,60 @@ def _check_distributed_queries(protocol, transport):
             assert _samples(samples) == [[0, 37.5], [5, 51.0], [10, 63.0]]
 
     # LATEST must serialize an unfinished compaction bucket without mutating it.
-    with env.getClusterConnectionIfNeeded() as client:
-        source = f'source:{{{slot_table[16383]}}}'
-        dest = f'compact:{{{slot_table[16383]}}}'.encode()
+    with _data_connection(env, protocol) as client:
+        source = f'source:{{{slot_table[slots[-1]]}}}'
+        dest = f'compact:{{{slot_table[slots[-1]]}}}'.encode()
         client.execute_command('TS.CREATE', source)
         client.execute_command('TS.CREATE', dest, 'LABELS', 'metric', 'compact')
         client.execute_command('TS.CREATERULE', source, dest, 'AGGREGATION', 'avg', 10)
         for t, v in ((1, 2), (2, 4), (11, 8), (12, 12)):
             client.execute_command('TS.ADD', source, t, v)
-        with env.getConnection(1) as coordinator:
+        with _connection(env, 1, protocol) as coordinator:
             latest = _rows(coordinator.execute_command('TS.MGET', 'LATEST', 'FILTER', 'metric=compact'), protocol, 'get')
             assert _samples([latest[dest][1]]) == [[10, 10.0]]
             latest = _rows(coordinator.execute_command('TS.MRANGE', '-', '+', 'LATEST', 'FILTER', 'metric=compact'), protocol, 'range')
             assert _samples(latest[dest][1]) == [[0, 3.0], [10, 10.0]]
         assert _samples(client.execute_command('TS.RANGE', dest, '-', '+')) == [[0, 3.0]]
 
-    # Read permissions must reach remote shards. Label discovery omits unreadable
-    # keys. Internal commands reject a partially unreadable result; the legacy
-    # gears protocol omits unreadable series. A later admin request
-    # must still work after the distributed error path releases its resources.
-    for shard in range(1, 4):
-        with env.getConnection(shard) as admin:
-            admin.execute_command('ACL', 'SETUSER', 'distributed_reader', 'on',
-                                  '>test-pass', '+@all', b'~' + keys[0])
+    # Both transports reject the complete data query if any matching series is
+    # unreadable. Metadata discovery retains its existing filtering semantics.
+    commands = [('TS.MGET', 'FILTER', 'metric=temp')]
+    for command in ('TS.MRANGE', 'TS.MREVRANGE'):
+        commands.append((command, '-', '+', 'FILTER', 'metric=temp'))
+        commands.append((command, '-', '+', 'FILTER', 'metric=temp',
+                         'GROUPBY', 'site', 'REDUCE', 'sum'))
     try:
-        with env.getConnection(1) as restricted:
-            restricted.execute_command('AUTH', 'distributed_reader', 'test-pass')
-            assert set(restricted.execute_command(
-                'TS.QUERYLABELS', 'VALUES', 'sensor', 'FILTER', 'metric=temp')) == {b'0'}
-            for command in (('TS.MGET', 'FILTER', 'metric=temp'),
-                            ('TS.MRANGE', '-', '+', 'FILTER', 'metric=temp')):
-                if transport == 'internal':
-                    with pytest.raises(NoPermissionError):
-                        restricted.execute_command(*command)
-                else:
-                    kind = 'get' if command[0] == 'TS.MGET' else 'range'
-                    result = _rows(restricted.execute_command(*command), protocol, kind)
-                    assert set(result) == {keys[0]}
-        with env.getConnection(1) as admin:
-            assert len(admin.execute_command('TS.MGET', 'FILTER', 'metric=temp')) == 3
+        for permissions, visible_sensors in ((b'~' + keys[0], {b'0'}), (b'~no-matching-key', set())):
+            for shard in coordinators:
+                with _connection(env, shard, protocol) as admin:
+                    admin.execute_command('ACL', 'SETUSER', 'distributed_reader', 'on',
+                                          '>test-pass', '+@all', 'resetkeys', permissions)
+            # Exercise denial on the coordinator and on remote shards.
+            for shard in coordinators:
+                with _connection(env, shard, protocol) as restricted:
+                    restricted.execute_command('AUTH', 'distributed_reader', 'test-pass')
+                    assert set(restricted.execute_command(
+                        'TS.QUERYLABELS', 'VALUES', 'sensor', 'FILTER', 'metric=temp')) == visible_sensors
+                    assert set(restricted.execute_command('TS.QUERYINDEX', 'metric=temp')) == set(keys)
+                    for command in commands:
+                        with pytest.raises(NoPermissionError):
+                            restricted.execute_command(*command)
+            # An error must release worker locks and restore the context user.
+            with _connection(env, 1, protocol) as admin:
+                assert len(admin.execute_command('TS.MGET', 'FILTER', 'metric=temp')) == 3
+
+        # Widen permissions and retry the same queries successfully.
+        for shard in coordinators:
+            with _connection(env, shard, protocol) as admin:
+                admin.execute_command('ACL', 'SETUSER', 'distributed_reader', 'resetkeys', '~*')
+        with _connection(env, 1, protocol) as allowed:
+            allowed.execute_command('AUTH', 'distributed_reader', 'test-pass')
+            for command in commands:
+                result = allowed.execute_command(*command)
+                assert len(result) == (1 if 'GROUPBY' in command else 3)
     finally:
-        for shard in range(1, 4):
-            with env.getConnection(shard) as admin:
+        for shard in coordinators:
+            with _connection(env, shard, protocol) as admin:
                 admin.execute_command('ACL', 'DELUSER', 'distributed_reader')
 
 
