@@ -79,6 +79,7 @@ runs:
         path: coverage-report
 
     - name: Summarize coverage
+      continue-on-error: true
       if: always()
       shell: bash
       env:
@@ -220,6 +221,11 @@ runs:
         # Process each job
         for job in $(echo "$JOB_RESULTS" | jq -r 'keys[]'); do
           result=$(echo "$JOB_RESULTS" | jq -r --arg job "$job" '.[$job]')
+          # Coverage can be deliberately disabled. Its availability is reported
+          # in the coverage section; it must not downgrade successful test jobs.
+          if [[ "$job" == "coverage" && "$result" == "skipped" ]]; then
+            continue
+          fi
           TOTAL_JOBS=$((TOTAL_JOBS + 1))
 
           case "$result" in
@@ -551,8 +557,14 @@ runs:
         )
 
         # Add coverage collected by this run to the existing notification.
-        PAYLOAD=$(jq --slurpfile coverage coverage-summary-block.json \
-          '.blocks = (.blocks[:-1] + $coverage + .blocks[-1:])' <<< "$PAYLOAD")
+        # Preserve the test notification if coverage rendering failed or wrote invalid JSON.
+        if [ -f coverage-summary-block.json ] && \
+           COVERAGE_PAYLOAD=$(jq --slurpfile coverage coverage-summary-block.json \
+             '.blocks = (.blocks[:-1] + $coverage + .blocks[-1:])' <<< "$PAYLOAD"); then
+          PAYLOAD="$COVERAGE_PAYLOAD"
+        else
+          echo "::warning::Coverage summary unavailable; sending the test summary without it."
+        fi
 
         # Send to Slack
         RESPONSE_FILE=$(mktemp)
