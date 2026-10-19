@@ -261,9 +261,6 @@ __done:
 }
 
 static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
-    RedisModuleBlockedClient *bc = data->bc;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-
     if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
         goto __done;
     }
