@@ -80,6 +80,8 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             size_t predicate_count,
                             bool *hasPermissionError);
 
+void RemoveExpiredQueryIndexKeys(RedisModuleCtx *ctx, RedisModuleDict *result);
+
 // Returns a fresh dict of every currently-indexed series key (ts_key -> dummy).
 // Used by TS.QUERYLABELS when no FILTER is given ("all series").
 RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx);

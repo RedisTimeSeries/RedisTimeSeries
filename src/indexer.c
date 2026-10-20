@@ -564,6 +564,21 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     return res;
 }
 
+// Filter the result snapshot, not the live label index: checking a key may expire it
+// and synchronously remove its label-index entries through keyspace notifications.
+void RemoveExpiredQueryIndexKeys(RedisModuleCtx *ctx, RedisModuleDict *result) {
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
+    RedisModuleString *key;
+    while ((key = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
+        if (!RedisModule_KeyExists(ctx, key)) {
+            RedisModule_DictDel(result, key, NULL);
+            RedisModule_DictIteratorReseek(iter, ">", key);
+        }
+        RedisModule_FreeString(NULL, key);
+    }
+    RedisModule_DictIteratorStop(iter);
+}
+
 RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx) {
     RedisModuleDict *res = RedisModule_CreateDict(ctx);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(tsLabelIndex, "^", NULL, 0);

@@ -103,6 +103,30 @@ def test_expire():
         env.assertEqual(sorted(res), sorted([[b't{2}', [], []], [b't{1}_agg', [], []]]))
 
 
+def test_queryindex_passive_expiration():
+    skip_on_rlec()  # DEBUG controls are only available on the local test servers.
+    env = Env()
+    shards = [env.getConnection(i + 1) for i in range(env.shardsCount)]
+    try:
+        for shard in shards:
+            shard.execute_command('DEBUG', 'SET-ACTIVE-EXPIRE', 0)
+        with env.getClusterConnectionIfNeeded() as r:
+            r.execute_command('TS.CREATE', 'live', 'LABELS', 'expiry', 'mixed')
+            for i in range(32):
+                key = 'expired{%d}' % i
+                r.execute_command('TS.CREATE', key, 'LABELS', 'expiry', 'mixed', 'only', 'expired')
+                r.execute_command('EXPIRE', key, 1)
+            time.sleep(2)
+            # No key lookup before QUERYINDEX: EXISTS/TTL could expire the keys
+            # themselves and hide a stale index result.
+            env.assertEqual(shards[0].execute_command('TS.QUERYINDEX', 'only=expired'), [])
+            env.assertEqual(shards[0].execute_command('TS.QUERYINDEX', 'expiry=mixed'), [b'live'])
+            env.assertEqual(shards[0].execute_command('TS.QUERYINDEX', 'only=expired'), [])
+    finally:
+        for shard in shards:
+            shard.execute_command('DEBUG', 'SET-ACTIVE-EXPIRE', 1)
+
+
 def test_unlink():
     env = Env()
     with env.getClusterConnectionIfNeeded() as r:

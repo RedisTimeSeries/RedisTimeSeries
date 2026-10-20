@@ -868,6 +868,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     RedisModuleDict *result = QueryIndex(
         rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
 
+    RemoveExpiredQueryIndexKeys(rts_staticCtx, result);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
     size_t currentKeyLen;
@@ -1291,6 +1292,7 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     ApplyCtxUser(ctx, queryArg->userName);
     RedisModuleDict *qi =
         QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
+    RemoveExpiredQueryIndexKeys(ctx, qi);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
 
     const char *keyName;
