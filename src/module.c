@@ -382,6 +382,14 @@ void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
         if (!CheckKeyIsAllowedToReadC(ctx, userCtx.user, currentKey, currentKeyLen)) {
             continue;
         }
+        // Candidates are a snapshot: expiring a key here may safely update the live
+        // label index before we read its labels. Never do this inside an index iterator.
+        RedisModuleString *key = RedisModule_CreateString(NULL, currentKey, currentKeyLen);
+        int exists = RedisModule_KeyExists(ctx, key);
+        RedisModule_FreeString(NULL, key);
+        if (!exists) {
+            continue;
+        }
         QueryLabelsFromIndex(
             currentKey, currentKeyLen, subtype, prefixBuf, prefixLen, QueryLabelsEmitToDict, agg);
     }

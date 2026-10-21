@@ -1,3 +1,4 @@
+import time
 import pytest
 import redis
 from includes import *
@@ -124,3 +125,34 @@ def test_querylabels_acl_filters_unreadable_keys(env):
             r1.execute_command('AUTH', 'default', '')
             for i in range(env.shardsCount):
                 env.getConnection(i).execute_command('ACL', 'DELUSER', 'ql_acl_user')
+
+
+def test_querylabels_passive_expiration():
+    skip_on_rlec()  # Requires control over active expiration on each shard.
+    env = Env()
+    shards = [env.getConnection(i + 1) for i in range(env.shardsCount)]
+    try:
+        for shard in shards:
+            shard.execute_command('DEBUG', 'SET-ACTIVE-EXPIRE', 0)
+        with env.getClusterConnectionIfNeeded() as r:
+            for subtype in [('LABELS',), ('VALUES', 'kind')]:
+                for filtered in (False, True):
+                    env.flush()
+                    r.execute_command('TS.CREATE', 'live', 'LABELS', 'group', 'all', 'kind', 'live')
+                    for i in range(32):
+                        key = 'expired{%d}' % i
+                        r.execute_command('TS.CREATE', key, 'LABELS', 'group', 'all',
+                                          'kind', 'expired', 'expired_only', 'yes')
+                        r.execute_command('PEXPIRE', key, 200)
+                    time.sleep(0.5)
+                    # Fresh expired keys for every case; no lookup or QUERYINDEX may
+                    # expire them before the command under test.
+                    cmd = ('TS.QUERYLABELS',) + subtype
+                    if filtered:
+                        cmd += ('FILTER', 'group=all')
+                    expected = [b'group', b'kind'] if subtype[0] == 'LABELS' else [b'live']
+                    env.assertEqual(sorted(shards[0].execute_command(*cmd)), expected)
+                    env.assertEqual(sorted(shards[0].execute_command(*cmd)), expected)
+    finally:
+        for shard in shards:
+            shard.execute_command('DEBUG', 'SET-ACTIVE-EXPIRE', 1)
