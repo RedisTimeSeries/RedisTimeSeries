@@ -282,6 +282,8 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count, NULL);
 
+    RemoveExpiredQueryIndexKeys(ctx, result);
+
     ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
@@ -378,6 +380,14 @@ void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
     size_t currentKeyLen;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         if (!CheckKeyIsAllowedToReadC(ctx, userCtx.user, currentKey, currentKeyLen)) {
+            continue;
+        }
+        // Candidates are a snapshot: expiring a key here may safely update the live
+        // label index before we read its labels. Never do this inside an index iterator.
+        RedisModuleString *key = RedisModule_CreateString(NULL, currentKey, currentKeyLen);
+        int exists = RedisModule_KeyExists(ctx, key);
+        RedisModule_FreeString(NULL, key);
+        if (!exists) {
             continue;
         }
         QueryLabelsFromIndex(
