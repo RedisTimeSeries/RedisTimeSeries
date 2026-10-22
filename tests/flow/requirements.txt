@@ -1,5 +1,5 @@
 # Includes the escaped-semicolon fix (MOD-18913) and bounded shutdown (MOD-19365).
-RLTest == 0.7.31
+RLTest == 0.7.32
 statistics
 # Capped below redis-py 6: from 6 on, the client negotiates RESP3 by default, and RLTest's
 # requirement is uncapped, so pip picks the newest. Under RESP3 TS.MRANGE ... GROUPBY replies
