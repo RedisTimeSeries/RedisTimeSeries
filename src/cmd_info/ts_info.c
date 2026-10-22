@@ -1384,6 +1384,10 @@ static const RedisModuleCommandKeySpec TS_MRANGE_KEYSPECS[] = { { 0 } };
 static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
     { .name = "fromTimestamp", .type = REDISMODULE_ARG_TYPE_STRING },
     { .name = "toTimestamp", .type = REDISMODULE_ARG_TYPE_STRING },
+    { .name = "LOCAL",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "LOCAL" },
     { .name = "LATEST",
       .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
       .flags = REDISMODULE_CMD_ARG_OPTIONAL,
@@ -1532,6 +1536,10 @@ static const RedisModuleCommandKeySpec TS_MREVRANGE_KEYSPECS[] = { { 0 } };
 static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
     { .name = "fromTimestamp", .type = REDISMODULE_ARG_TYPE_STRING },
     { .name = "toTimestamp", .type = REDISMODULE_ARG_TYPE_STRING },
+    { .name = "LOCAL",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "LOCAL" },
     { .name = "LATEST",
       .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
       .flags = REDISMODULE_CMD_ARG_OPTIONAL,
