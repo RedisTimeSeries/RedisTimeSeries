@@ -691,12 +691,16 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
     }
     for (size_t i = heapSize / 2; i > 0; --i)
         FixSnapshotHeap(heap, heapSize, i - 1);
-    size_t size = 0, capacity = 0, bytes = 0, allocated = 0;
+    // A handful of matches should not pay for heap allocations of the result
+    // buffers. Larger snapshots retain the same growth and ownership rules.
+    SnapshotKey inlineKeys[32];
+    char inlineNames[2048];
+    size_t size = 0, capacity = 32, bytes = 0, allocated = sizeof(inlineNames);
     if (count == 1 && predicates[0].count == 1 && predicates[0].dicts[0])
-        capacity = RedisModule_DictSize(predicates[0].dicts[0]);
+        capacity = max(capacity, RedisModule_DictSize(predicates[0].dicts[0]));
     RedisModule_Assert(capacity <= SIZE_MAX / sizeof(SnapshotKey));
-    SnapshotKey *keys = capacity ? malloc(capacity * sizeof(*keys)) : NULL;
-    char *names = malloc(1);
+    SnapshotKey *keys = capacity > 32 ? malloc(capacity * sizeof(*keys)) : inlineKeys;
+    char *names = inlineNames;
     bool merge = first->count > 1;
     RedisModuleDictIter *single = (!merge && heapSize) ? heap[0].iter : NULL;
     const char *name = heapSize ? heap[0].name : NULL;
@@ -732,8 +736,13 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
         }
         if (size == capacity) {
             RedisModule_Assert(capacity <= SIZE_MAX / 2 / sizeof(*keys));
-            capacity = capacity ? capacity * 2 : 64;
-            keys = realloc(keys, capacity * sizeof(*keys));
+            capacity *= 2;
+            if (keys == inlineKeys) {
+                keys = malloc(capacity * sizeof(*keys));
+                memcpy(keys, inlineKeys, size * sizeof(*keys));
+            } else {
+                keys = realloc(keys, capacity * sizeof(*keys));
+            }
         }
         RedisModuleString *owned = filterExpiry ? RedisModule_HoldString(NULL, value) : NULL;
         if (owned && len >= 64) {
@@ -745,8 +754,13 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
         RedisModule_Assert(len <= SIZE_MAX - bytes);
         if (bytes + len > allocated) {
             RedisModule_Assert(allocated <= SIZE_MAX / 2);
-            allocated = max(allocated ? allocated * 2 : 1024, bytes + len);
-            names = realloc(names, allocated);
+            allocated = max(allocated * 2, bytes + len);
+            if (names == inlineNames) {
+                names = malloc(allocated);
+                memcpy(names, inlineNames, bytes);
+            } else {
+                names = realloc(names, allocated);
+            }
         }
         keys[size++] = (SnapshotKey){ .key.offset = bytes, .len = len, .owned = owned };
         memcpy(names + bytes, name, len);
@@ -802,8 +816,10 @@ next:
         if (filterExpiry && keys[i].len >= 64)
             RedisModule_FreeString(NULL, keys[i].owned);
     }
-    free(names);
-    free(keys);
+    if (names != inlineNames)
+        free(names);
+    if (keys != inlineKeys)
+        free(keys);
     return visible;
 }
 

@@ -56,3 +56,22 @@ def test_querylabels_index_compatibility():
                                 names)
                 env.assertEqual(sorted(shard.execute_command('TS.QUERYLABELS', 'VALUES', 'a', *suffix)),
                                 values)
+
+
+def test_query_snapshot_buffer_growth():
+    """Exercise small result buffers and both transitions to allocated storage."""
+    env = Env()
+    for count, keylen in [(32, 16), (33, 16), (8, 256), (9, 256)]:
+        env.flush()
+        with env.getClusterConnectionIfNeeded() as r:
+            keys = [f'key:{i:04d}'.ljust(keylen, 'x').encode() for i in range(count)]
+            for i, key in enumerate(keys):
+                r.execute_command('TS.CREATE', key, 'LABELS', 'group', 'all', 'tag', str(i))
+            shard = env.getConnection(1)
+            # Two predicates keep the result size unknown until traversal finishes.
+            env.assertEqual(sorted(shard.execute_command('TS.QUERYINDEX', 'group=all', 'tag!=')),
+                            sorted(keys))
+            for suffix in ([], ['FILTER', 'group=all']):
+                env.assertEqual(sorted(shard.execute_command('TS.QUERYLABELS', 'VALUES', 'tag', *suffix)),
+                                sorted(str(i).encode() for i in range(count)))
+            env.assertEqual(shard.execute_command('TS.QUERYINDEX', 'group=missing'), [])
