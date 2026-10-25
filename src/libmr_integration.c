@@ -1084,12 +1084,10 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
     const redisReply *labelsElement = reply->element[1];
     RedisModule_Assert(labelsElement->type == REDIS_REPLY_ARRAY);
     if (labelsElement->elements > 0) {
-        static RedisModuleString *LABELS = NULL;
-        if (LABELS == NULL)
-            LABELS = RedisModule_CreateString(rts_staticCtx, "LABELS", 6);
-        size_t argc = 1 + 2 * labelsElement->elements;
-        RedisModuleString *argv[argc];
-        argv[0] = LABELS;
+        // These are already parsed shard results, not client command arguments.
+        // Construct the owned labels once instead of copying them through an argv array.
+        cCtx.labelsCount = labelsElement->elements;
+        cCtx.labels = calloc(cCtx.labelsCount, sizeof(*cCtx.labels));
         for (size_t i = 0; i < labelsElement->elements; i++) {
             const redisReply *labelElement = labelsElement->element[i];
             RedisModule_Assert(labelElement->type == REDIS_REPLY_ARRAY);
@@ -1097,24 +1095,30 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
             RedisModule_Assert(labelElement->element[0]->type == REDIS_REPLY_STRING &&
                                (labelElement->element[1]->type == REDIS_REPLY_STRING ||
                                 labelElement->element[1]->type == REDIS_REPLY_NIL));
-            RedisModuleString *lname = RedisModule_CreateString(
-                rts_staticCtx, labelElement->element[0]->str, labelElement->element[0]->len);
-            RedisModuleString *lvalue = NULL;
-            if (labelElement->element[1]->type == REDIS_REPLY_STRING)
-                lvalue = RedisModule_CreateString(
-                    rts_staticCtx, labelElement->element[1]->str, labelElement->element[1]->len);
-            argv[1 + 2 * i] = lname;
-            argv[2 + 2 * i] = lvalue;
+            const redisReply *key = labelElement->element[0];
+            const redisReply *value = labelElement->element[1];
+            RedisModule_Assert(key->len > 0);
+            cCtx.labels[i].key = RedisModule_CreateString(NULL, key->str, key->len);
+            if (value->type == REDIS_REPLY_STRING) {
+                RedisModule_Assert(value->len > 0 && strpbrk(value->str, "(),") == NULL);
+                cCtx.labels[i].value = RedisModule_CreateString(NULL, value->str, value->len);
+            }
         }
-        int r = parseLabelsFromArgs(argv, argc, &cCtx.labelsCount, &cCtx.labels, true);
-        RedisModule_Assert(r == REDISMODULE_OK);
-        for (size_t i = 1; i < argc; i++)
-            if (argv[i] != NULL)
-                RedisModule_FreeString(rts_staticCtx, argv[i]);
     }
 
     const redisReply *samplesElement = reply->element[2];
     RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
+
+    // Shard replies are transient query results. When they fit in one regular chunk,
+    // avoid compressing them on LibMR's I/O thread just to decompress them at reply time.
+    // Keep larger replies compressed to avoid increasing their temporary sample storage.
+    const bool singleSample =
+        samplesElement->elements == 2 && samplesElement->element[0]->type == REDIS_REPLY_INTEGER;
+    const size_t sampleCount = singleSample ? 1 : samplesElement->elements;
+    if (sampleCount <= cCtx.chunkSizeBytes / sizeof(Sample)) {
+        cCtx.options = SERIES_OPT_UNCOMPRESSED;
+        cCtx.chunkSizeBytes = max(sampleCount, 1) * sizeof(Sample);
+    }
 
     // Detect numAgg from first sample: [ts, v0, v1, ...] → elements-1; compact [ts,val] → 1.
     // Never go below minNumAgg: empty keys must produce as many Series as populated ones so
@@ -1137,8 +1141,8 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
             cCtx.labels = NULL;
             cCtx.labelsCount = 0;
         } else {
-            CreateCtx emptyCCtx = { .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
-                                    .options = SERIES_OPT_COMPRESSED_GORILLA,
+            CreateCtx emptyCCtx = { .chunkSizeBytes = cCtx.chunkSizeBytes,
+                                    .options = cCtx.options,
                                     .duplicatePolicy = DP_NONE };
             result = array_append(result, NewSeries(sname, &emptyCCtx));
         }
