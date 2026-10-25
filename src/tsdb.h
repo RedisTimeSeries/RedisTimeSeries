@@ -98,6 +98,8 @@ static inline timestamp_t BucketStartNormalize(timestamp_t bucketTS) {
     return max(0, (int64_t)bucketTS);
 }
 
+// Call on the main thread before dispatching work that may create temporary Series.
+void EnsureSeriesNotifications(void);
 Series *NewSeries(RedisModuleString *keyName, const CreateCtx *cCtx);
 void FreeSeries(void *value);
 int DefragSeries(RedisModuleDefragCtx *ctx, RedisModuleString *key, void **value);

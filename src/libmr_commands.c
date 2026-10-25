@@ -574,6 +574,8 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (parseMGetCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
+    // An empty coordinator may first create Series while parsing a remote reply.
+    EnsureSeriesNotifications();
 
     QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
@@ -640,6 +642,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         return REDISMODULE_OK;
     }
     args.reverse = reverse;
+    EnsureSeriesNotifications();
 
     QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;

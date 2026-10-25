@@ -1,6 +1,7 @@
 from includes import Env, RLEC_CLUSTER, verifyClusterInitialized
 from redis.crc import key_slot
 import math
+from concurrent.futures import ThreadPoolExecutor
 
 
 def _check_internal_replies(protocol):
@@ -123,3 +124,32 @@ def test_internal_reply_chunk_boundaries_resp2():
 
 def test_internal_reply_chunk_boundaries_resp3():
     _check_internal_replies(3)
+
+
+def test_internal_reply_empty_coordinators():
+    if RLEC_CLUSTER:
+        Env().skip()
+    env = Env(env='oss-cluster', shardsCount=3, protocol=2, moduleArgs='LIBMR_PROTOCOL INTERNAL')
+    with env.getClusterConnectionIfNeeded() as client:
+        # Only one shard owns series; the other two first construct temporary Series
+        # in their coordinator workers. Initialization must already have run on main.
+        client.execute_command('TS.ADD', 'remote-only', 0, 42, 'LABELS', 'test', 'cold', 'group', 'all')
+        for shard in range(1, 4):
+            conn = env.getConnection(shard)
+            conn.execute_command('DEBUG', 'MARK-INTERNAL-CLIENT')
+            conn.execute_command('timeseries.FORCESHARDSCONNECTION')
+        verifyClusterInitialized(env)
+
+        def check(shard):
+            conn = env.getConnection(shard)
+            try:
+                for _ in range(20):
+                    assert conn.execute_command('TS.MGET', 'FILTER', 'test=cold') == [
+                        [b'remote-only', [], [0, b'42']]]
+                    assert conn.execute_command('TS.MRANGE', '-', '+', 'FILTER', 'test=cold',
+                        'GROUPBY', 'group', 'REDUCE', 'avg') == [[b'group=all', [], [[0, b'42']]]]
+            finally:
+                conn.close()
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(check, range(1, 4)))

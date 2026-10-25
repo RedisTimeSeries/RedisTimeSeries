@@ -1190,7 +1190,7 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
     RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
 
     // Shard replies are transient query results. When they fit in one regular chunk,
-    // avoid compressing them on LibMR's I/O thread just to decompress them at reply time.
+    // avoid compressing them during reply parsing just to decompress them at reply time.
     // Keep larger replies compressed to avoid increasing their temporary sample storage.
     const bool singleSample =
         samplesElement->elements == 2 && samplesElement->element[0]->type == REDIS_REPLY_INTEGER;
@@ -1203,29 +1203,26 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
     // Detect numAgg from first sample: [ts, v0, v1, ...] → elements-1; compact [ts,val] → 1.
     // Never go below minNumAgg: empty keys must produce as many Series as populated ones so
     // mrange_done_internal's flat-list stride stays consistent.
-    size_t numAgg = minNumAgg;
+    size_t numAgg = max(minNumAgg, 1);
     if (samplesElement->elements > 0) {
         const redisReply *first = samplesElement->element[0];
         if (first->type == REDIS_REPLY_ARRAY && first->elements > 2)
-            numAgg = max(first->elements - 1, minNumAgg);
+            numAgg = max(first->elements - 1, numAgg);
     }
 
     // Build N Series — only series[0] carries labels.
     ARR(Series *) result = array_new(Series *, numAgg);
-    for (size_t a = 0; a < numAgg; a++) {
+    RedisModuleString *firstName =
+        RedisModule_CreateString(rts_staticCtx, nameElement->str, nameElement->len);
+    // Transfer labels unconditionally, including replies with no samples.
+    result = array_append(result, NewSeries(firstName, &cCtx));
+    for (size_t a = 1; a < numAgg; a++) {
         RedisModuleString *sname =
             RedisModule_CreateString(rts_staticCtx, nameElement->str, nameElement->len);
-        if (a == 0) {
-            result = array_append(result, NewSeries(sname, &cCtx));
-            // cCtx.labels now owned by series[0]; clear so later iterations don't share it.
-            cCtx.labels = NULL;
-            cCtx.labelsCount = 0;
-        } else {
-            CreateCtx emptyCCtx = { .chunkSizeBytes = cCtx.chunkSizeBytes,
-                                    .options = cCtx.options,
-                                    .duplicatePolicy = DP_NONE };
-            result = array_append(result, NewSeries(sname, &emptyCCtx));
-        }
+        CreateCtx emptyCCtx = { .chunkSizeBytes = cCtx.chunkSizeBytes,
+                                .options = cCtx.options,
+                                .duplicatePolicy = DP_NONE };
+        result = array_append(result, NewSeries(sname, &emptyCCtx));
     }
 
     // Compact single-sample form [ts, value] only exists for single-agg/raw.
