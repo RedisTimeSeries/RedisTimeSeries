@@ -854,36 +854,23 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     return series_listOrMap;
 }
 
+static void QueryIndexRecord(RedisModuleCtx *ctx, const char *name, size_t len, void *data) {
+    char *copy = malloc(len + 1);
+    memcpy(copy, name, len);
+    copy[len] = 0;
+    ListRecord_Add(data, StringRecord_Create(copy, len));
+}
+
 Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     QueryPredicates_Arg *predicates = arg;
-
-    if (predicates->shouldReturnNull) {
+    if (predicates->shouldReturnNull)
         return NULL;
-    }
     predicates->shouldReturnNull = true;
-
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
-
-    // The permission error is ignored.
-    RedisModuleDict *result = QueryIndex(
-        rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
-
-    RemoveExpiredQueryIndexKeys(rts_staticCtx, result);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-
-    Record *series_list = ListRecord_Create(0);
-
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        ListRecord_Add(series_list,
-                       StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
-    }
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(rts_staticCtx, result);
+    Record *result = ListRecord_Create(0);
+    VisitQueryIndex(rts_staticCtx, predicates->predicates, true, QueryIndexRecord, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
-
-    return series_list;
+    return result;
 }
 
 Record *ShardQuerylabelsMapper(ExecutionCtx *rctx, void *arg) {
@@ -897,15 +884,12 @@ Record *ShardQuerylabelsMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
     ApplyCtxUser(rts_staticCtx, queryArg->userName);
 
-    RedisModuleDict *candidates =
-        queryArg->hasFilter
-            ? QueryIndex(
-                  rts_staticCtx, queryArg->predicates->list, queryArg->predicates->count, NULL)
-            : GetAllIndexedSeriesKeys(rts_staticCtx);
-
     RedisModuleDict *agg = RedisModule_CreateDict(NULL);
-    QueryLabelsAggregateFromCandidates(
-        rts_staticCtx, queryArg->subtype, queryArg->label, candidates, agg);
+    QueryLabelsAggregate(rts_staticCtx,
+                         queryArg->subtype,
+                         queryArg->label,
+                         queryArg->hasFilter ? queryArg->predicates : NULL,
+                         agg);
 
     Record *result_list = ListRecord_Create(0);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(agg, "^", NULL, 0);
@@ -918,7 +902,6 @@ Record *ShardQuerylabelsMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_DictIteratorStop(iter);
 
     RedisModule_FreeDict(NULL, agg);
-    RedisModule_FreeDict(rts_staticCtx, candidates);
     ReleaseCtxUser(rts_staticCtx);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
 
@@ -1287,27 +1270,17 @@ _cleanup:
 static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
                                                   .replyParser = SeriesListReplyParser };
 
+static void QueryIndexInternalReply(RedisModuleCtx *ctx, const char *name, size_t len, void *data) {
+    RedisModule_ReplyWithStringBuffer(ctx, name, len);
+}
+
 static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
     ApplyCtxUser(ctx, queryArg->userName);
-    RedisModuleDict *qi =
-        QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL);
-    RemoveExpiredQueryIndexKeys(ctx, qi);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
-
-    const char *keyName;
-    size_t keyNameLen;
-    long long replylen = 0;
-
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    while ((keyName = RedisModule_DictNextC(iter, &keyNameLen, NULL)) != NULL) {
-        RedisModule_ReplyWithStringBuffer(ctx, keyName, keyNameLen);
-        replylen++;
-    }
-    RedisModule_ReplySetArrayLength(ctx, replylen);
-
-    RedisModule_DictIteratorStop(iter);
-    RedisModule_FreeDict(ctx, qi);
+    long long count =
+        VisitQueryIndex(ctx, queryArg->predicates, true, QueryIndexInternalReply, NULL);
+    RedisModule_ReplySetArrayLength(ctx, count);
     ReleaseCtxUser(ctx);
 }
 
@@ -1330,15 +1303,12 @@ static void TS_INTERNAL_QUERYLABELS(RedisModuleCtx *ctx, void *args) {
     QueryLabelsArg *queryArg = args;
     ApplyCtxUser(ctx, queryArg->userName);
 
-    RedisModuleDict *candidates =
-        queryArg->hasFilter
-            ? QueryIndex(ctx, queryArg->predicates->list, queryArg->predicates->count, NULL)
-            : GetAllIndexedSeriesKeys(ctx);
-
-    // Aggregate into a dict (shared with the non-cluster path) so per-shard duplicates
-    // (e.g. a label shared by many series) are collapsed before crossing the wire.
     RedisModuleDict *agg = RedisModule_CreateDict(NULL);
-    QueryLabelsAggregateFromCandidates(ctx, queryArg->subtype, queryArg->label, candidates, agg);
+    QueryLabelsAggregate(ctx,
+                         queryArg->subtype,
+                         queryArg->label,
+                         queryArg->hasFilter ? queryArg->predicates : NULL,
+                         agg);
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(agg, "^", NULL, 0);
@@ -1353,7 +1323,6 @@ static void TS_INTERNAL_QUERYLABELS(RedisModuleCtx *ctx, void *args) {
     RedisModule_ReplySetArrayLength(ctx, replylen);
 
     RedisModule_FreeDict(NULL, agg);
-    RedisModule_FreeDict(ctx, candidates);
     ReleaseCtxUser(ctx);
 }
 

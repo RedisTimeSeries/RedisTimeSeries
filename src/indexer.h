@@ -80,11 +80,12 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             size_t predicate_count,
                             bool *hasPermissionError);
 
-void RemoveExpiredQueryIndexKeys(RedisModuleCtx *ctx, RedisModuleDict *result);
-
-// Returns a fresh dict of every currently-indexed series key (ts_key -> dummy).
-// Used by TS.QUERYLABELS when no FILTER is given ("all series").
-RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx);
+// Visit an owned snapshot; callbacks may expire keys and mutate the live index.
+size_t VisitQueryIndex(RedisModuleCtx *ctx,
+                       QueryPredicateList *queries,
+                       bool filterExpiry,
+                       void (*visit)(RedisModuleCtx *, const char *, size_t, void *),
+                       void *data);
 
 // Builds the index-entry prefix for a LABELS or VALUES query (see QueryLabelsFromIndex).
 // Caller owns the returned string and must free it with RedisModule_FreeString(NULL, ...).

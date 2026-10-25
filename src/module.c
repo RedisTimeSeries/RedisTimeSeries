@@ -279,23 +279,14 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
+static void QueryIndexReply(RedisModuleCtx *ctx, const char *name, size_t len, void *data) {
+    RedisModule_ReplyWithStringBuffer(ctx, name, len);
+}
+
 void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    RedisModuleDict *result = QueryIndex(ctx, queries->list, queries->count, NULL);
-
-    RemoveExpiredQueryIndexKeys(ctx, result);
-
     ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    long long replylen = 0;
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
-        replylen++;
-    }
-    RedisModule_DictIteratorStop(iter);
-    ReplySetSetOrArrayLength(ctx, replylen);
+    long long count = VisitQueryIndex(ctx, queries, true, QueryIndexReply, NULL);
+    ReplySetSetOrArrayLength(ctx, count);
 }
 
 int TSDB_queryindex(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -364,38 +355,78 @@ static void QueryLabelsEmitToDict(void *userData, const char *buf, size_t len) {
     RedisModule_DictSetC((RedisModuleDict *)userData, (void *)buf, len, NULL);
 }
 
-// ACL: skips candidates the caller can't read. Shared by the local and cluster-fanout paths.
-void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
-                                        QueryLabelsSubtype subtype,
-                                        RedisModuleString *labelFilter,
-                                        RedisModuleDict *candidates,
-                                        RedisModuleDict *agg) {
-    RedisModuleString *prefix = QueryLabelsBuildPrefix(subtype, labelFilter);
+typedef struct
+{
+    QueryLabelsSubtype subtype;
+    RedisModuleString *label;
+    const char *prefix;
     size_t prefixLen;
-    const char *prefixBuf = RedisModule_StringPtrLen(prefix, &prefixLen);
+    RedisModuleDict *agg;
+    RedisModuleUser *user;
+} QueryLabelsVisitor;
 
-    User_Ctx_t userCtx = GetUserFromContext(ctx);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(candidates, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        if (!CheckKeyIsAllowedToReadC(ctx, userCtx.user, currentKey, currentKeyLen)) {
-            continue;
+static void QueryLabelsVisit(RedisModuleCtx *ctx, const char *name, size_t len, void *data) {
+    QueryLabelsVisitor *v = data;
+    if (!CheckKeyIsAllowedToReadC(ctx, v->user, name, len))
+        return;
+    RedisModuleString *key = RedisModule_CreateString(NULL, name, len);
+    RedisModuleKey *opened =
+        RedisModule_OpenKey(ctx, key, REDISMODULE_READ | REDISMODULE_OPEN_KEY_NOTOUCH);
+    if (RedisModule_KeyType(opened) == REDISMODULE_KEYTYPE_MODULE &&
+        RedisModule_ModuleTypeGetType(opened) == SeriesType) {
+        Series *series = RedisModule_ModuleTypeGetValue(opened);
+        // Preserve the label index's C-string handling of embedded NULs and
+        // ambiguous '=' label names; duplicate names use the first sorted value.
+        bool useIndex = false;
+        RedisModuleString *smallest = NULL;
+        for (size_t i = 0; i < series->labelsCount; ++i) {
+            size_t keyLen, valueLen;
+            const char *keyBuf = RedisModule_StringPtrLen(series->labels[i].key, &keyLen);
+            const char *valueBuf = RedisModule_StringPtrLen(series->labels[i].value, &valueLen);
+            if (memchr(keyBuf, '=', keyLen) || memchr(keyBuf, '\0', keyLen) ||
+                memchr(valueBuf, '\0', valueLen)) {
+                useIndex = true;
+                break;
+            }
         }
-        // Candidates are a snapshot: expiring a key here may safely update the live
-        // label index before we read its labels. Never do this inside an index iterator.
-        RedisModuleString *key = RedisModule_CreateString(NULL, currentKey, currentKeyLen);
-        int exists = RedisModule_KeyExists(ctx, key);
-        RedisModule_FreeString(NULL, key);
-        if (!exists) {
-            continue;
+        if (v->label) {
+            size_t labelLen;
+            const char *labelBuf = RedisModule_StringPtrLen(v->label, &labelLen);
+            useIndex |= memchr(labelBuf, '\0', labelLen) != NULL;
         }
-        QueryLabelsFromIndex(
-            currentKey, currentKeyLen, subtype, prefixBuf, prefixLen, QueryLabelsEmitToDict, agg);
+        if (useIndex) {
+            QueryLabelsFromIndex(
+                name, len, v->subtype, v->prefix, v->prefixLen, QueryLabelsEmitToDict, v->agg);
+        } else
+            for (size_t i = 0; i < series->labelsCount; ++i) {
+                if (v->subtype == QueryLabelsSubtype_Labels)
+                    RedisModule_DictSet(v->agg, series->labels[i].key, NULL);
+                else if (!RedisModule_StringCompare(series->labels[i].key, v->label)) {
+                    if (!smallest ||
+                        RedisModule_StringCompare(series->labels[i].value, smallest) < 0)
+                        smallest = series->labels[i].value;
+                }
+            }
+        if (smallest)
+            RedisModule_DictSet(v->agg, smallest, NULL);
     }
-    RedisModule_DictIteratorStop(iter);
-    FreeUser(&userCtx);
+    RedisModule_CloseKey(opened);
+    RedisModule_FreeString(NULL, key);
+}
 
+void QueryLabelsAggregate(RedisModuleCtx *ctx,
+                          QueryLabelsSubtype subtype,
+                          RedisModuleString *label,
+                          QueryPredicateList *queries,
+                          RedisModuleDict *agg) {
+    RedisModuleString *prefix = QueryLabelsBuildPrefix(subtype, label);
+    User_Ctx_t user = GetUserFromContext(ctx);
+    QueryLabelsVisitor visitor = {
+        .subtype = subtype, .label = label, .agg = agg, .user = user.user
+    };
+    visitor.prefix = RedisModule_StringPtrLen(prefix, &visitor.prefixLen);
+    VisitQueryIndex(ctx, queries, false, QueryLabelsVisit, &visitor);
+    FreeUser(&user);
     RedisModule_FreeString(NULL, prefix);
 }
 
@@ -403,15 +434,10 @@ static void _TSDB_querylabels_impl(RedisModuleCtx *ctx,
                                    QueryLabelsSubtype subtype,
                                    RedisModuleString *label,
                                    QueryPredicateList *queries) {
-    RedisModuleDict *candidates = queries != NULL
-                                      ? QueryIndex(ctx, queries->list, queries->count, NULL)
-                                      : GetAllIndexedSeriesKeys(ctx);
-
     RedisModuleDict *agg = RedisModule_CreateDict(NULL);
-    QueryLabelsAggregateFromCandidates(ctx, subtype, label, candidates, agg);
+    QueryLabelsAggregate(ctx, subtype, label, queries, agg);
     ReplyWithKeySetFromDict(ctx, agg);
     RedisModule_FreeDict(NULL, agg);
-    RedisModule_FreeDict(ctx, candidates);
 }
 
 int TSDB_querylabels(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
