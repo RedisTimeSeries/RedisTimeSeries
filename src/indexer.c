@@ -704,8 +704,10 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
     void *value = heapSize ? heap[0].value : NULL;
     while (name) {
         if (merge && size && len == keys[size - 1].len &&
-            !memcmp(name, filterExpiry && len >= 64 ? keys[size - 1].key.name
-                                                  : names + keys[size - 1].key.offset, len))
+            !memcmp(name,
+                    filterExpiry && len >= 64 ? keys[size - 1].key.name
+                                              : names + keys[size - 1].key.offset,
+                    len))
             goto next;
         bool matches = true;
         for (size_t j = 1; j < count && matches; ++j) {
@@ -735,8 +737,9 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
         }
         RedisModuleString *owned = filterExpiry ? RedisModule_HoldString(NULL, value) : NULL;
         if (owned && len >= 64) {
-            keys[size++] = (SnapshotKey){.key.name = RedisModule_StringPtrLen(owned, NULL),
-                                        .len = len, .owned = owned};
+            keys[size++] = (SnapshotKey){ .key.name = RedisModule_StringPtrLen(owned, NULL),
+                                          .len = len,
+                                          .owned = owned };
             goto next;
         }
         RedisModule_Assert(len <= SIZE_MAX - bytes);
@@ -745,10 +748,7 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
             allocated = max(allocated ? allocated * 2 : 1024, bytes + len);
             names = realloc(names, allocated);
         }
-        keys[size++] =
-            (SnapshotKey){ .key.offset = bytes,
-                           .len = len,
-                           .owned = owned };
+        keys[size++] = (SnapshotKey){ .key.offset = bytes, .len = len, .owned = owned };
         memcpy(names + bytes, name, len);
         bytes += len;
 next:
@@ -788,7 +788,8 @@ next:
             if (i + 16 < size)
                 __builtin_prefetch(keys[i + 16].owned, 0, 1);
             bool exists = RedisModule_KeyExists(ctx, key);
-            if (keys[i].len < 64) RedisModule_FreeString(NULL, key);
+            if (keys[i].len < 64)
+                RedisModule_FreeString(NULL, key);
             if (!exists) {
                 keys[i].key.name = NULL;
                 --visible;
@@ -798,7 +799,8 @@ next:
     for (size_t i = 0; i < size; ++i) {
         if (keys[i].key.name)
             visit(ctx, keys[i].key.name, keys[i].len, data);
-        if (filterExpiry && keys[i].len >= 64) RedisModule_FreeString(NULL, keys[i].owned);
+        if (filterExpiry && keys[i].len >= 64)
+            RedisModule_FreeString(NULL, keys[i].owned);
     }
     free(names);
     free(keys);
