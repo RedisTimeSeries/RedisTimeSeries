@@ -3,25 +3,39 @@
 Requires redis-py and memtier_benchmark. Run once per module build with a fresh --root:
   python coordinator_reply_bench.py --module /path/to/redistimeseries.so --root /tmp/ts-before
 
-The dataset and client concurrency stay fixed as --shards changes. Clients target one
-coordinator deliberately; this measures coordinator overhead, not production scale-out.
+The dataset and total client concurrency stay fixed as --shards changes. By default,
+clients target every shard simultaneously; --coordinators single isolates one coordinator.
 All processes run on one machine. Do not compare these numbers with distributed hardware.
 """
 
 import argparse
 import json
+import math
 import pathlib
 import random
 import shutil
 import subprocess
 import time
 
+import thread_cpu
+
 import redis
 from redis.crc import key_slot
 
 
+def equivalent(a, b):
+    if a == b:
+        return True
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(equivalent(x, y) for x, y in zip(a, b))
+    try:
+        return math.isclose(float(a), float(b), rel_tol=1e-12, abs_tol=1e-12)
+    except (TypeError, ValueError):
+        return False
+
+
 class Cluster:
-    def __init__(self, module, n, root, redis_server, base_port=23100):
+    def __init__(self, module, n, root, redis_server, base_port=23100, workers=3):
         self.root = pathlib.Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=False)
         self.processes = []
@@ -29,13 +43,14 @@ class Cluster:
         self.ports = list(range(base_port, base_port + n))
         try:
             for i, port in enumerate(self.ports):
+                node_module = module[i] if isinstance(module, (list, tuple)) else module
                 node = self.root / str(i)
                 node.mkdir()
                 config = [f'port {port}', 'bind 127.0.0.1', 'protected-mode no',
                           'save ""', 'appendonly no', f'dir {json.dumps(str(node))}',
                           f'logfile {json.dumps(str(node / "redis.log"))}', 'enable-debug-command yes',
-                          f'loadmodule {json.dumps(str(pathlib.Path(module).resolve()))}',
-                          'ts-libmr-protocol internal']
+                          f'loadmodule {json.dumps(str(pathlib.Path(node_module).resolve()))}',
+                          'ts-libmr-protocol internal', f'ts-num-threads {workers}']
                 if n > 1:
                     config += ['cluster-enabled yes', 'cluster-node-timeout 5000',
                                'cluster-config-file nodes.conf']
@@ -110,7 +125,14 @@ class Cluster:
     def metrics(self):
         stats = [c.info() for c in self.connections]
         return {'cpu': sum(s['used_cpu_user'] + s['used_cpu_sys'] for s in stats),
-                'output': sum(s['total_net_output_bytes'] for s in stats)}
+                'output': sum(s['total_net_output_bytes'] for s in stats),
+                'shards': [{'cpu': s['used_cpu_user'] + s['used_cpu_sys'],
+                            'main_cpu': (s['used_cpu_user_main_thread'] + s['used_cpu_sys_main_thread']
+                                         if 'used_cpu_user_main_thread' in s else None),
+                            'memory_used': s['used_memory'], 'memory_peak': s['used_memory_peak'],
+                            'memory_rss': s['used_memory_rss'],
+                            'threads': thread_cpu.snapshot(p.pid)}
+                           for p, s in zip(self.processes, stats)]}
 
     def close(self):
         for proc in self.processes:
@@ -136,22 +158,32 @@ def main():
     parser.add_argument('--shards', type=int, default=3)
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--seconds', type=int, default=3)
-    parser.add_argument('--cases', nargs='+', choices=['narrow_avg', 'broad_avg', 'multi_avg_sum',
+    parser.add_argument('--coordinators', choices=['all', 'single'], default='all')
+    parser.add_argument('--clients', type=int, default=48, help='Total connections across coordinators')
+    parser.add_argument('--workers', type=int, default=3)
+    parser.add_argument('--series', type=int, default=96)
+    parser.add_argument('--pipeline', type=int, default=2)
+    parser.add_argument('--cases', nargs='+', choices=['narrow_avg', 'narrow_balanced', 'broad_avg', 'multi_avg_sum',
                                                      'group_avg', 'mget', 'raw'])
     args = parser.parse_args()
     if not args.redis_server or not args.memtier:
         parser.error('redis-server and memtier_benchmark must be installed or supplied explicitly')
-    if min(args.shards, args.repeats, args.seconds) < 1:
-        parser.error('shards, repeats and seconds must be positive')
+    if min(args.shards, args.repeats, args.seconds, args.clients, args.workers, args.series, args.pipeline) < 1:
+        parser.error('numeric workload parameters must be positive')
+    coordinators = args.shards if args.coordinators == 'all' else 1
+    if args.clients % coordinators:
+        parser.error('clients must be divisible by the number of coordinators')
     if args.base_port < 1024 or args.base_port + args.shards + 10000 > 65535:
         parser.error('base-port must leave room for all client and cluster-bus ports')
     if not pathlib.Path(args.module).is_file():
         parser.error('module must be an existing file')
-    cluster = Cluster(args.module, args.shards, args.root, args.redis_server, args.base_port)
+    cluster = Cluster(args.module, args.shards, args.root, args.redis_server, args.base_port, args.workers)
     try:
-        cluster.seed()
+        cluster.seed(series=args.series)
+        (cluster.root / 'workload.json').write_text(json.dumps(vars(args), indent=2))
         cases = {
             'narrow_avg': 'TS.MRANGE 6000000 6059999 AGGREGATION avg 60000 FILTER measurement=cpu fieldname=usage_nice host=h1',
+            'narrow_balanced': 'TS.MRANGE 6000000 6059999 AGGREGATION avg 60000 FILTER measurement=cpu fieldname=usage_nice host={host}',
             'broad_avg': 'TS.MRANGE 6000000 6059999 AGGREGATION avg 60000 FILTER measurement=cpu',
             'multi_avg_sum': 'TS.MRANGE 6000000 6059999 AGGREGATION avg,sum 60000 FILTER measurement=cpu',
             'group_avg': 'TS.MRANGE 6000000 6059999 AGGREGATION avg 60000 FILTER measurement=cpu GROUPBY group REDUCE avg',
@@ -160,32 +192,81 @@ def main():
         }
         if args.cases:
             cases = {k: cases[k] for k in args.cases}
+        hosts = [next((f'h{i}' for i in range(args.series)
+                       if cluster.owner(f'bench:series:{i}') is conn), None)
+                 for conn in cluster.connections]
+        if 'narrow_balanced' in cases and any(host is None for host in hosts):
+            raise RuntimeError('Increase --series so every shard owns a series')
+        commands = {name: [command.format(host=host) for host in hosts]
+                    for name, command in cases.items()}
         # Verify every query before measuring, and preserve replies for before/after comparison.
-        replies = {name: cluster.connections[0].execute_command(*command.split())
-                   for name, command in cases.items()}
+        replies = {name: [c.execute_command(*command.split())
+                         for c, command in zip(cluster.connections, node_commands)]
+                   for name, node_commands in commands.items()}
+        for name, results in replies.items():
+            canonical = [sorted(reply, key=lambda row: row[0]) for reply in results]
+            if name != 'narrow_balanced' and any(not equivalent(reply, canonical[0])
+                                                for reply in canonical[1:]):
+                raise RuntimeError(f'Coordinators disagree on {name}')
         (cluster.root / 'replies.json').write_text(json.dumps(replies, default=lambda b: b.decode()))
         runs = [(name, command, repeat) for repeat in range(args.repeats)
                 for name, command in cases.items()]
         random.Random(1).shuffle(runs)
         rows = []
         for name, command, repeat in runs:
-            result = cluster.root / f'{name}-{repeat}.json'
             before = cluster.metrics()
-            with (cluster.root / f'{name}-{repeat}.log').open('w') as log:
-                subprocess.run([args.memtier, '-s', '127.0.0.1',
-                                '-p', str(cluster.ports[0]), '-t', '2', '-c', '8', '--pipeline', '2',
-                                '--test-time', str(args.seconds), '--command', command,
-                                '--hide-histogram', '--json-out-file', str(result)],
-                               stdout=log, stderr=subprocess.STDOUT, check=True,
-                               timeout=args.seconds + 30)
+            clients, logs, result_paths = [], [], []
+            try:
+                # Start every load generator before waiting for any of them.
+                for i in range(coordinators):
+                    stem = cluster.root / f'{name}-{repeat}-coordinator{i}'
+                    result_paths.append(stem.with_suffix('.json'))
+                    log = stem.with_suffix('.log').open('w')
+                    logs.append(log)
+                    clients.append(subprocess.Popen(
+                        [args.memtier, '-s', '127.0.0.1', '-p', str(cluster.ports[i]),
+                         '-t', '1', '-c', str(args.clients // coordinators),
+                         '--pipeline', str(args.pipeline), '--test-time', str(args.seconds),
+                         '--command', commands[name][i], '--hide-histogram',
+                         '--json-out-file', str(result_paths[-1])], stdout=log, stderr=subprocess.STDOUT))
+                for proc in clients:
+                    if proc.wait(timeout=args.seconds + 30):
+                        raise RuntimeError(f'memtier failed for {name}; inspect coordinator logs')
+            finally:
+                for proc in clients:
+                    if proc.poll() is None:
+                        proc.kill()
+                    proc.wait()
+                for log in logs:
+                    log.close()
             after = cluster.metrics()
-            result_data = json.loads(result.read_text())
-            totals = result_data['ALL STATS']['Totals']
-            if totals['Count'] == 0:
-                raise RuntimeError(f'No completed requests for {name}; inspect its log')
+            measurements = [json.loads(path.read_text())['ALL STATS'] for path in result_paths]
+            if any('error' in path.with_suffix('.log').read_text().lower() for path in result_paths):
+                raise RuntimeError(f'memtier reported errors for {name}; inspect coordinator logs')
+            counts = [m['Totals']['Count'] for m in measurements]
+            if min(counts) == 0:
+                raise RuntimeError(f'No completed requests on a coordinator for {name}')
+            start = min(m['Runtime']['Start time'] for m in measurements)
+            finish = max(m['Runtime']['Finish time'] for m in measurements)
+            overlap = min(m['Runtime']['Finish time'] for m in measurements) - max(
+                m['Runtime']['Start time'] for m in measurements)
+            if overlap < args.seconds * 1000 * 0.8:
+                raise RuntimeError('Load generators did not overlap sufficiently')
+            totals = {'Count': sum(counts), 'Ops/sec': sum(counts) * 1000 / (finish - start)}
             row = {'case': name, 'repeat': repeat, 'shards': args.shards,
+                   'coordinators': coordinators, 'clients': args.clients, 'workers': args.workers,
+                   'overlap_ms': overlap, 'per_coordinator': [m['Totals'] for m in measurements],
+                   'commands': commands[name][:coordinators],
                    'totals': totals, 'cpu_seconds': after['cpu'] - before['cpu'],
-                   'output_bytes': after['output'] - before['output']}
+                   'output_bytes': after['output'] - before['output'],
+                   'per_shard': [{'cpu_seconds': a['cpu'] - b['cpu'],
+                                  'main_cpu_seconds': (a['main_cpu'] - b['main_cpu']
+                                                       if a['main_cpu'] is not None else None),
+                                  'memory_used_before': b['memory_used'], 'memory_used_after': a['memory_used'],
+                                  'memory_peak': a['memory_peak'],
+                                  'memory_rss_before': b['memory_rss'], 'memory_rss_after': a['memory_rss'],
+                                  'threads': thread_cpu.delta(b['threads'], a['threads'])}
+                                 for b, a in zip(before['shards'], after['shards'])]}
             rows.append(row)
             (cluster.root / 'summary.json').write_text(json.dumps(rows, indent=2))
             print(f"{name}: {totals['Ops/sec']:.0f} ops/sec, "

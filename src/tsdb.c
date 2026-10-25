@@ -552,6 +552,8 @@ const char *SeriesGetCStringLabelValue(const Series *series, const char *labelKe
     for (int i = 0; i < series->labelsCount; i++) {
         const char *currLabel = RedisModule_StringPtrLen(series->labels[i].key, NULL);
         if (strcmp(currLabel, labelKey) == 0) {
+            if (series->labels[i].value == NULL)
+                return NULL; // A projected missing label is not a group value.
             return RedisModule_StringPtrLen(series->labels[i].value, len);
         }
     }

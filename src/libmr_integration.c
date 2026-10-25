@@ -31,6 +31,9 @@ static MRRecordType *SlotRangesRecordType = NULL;
 static MRRecordType *SeriesListRecordType = NULL;
 static MRRecordType *StringListRecordType = NULL;
 
+// Distinct from every LibMR step type, so peeking cannot consume a following GEARS step.
+#define MRANGE_PLAN_V1 0x54534d525031LL
+
 static void QueryPredicates_FreeUserName(QueryPredicates_Arg *predicate_list) {
     if (predicate_list->userName) {
         RedisModule_FreeString(NULL, predicate_list->userName);
@@ -90,6 +93,7 @@ static void QueryPredicates_ObjectFree(void *arg) {
     QueryPredicateList_Free(predicate_list->predicates);
     QueryPredicates_FreeLimitLabels(predicate_list);
     QueryPredicates_FreeUserName(predicate_list);
+    free(predicate_list->groupByLabel);
     free(predicate_list);
 }
 
@@ -222,6 +226,14 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
         }
     }
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->excludeEmpty, error);
+    if (predicate_list->hasQueryPlan) {
+        // MRANGE must be the final execution step: legacy readers stop before this trailer.
+        MR_SerializationCtxWriteLongLong(sctx, MRANGE_PLAN_V1, error);
+        const char *group = predicate_list->groupByLabel ?: "";
+        MR_SerializationCtxWriteBuffer(sctx, group, strlen(group) + 1, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->perSeriesCount, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->groupReducer, error);
+    }
 }
 
 static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
@@ -259,6 +271,7 @@ static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *pr
     }
     free(predicates->predicates);
     QueryPredicates_FreeLimitLabels(predicates);
+    free(predicates->groupByLabel);
     free(predicates);
 }
 
@@ -358,6 +371,18 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
         }
     }
     predicates->excludeEmpty = MR_SerializationCtxReadLongLong(sctx, error);
+
+    if (!*error && MR_SerializationCtxReadOptionalMarker(sctx, MRANGE_PLAN_V1)) {
+        predicates->hasQueryPlan = true;
+        size_t len;
+        const char *group = MR_SerializationCtxReadBuffer(sctx, &len, error);
+        if (*error || len == 0 || group[len - 1] != '\0')
+            goto err;
+        if (len > 1)
+            predicates->groupByLabel = strdup(group);
+        predicates->perSeriesCount = MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->groupReducer = MR_SerializationCtxReadLongLong(sctx, error);
+    }
 
     if (unlikely(expect_resp && *error)) {
         goto err;
@@ -1014,7 +1039,7 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
 
     ApplyCtxUser(ctx, queryArg->userName);
-    MRangeArgs mrangeArgs;
+    MRangeArgs mrangeArgs = { 0 };
     mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
     mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
     mrangeArgs.rangeArgs.latest = queryArg->latest;
@@ -1033,6 +1058,21 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     // mrange_done)
     mrangeArgs.withLabels = true;
     mrangeArgs.numLimitLabels = 0;
+    if (queryArg->hasQueryPlan) {
+        mrangeArgs.withLabels = queryArg->withLabels;
+        mrangeArgs.numLimitLabels = queryArg->limitLabelsSize;
+        memcpy(mrangeArgs.limitLabels,
+               queryArg->limitLabels,
+               queryArg->limitLabelsSize * sizeof(*queryArg->limitLabels));
+        mrangeArgs.rangeArgs.count = queryArg->perSeriesCount;
+        if (queryArg->groupByLabel) {
+            // Grouped client replies contain group/reducer/source metadata, not source labels.
+            mrangeArgs.withLabels = false;
+            mrangeArgs.numLimitLabels = 1;
+            mrangeArgs.limitLabels[0] = RedisModule_CreateString(
+                NULL, queryArg->groupByLabel, strlen(queryArg->groupByLabel));
+        }
+    }
     mrangeArgs.queryPredicates = queryArg->predicates;
     mrangeArgs.groupByLabel = NULL;
     mrangeArgs.groupByReducerArgs.aggregationClass = NULL;
@@ -1056,7 +1096,47 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
 
     RedisModuleDict *qi =
         QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
-    replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    if (queryArg->hasQueryPlan && queryArg->groupByLabel &&
+        DistributedGroupSupported(queryArg->groupReducer)) {
+        // Validate permissions on every match, including series without the group label.
+        if (CheckDictSeriesPermissions(
+                ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+            GetSeriesResult_PermissionError) {
+            RTS_ReplyKeyPermissionsError(ctx);
+        } else {
+            DistributedGroups *groups = DistributedGroups_New(queryArg->groupReducer);
+            RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+            RedisModuleString *name;
+            while ((name = RedisModule_DictNext(ctx, iter, NULL))) {
+                RedisModuleKey *key;
+                Series *series;
+                if (GetSeries(ctx,
+                              name,
+                              &key,
+                              &series,
+                              REDISMODULE_READ,
+                              GetSeriesFlags_SilentOperation) == GetSeriesResult_Success) {
+                    DistributedGroups_AddSeries(groups,
+                                                series,
+                                                queryArg->groupByLabel,
+                                                &mrangeArgs.rangeArgs,
+                                                mrangeArgs.excludeEmpty);
+                    RedisModule_CloseKey(key);
+                } else {
+                    RedisModule_DictIteratorStop(iter);
+                    iter = RedisModule_DictIteratorStart(qi, ">", name);
+                }
+                RedisModule_FreeString(ctx, name);
+            }
+            RedisModule_DictIteratorStop(iter);
+            DistributedGroups_ReplyPartial(ctx, groups);
+            DistributedGroups_Free(groups);
+        }
+    } else {
+        replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    }
+    if (queryArg->hasQueryPlan && queryArg->groupByLabel)
+        RedisModule_FreeString(NULL, mrangeArgs.limitLabels[0]);
     RedisModule_FreeDict(ctx, qi);
     ReleaseCtxUser(ctx);
 }
@@ -1152,8 +1232,7 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
     if (numAgg == 1 && samplesElement->elements == 2 &&
         samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
         api_timestamp_t ts = samplesElement->element[0]->integer;
-        double val;
-        parse_double_cstr(samplesElement->element[1]->str, samplesElement->element[1]->len, &val);
+        double val = ShardReplyDouble(samplesElement->element[1]);
         SeriesAddSample(result[0], ts, val);
         return result;
     }
@@ -1165,10 +1244,8 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
         RedisModule_Assert(sampleElement->element[0]->type == REDIS_REPLY_INTEGER);
         api_timestamp_t ts = sampleElement->element[0]->integer;
         for (size_t a = 0; a < numAgg; a++) {
-            double val;
             // element type may appear as status string for values starting with '+'/'-'
-            parse_double_cstr(
-                sampleElement->element[1 + a]->str, sampleElement->element[1 + a]->len, &val);
+            double val = ShardReplyDouble(sampleElement->element[1 + a]);
             SeriesAddSample(result[a], ts, val);
         }
     }
@@ -1177,6 +1254,16 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
 
 static Record *SeriesListReplyParser(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+
+    if (reply->elements == 3 && reply->element[0]->type == REDIS_REPLY_STRING &&
+        reply->element[0]->len == strlen(TS_GROUP_REPLY_VERSION) &&
+        memcmp(reply->element[0]->str, TS_GROUP_REPLY_VERSION, strlen(TS_GROUP_REPLY_VERSION)) ==
+            0) {
+        SeriesListRecord *record =
+            (SeriesListRecord *)SeriesListRecord_Create(array_new(Series *, 1), 1);
+        record->groups = DistributedGroups_Parse(reply);
+        return &record->base;
+    }
 
     // First pass: determine numAgg from populated keys without allocating Series.
     // Empty keys have zero samples so they cannot reveal the agg count on their own.
@@ -1943,12 +2030,14 @@ static Record *SeriesListRecord_Create(ARR(Series *) seriesList, size_t numAggCl
         (SeriesListRecord *)MR_RecordCreate(SeriesListRecordType, sizeof(*result));
     result->seriesList = seriesList;
     result->numAggClasses = numAggClasses;
+    result->groups = NULL;
     return &result->base;
 }
 
 static void SeriesListRecord_Free(void *base) {
     SeriesListRecord *record = base;
     array_free_ex(record->seriesList, FreeSeries(*(Series **)ptr));
+    DistributedGroups_Free(record->groups);
     free(record);
 }
 

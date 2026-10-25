@@ -193,6 +193,7 @@ define _SOURCES
 	indexer.c
 	libmr_integration.c
 	libmr_commands.c
+	distributed_group.c
 	module.c
 	parse_policies.c
 	query_language.c
