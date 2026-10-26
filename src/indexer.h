@@ -80,10 +80,9 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             size_t predicate_count,
                             bool *hasPermissionError);
 
-// Visit an owned snapshot; callbacks may expire keys and mutate the live index.
+// Visit live matching keys. The callback must not mutate the keyspace or index.
 size_t VisitQueryIndex(RedisModuleCtx *ctx,
                        QueryPredicateList *queries,
-                       bool filterExpiry,
                        void (*visit)(RedisModuleCtx *, const char *, size_t, void *),
                        void *data);
 

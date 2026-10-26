@@ -44,8 +44,8 @@ def test_query_expiry_rebuilds_cursors():
             shard.execute_command('DEBUG', 'SET-ACTIVE-EXPIRE', 1)
 
 
-def test_query_union_deduplicates_across_batches():
-    """One series can appear in distinct union leaves on a batch boundary."""
+def test_query_union_deduplicates_after_expiry():
+    """One series can appear in distinct union leaves; expiry must preserve deduplication."""
     skip_on_rlec()
     env = Env()
     shards = [env.getConnection(i + 1) for i in range(env.shardsCount)]

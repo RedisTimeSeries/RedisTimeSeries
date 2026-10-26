@@ -22,10 +22,6 @@ RedisModuleDict *labelsIndex;  // maps label to it's ts keys.
 RedisModuleDict *tsLabelIndex; // maps ts_key to it's dict in labelsIndex
 extern bool isReshardTrimming, isAsmTrimming, isAsmImporting;
 
-// Index mutations are synchronous under the Redis lock. Queries use this epoch
-// to rebuild their cursors if a lookup or visitor changes any label dictionary.
-static uint64_t indexGeneration;
-
 #define KV_PREFIX_LITERAL "__index_"
 #define K_PREFIX_LITERAL "__key_index_"
 #define KV_PREFIX KV_PREFIX_LITERAL "%s=%s"
@@ -38,7 +34,6 @@ typedef enum
 } INDEXER_OPERATION_T;
 
 void IndexInit() {
-    ++indexGeneration;
     labelsIndex = RedisModule_CreateDict(NULL);
     tsLabelIndex = RedisModule_CreateDict(NULL);
 }
@@ -54,7 +49,6 @@ static int DefragIndexLeaf(RedisModuleDefragCtx *ctx,
 }
 
 int DefragIndex(RedisModuleDefragCtx *ctx) {
-    ++indexGeneration;
     static RedisModuleString *seekTo = NULL;
     static RedisModuleDict **index = &labelsIndex;
 
@@ -189,10 +183,7 @@ static inline void labelsIndexRemoveTsKey(RedisModuleDict *leaf,
                                           RedisModuleString *key,
                                           RedisModuleString *ts_key,
                                           RedisModuleDict *_labelsIndex) {
-    RedisModuleString *owned = NULL;
-    RedisModule_DictDel(leaf, ts_key, (void **)&owned);
-    if (owned)
-        RedisModule_FreeString(NULL, owned);
+    RedisModule_DictDel(leaf, ts_key, NULL);
     if (RedisModule_DictSize(leaf) == 0) {
         RedisModule_FreeDict(NULL, leaf);
         RedisModule_DictDel(_labelsIndex, key, NULL);
@@ -204,7 +195,6 @@ void labelIndexUnderKey(INDEXER_OPERATION_T op,
                         RedisModuleString *ts_key,
                         RedisModuleDict *_labelsIndex,
                         RedisModuleDict *_tsLabelIndex) {
-    ++indexGeneration;
     int nokey = 0;
     RedisModuleDict *leaf = RedisModule_DictGet(_labelsIndex, key, &nokey);
     if (nokey) {
@@ -219,11 +209,7 @@ void labelIndexUnderKey(INDEXER_OPERATION_T op,
     }
 
     if (op & Indexer_Add) {
-        size_t len;
-        RedisModule_StringPtrLen(ts_key, &len);
-        RedisModuleString *owned = len >= 64 ? RedisModule_HoldString(NULL, ts_key) : NULL;
-        if (RedisModule_DictSet(leaf, ts_key, owned) == REDISMODULE_ERR && owned)
-            RedisModule_FreeString(NULL, owned);
+        RedisModule_DictSet(leaf, ts_key, NULL);
         RedisModule_DictSet(ts_leaf, key, NULL);
     } else if (op & Indexer_Remove) {
         labelsIndexRemoveTsKey(leaf, key, ts_key, _labelsIndex);
@@ -231,13 +217,6 @@ void labelIndexUnderKey(INDEXER_OPERATION_T op,
 }
 
 void IndexMetric(RedisModuleString *ts_key, Label *labels, size_t labels_count) {
-    if (!labels_count)
-        return;
-    // Index references must not share refcounts with a Series freed on a background thread.
-    size_t keyLen;
-    RedisModule_StringPtrLen(ts_key, &keyLen);
-    RedisModuleString *index_key =
-        keyLen >= 64 ? RedisModule_CreateStringFromString(NULL, ts_key) : ts_key;
     const char *key_string, *value_string;
     for (int i = 0; i < labels_count; i++) {
         size_t _s;
@@ -247,14 +226,12 @@ void IndexMetric(RedisModuleString *ts_key, Label *labels, size_t labels_count) 
             RedisModule_CreateStringPrintf(NULL, KV_PREFIX, key_string, value_string);
         RedisModuleString *indexed_key = RedisModule_CreateStringPrintf(NULL, K_PREFIX, key_string);
 
-        labelIndexUnderKey(Indexer_Add, indexed_key_value, index_key, labelsIndex, tsLabelIndex);
-        labelIndexUnderKey(Indexer_Add, indexed_key, index_key, labelsIndex, tsLabelIndex);
+        labelIndexUnderKey(Indexer_Add, indexed_key_value, ts_key, labelsIndex, tsLabelIndex);
+        labelIndexUnderKey(Indexer_Add, indexed_key, ts_key, labelsIndex, tsLabelIndex);
 
         RedisModule_FreeString(NULL, indexed_key_value);
         RedisModule_FreeString(NULL, indexed_key);
     }
-    if (keyLen >= 64)
-        RedisModule_FreeString(NULL, index_key);
 }
 
 // Removes the ts from the label index and from the inverse index, if exist.
@@ -290,7 +267,6 @@ void RemoveIndexedMetric(RedisModuleString *ts_key) {
 // Removes all indexed metrics
 void RemoveAllIndexedMetrics_generic(RedisModuleDict *_labelsIndex,
                                      RedisModuleDict **_tsLabelIndex) {
-    ++indexGeneration;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(*_tsLabelIndex, "^", NULL, 0);
     RedisModuleString *currentTSKey;
     while ((currentTSKey = RedisModule_DictNext(NULL, iter, NULL)) != NULL) {
@@ -345,10 +321,6 @@ size_t IndexMemUsage(RedisModuleString *ts_key) {
     }
 
     size_t total = RedisModule_MallocSizeDict(ts_leaf);
-    size_t keyLen;
-    RedisModule_StringPtrLen(ts_key, &keyLen);
-    // Short names have no separately retained index allocation to account for.
-    bool countedKey = keyLen < 64;
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(ts_leaf, "^", NULL, 0);
     RedisModuleString *labelKey;
@@ -359,13 +331,6 @@ size_t IndexMemUsage(RedisModuleString *ts_key) {
             const uint64_t entries = RedisModule_DictSize(leaf);
             if (entries > 0) {
                 total += RedisModule_MallocSizeDict(leaf) / entries;
-                if (!countedKey) {
-                    RedisModuleString *owned = RedisModule_DictGet(leaf, ts_key, NULL);
-                    if (owned) {
-                        total += RedisModule_MallocSizeString(owned);
-                        countedKey = true;
-                    }
-                }
             }
         }
         RedisModule_FreeString(NULL, labelKey);
@@ -599,295 +564,68 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     return res;
 }
 
-typedef struct
-{
-    RedisModuleDict **dicts;
-    size_t count;
-    bool inclusion;
-} SnapshotPredicate;
-
-typedef struct
-{
-    union
-    {
-        size_t offset;
-        const char *name;
-    } key;
-    size_t len;
-    RedisModuleString *owned;
-} SnapshotKey;
-
-// Short names are packed for cache-friendly replies. For names of 64 bytes or
-// more, QUERYINDEX keeps the owned string until after replying, avoiding a second
-// large copy. QUERYLABELS always copies names because an unfiltered scan visits
-// the inverse index, whose values are label dictionaries rather than key strings.
-
-typedef struct
-{
-    RedisModuleDictIter *iter;
-    const char *name;
-    size_t len;
-    void *value;
-} SnapshotCursor;
-
-static int CompareNames(const char *a, size_t alen, const char *b, size_t blen) {
-    int cmp = memcmp(a, b, min(alen, blen));
-    return cmp ? cmp : (alen > blen) - (alen < blen);
-}
-
-static int CompareDictPointers(const void *a, const void *b) {
-    uintptr_t pa = (uintptr_t) * (RedisModuleDict *const *)a;
-    uintptr_t pb = (uintptr_t) * (RedisModuleDict *const *)b;
-    return (pa > pb) - (pa < pb);
-}
-
-static void FixSnapshotHeap(SnapshotCursor *heap, size_t size, size_t pos) {
-    SnapshotCursor root = heap[pos];
-    while (pos < size / 2) {
-        size_t child = pos * 2 + 1;
-        if (child + 1 < size &&
-            CompareNames(
-                heap[child + 1].name, heap[child + 1].len, heap[child].name, heap[child].len) < 0)
-            ++child;
-        if (CompareNames(root.name, root.len, heap[child].name, heap[child].len) <= 0)
-            break;
-        heap[pos] = heap[child];
-        pos = child;
-    }
-    heap[pos] = root;
-}
-
-// Stop only the iterator-owned storage: the dictionaries themselves may have
-// been freed by a synchronous expiry notification.
-static void StopQueryCursors(SnapshotCursor *heap,
-                             size_t heapSize,
-                             SnapshotPredicate *predicates,
-                             size_t count) {
-    for (size_t i = 0; i < heapSize; ++i)
-        RedisModule_DictIteratorStop(heap[i].iter);
-    free(heap);
-    for (size_t i = 0; i < count; ++i)
-        free(predicates[i].dicts);
-    free(predicates);
-}
-
+// A single index leaf can be scanned directly. Union filters reuse QueryIndex's
+// existing deduplicated result dictionary, which expiry cannot invalidate.
 size_t VisitQueryIndex(RedisModuleCtx *ctx,
                        QueryPredicateList *queries,
-                       bool filterExpiry,
                        void (*visit)(RedisModuleCtx *, const char *, size_t, void *),
                        void *data) {
-    RedisModule_Assert(!filterExpiry || queries);
-    size_t count = queries ? queries->count : 1;
-    if (!count)
-        return 0;
-    if (queries)
-        PromoteSmallestPredicateToFront(ctx, queries->list, count);
-    if (queries && !IS_INCLUSION(queries->list[0].type))
-        return 0;
-    enum
-    {
-        BATCH_SIZE = 256
-    };
-    SnapshotKey inlineKeys[32];
-    char inlineNames[2048], inlineLast[256];
-    SnapshotKey *keys = inlineKeys;
-    char *names = inlineNames, *last = inlineLast;
-    size_t capacity = 32, allocated = sizeof(inlineNames);
-    size_t lastLen = 0, lastCapacity = sizeof(inlineLast), visible = 0;
-    bool haveLast = false;
-restart:;
-    SnapshotPredicate *predicates = calloc(count, sizeof(*predicates));
+    RedisModuleDict *result = NULL, *source = tsLabelIndex;
+    RedisModuleDict **dicts = NULL;
+    size_t count = 0, visible = 0;
     if (queries) {
-        for (size_t i = 0; i < count; ++i) {
-            GetPredicateKeysDicts(
-                ctx, &queries->list[i], &predicates[i].dicts, &predicates[i].count);
-            predicates[i].inclusion = IS_INCLUSION(queries->list[i].type);
+        if (!queries->count)
+            return 0;
+        PromoteSmallestPredicateToFront(ctx, queries->list, queries->count);
+        if (!IS_INCLUSION(queries->list[0].type))
+            return 0;
+        GetPredicateKeysDicts(ctx, queries->list, &dicts, &count);
+        if (count == 1) {
+            source = dicts[0];
+        } else {
+            source = result = QueryIndex(ctx, queries->list, queries->count, NULL);
         }
-    } else {
-        predicates[0].dicts = malloc(sizeof(RedisModuleDict *));
-        predicates[0].dicts[0] = tsLabelIndex;
-        predicates[0].count = 1;
+        free(dicts);
     }
-    // Merge sorted leaves instead of materializing duplicate candidates. Repeated
-    // values in the first matcher must not multiply the snapshot's memory use.
-    SnapshotPredicate *first = &predicates[0];
-    if (first->count > 1) {
-        qsort(first->dicts, first->count, sizeof(*first->dicts), CompareDictPointers);
-        size_t unique = 0;
-        for (size_t i = 0; i < first->count; ++i)
-            if (first->dicts[i] && (!unique || first->dicts[i] != first->dicts[unique - 1]))
-                first->dicts[unique++] = first->dicts[i];
-        first->count = unique;
-    }
-    size_t heapSize = 0;
-    SnapshotCursor *heap = calloc(first->count, sizeof(*heap));
-    for (size_t i = 0; i < first->count; ++i) {
-        if (!first->dicts[i])
+    RedisModuleDictIter *iter =
+        source ? RedisModule_DictIteratorStartC(source, "^", NULL, 0) : NULL;
+    char *name;
+    size_t len;
+    while (iter && (name = RedisModule_DictNextC(iter, &len, NULL))) {
+        if (!result && queries &&
+            !_isKeySatisfyAllPredicates(ctx, name, len, queries->list, queries->count))
             continue;
-        SnapshotCursor cursor = { .iter = RedisModule_DictIteratorStartC(
-                                      first->dicts[i], haveLast ? ">" : "^", last, lastLen) };
-        cursor.name = RedisModule_DictNextC(cursor.iter, &cursor.len, &cursor.value);
-        if (cursor.name)
-            heap[heapSize++] = cursor;
-        else
-            RedisModule_DictIteratorStop(cursor.iter);
+        // Own the current name: KeyExists can synchronously expire it, removing
+        // its index entry and even freeing the whole source leaf. The visitor
+        // only reads the index or emits results; it must not modify the keyspace.
+        RedisModuleString *key = RedisModule_CreateString(NULL, name, len);
+        bool owned = !(isReshardTrimming || isAsmTrimming || isAsmImporting) ||
+                     (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(key);
+        bool exists = !owned || RedisModule_KeyExists(ctx, key);
+        if (owned && exists) {
+            name = (char *)RedisModule_StringPtrLen(key, &len);
+            visit(ctx, name, len, data);
+            ++visible;
+        }
+        if (!result && !exists) {
+            // Stop frees iterator storage only. Re-resolve the potentially freed
+            // leaf and resume strictly after the owned name, never stale pointers.
+            RedisModule_DictIteratorStop(iter);
+            source = tsLabelIndex;
+            if (queries) {
+                GetPredicateKeysDicts(ctx, queries->list, &dicts, &count);
+                source = count ? dicts[0] : NULL;
+                free(dicts);
+            }
+            name = (char *)RedisModule_StringPtrLen(key, &len);
+            iter = source ? RedisModule_DictIteratorStartC(source, ">", name, len) : NULL;
+        }
+        RedisModule_FreeString(NULL, key);
     }
-    for (size_t i = heapSize / 2; i > 0; --i)
-        FixSnapshotHeap(heap, heapSize, i - 1);
-    // Keep storage bounded by one batch; reuse allocations across batches.
-    size_t size, bytes;
-    bool merge = first->count > 1;
-    RedisModuleDictIter *single = (!merge && heapSize) ? heap[0].iter : NULL;
-    const char *name = heapSize ? heap[0].name : NULL;
-    size_t len = heapSize ? heap[0].len : 0;
-    void *value = heapSize ? heap[0].value : NULL;
-    while (name) {
-        size = bytes = 0;
-        uint64_t generation = indexGeneration;
-        while (name && size < BATCH_SIZE) {
-            if (merge && !size && haveLast && len == lastLen && !memcmp(name, last, len))
-                goto next;
-            if (merge && size && len == keys[size - 1].len &&
-                !memcmp(name,
-                        filterExpiry && len >= 64 ? keys[size - 1].key.name
-                                                  : names + keys[size - 1].key.offset,
-                        len))
-                goto next;
-            bool matches = true;
-            for (size_t j = 1; j < count && matches; ++j) {
-                bool found = false;
-                for (size_t k = 0; k < predicates[j].count && !found; ++k) {
-                    if (!predicates[j].dicts[k])
-                        continue;
-                    int missing = 0;
-                    RedisModule_DictGetC(predicates[j].dicts[k], (void *)name, len, &missing);
-                    found = !missing;
-                }
-                matches = (found == predicates[j].inclusion);
-            }
-            if (!matches)
-                goto next;
-            if (isReshardTrimming || isAsmTrimming || isAsmImporting) {
-                RedisModuleString *key = RedisModule_CreateString(NULL, name, len);
-                bool owned = (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(key);
-                RedisModule_FreeString(NULL, key);
-                if (!owned)
-                    goto next;
-            }
-            if (size == capacity) {
-                RedisModule_Assert(capacity <= SIZE_MAX / 2 / sizeof(*keys));
-                capacity *= 2;
-                if (keys == inlineKeys) {
-                    keys = malloc(capacity * sizeof(*keys));
-                    memcpy(keys, inlineKeys, size * sizeof(*keys));
-                } else {
-                    keys = realloc(keys, capacity * sizeof(*keys));
-                }
-            }
-            RedisModuleString *owned = NULL;
-            if (filterExpiry)
-                owned = value ? RedisModule_HoldString(NULL, value)
-                              : RedisModule_CreateString(NULL, name, len);
-            if (owned && len >= 64) {
-                keys[size++] = (SnapshotKey){ .key.name = RedisModule_StringPtrLen(owned, NULL),
-                                              .len = len,
-                                              .owned = owned };
-                goto next;
-            }
-            RedisModule_Assert(len <= SIZE_MAX - bytes);
-            if (bytes + len > allocated) {
-                RedisModule_Assert(allocated <= SIZE_MAX / 2);
-                allocated = max(allocated * 2, bytes + len);
-                if (names == inlineNames) {
-                    names = malloc(allocated);
-                    memcpy(names, inlineNames, bytes);
-                } else {
-                    names = realloc(names, allocated);
-                }
-            }
-            keys[size++] = (SnapshotKey){ .key.offset = bytes, .len = len, .owned = owned };
-            memcpy(names + bytes, name, len);
-            bytes += len;
-next:
-            if (!merge) {
-                name = RedisModule_DictNextC(single, &len, &value);
-                continue;
-            }
-            heap[0].name = RedisModule_DictNextC(heap[0].iter, &heap[0].len, &heap[0].value);
-            if (!heap[0].name) {
-                RedisModule_DictIteratorStop(heap[0].iter);
-                heap[0] = heap[--heapSize];
-            }
-            if (heapSize > 1)
-                FixSnapshotHeap(heap, heapSize, 0);
-            name = heapSize ? heap[0].name : NULL;
-            if (heapSize) {
-                len = heap[0].len;
-                value = heap[0].value;
-            }
-        }
-        if (!size)
-            break;
-        for (size_t i = 0; i < size; ++i)
-            if (!(filterExpiry && keys[i].len >= 64))
-                keys[i].key.name = names + keys[i].key.offset;
-        visible += size;
-        if (name) {
-            const char *bookmark = keys[size - 1].key.name;
-            lastLen = keys[size - 1].len;
-            if (lastLen > lastCapacity) {
-                if (last != inlineLast)
-                    free(last);
-                last = malloc(lastLen);
-                lastCapacity = lastLen;
-            }
-            memcpy(last, bookmark, lastLen);
-            haveLast = true;
-        }
-        // Validate every candidate before emitting it. Iterators are paused while
-        // expiry may mutate their dictionaries; they are rebuilt before any advance.
-        // Redis retains its normal replica and frozen-script-time expiry semantics.
-        if (filterExpiry) {
-            for (size_t i = 0; i < size; ++i) {
-                RedisModuleString *key = keys[i].owned;
-                if (!key)
-                    key = RedisModule_CreateString(NULL, keys[i].key.name, keys[i].len);
-                if (i + 16 < size)
-                    __builtin_prefetch(keys[i + 16].owned, 0, 1);
-                bool exists = RedisModule_KeyExists(ctx, key);
-                if (keys[i].len < 64)
-                    RedisModule_FreeString(NULL, key);
-                if (!exists) {
-                    keys[i].key.name = NULL;
-                    --visible;
-                }
-            }
-        }
-        for (size_t i = 0; i < size; ++i) {
-            if (keys[i].key.name)
-                visit(ctx, keys[i].key.name, keys[i].len, data);
-            if (filterExpiry && keys[i].len >= 64)
-                RedisModule_FreeString(NULL, keys[i].owned);
-        }
-        if (name && generation != indexGeneration) {
-            // StopQueryCursors only frees iterator-owned storage, not dictionaries.
-            StopQueryCursors(heap, heapSize, predicates, count);
-            goto restart;
-        }
-    }
-    // The single-leaf fast path keeps its iterator until the end; the merge
-    // path removes exhausted iterators from the heap as it traverses.
-    if (single) {
-        RedisModule_DictIteratorStop(single);
-        heapSize = 0;
-    }
-    StopQueryCursors(heap, heapSize, predicates, count);
-    if (names != inlineNames)
-        free(names);
-    if (keys != inlineKeys)
-        free(keys);
-    if (last != inlineLast)
-        free(last);
+    if (iter)
+        RedisModule_DictIteratorStop(iter);
+    if (result)
+        RedisModule_FreeDict(ctx, result);
     return visible;
 }
 

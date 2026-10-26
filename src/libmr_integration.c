@@ -868,7 +868,7 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     predicates->shouldReturnNull = true;
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
     Record *result = ListRecord_Create(0);
-    VisitQueryIndex(rts_staticCtx, predicates->predicates, true, QueryIndexRecord, result);
+    VisitQueryIndex(rts_staticCtx, predicates->predicates, QueryIndexRecord, result);
     RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
     return result;
 }
@@ -1278,8 +1278,7 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
     QueryPredicates_Arg *queryArg = args;
     ApplyCtxUser(ctx, queryArg->userName);
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    long long count =
-        VisitQueryIndex(ctx, queryArg->predicates, true, QueryIndexInternalReply, NULL);
+    long long count = VisitQueryIndex(ctx, queryArg->predicates, QueryIndexInternalReply, NULL);
     RedisModule_ReplySetArrayLength(ctx, count);
     ReleaseCtxUser(ctx);
 }

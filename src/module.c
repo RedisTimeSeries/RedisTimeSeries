@@ -285,7 +285,7 @@ static void QueryIndexReply(RedisModuleCtx *ctx, const char *name, size_t len, v
 
 void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     ReplyWithSetOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    long long count = VisitQueryIndex(ctx, queries, true, QueryIndexReply, NULL);
+    long long count = VisitQueryIndex(ctx, queries, QueryIndexReply, NULL);
     ReplySetSetOrArrayLength(ctx, count);
 }
 
@@ -358,7 +358,6 @@ static void QueryLabelsEmitToDict(void *userData, const char *buf, size_t len) {
 typedef struct
 {
     QueryLabelsSubtype subtype;
-    RedisModuleString *label;
     const char *prefix;
     size_t prefixLen;
     RedisModuleDict *agg;
@@ -369,49 +368,8 @@ static void QueryLabelsVisit(RedisModuleCtx *ctx, const char *name, size_t len, 
     QueryLabelsVisitor *v = data;
     if (!CheckKeyIsAllowedToReadC(ctx, v->user, name, len))
         return;
-    RedisModuleString *key = RedisModule_CreateString(NULL, name, len);
-    RedisModuleKey *opened =
-        RedisModule_OpenKey(ctx, key, REDISMODULE_READ | REDISMODULE_OPEN_KEY_NOTOUCH);
-    if (RedisModule_KeyType(opened) == REDISMODULE_KEYTYPE_MODULE &&
-        RedisModule_ModuleTypeGetType(opened) == SeriesType) {
-        Series *series = RedisModule_ModuleTypeGetValue(opened);
-        // Preserve the label index's C-string handling of embedded NULs and
-        // ambiguous '=' label names; duplicate names use the first sorted value.
-        bool useIndex = false;
-        RedisModuleString *smallest = NULL;
-        for (size_t i = 0; i < series->labelsCount; ++i) {
-            size_t keyLen, valueLen;
-            const char *keyBuf = RedisModule_StringPtrLen(series->labels[i].key, &keyLen);
-            const char *valueBuf = RedisModule_StringPtrLen(series->labels[i].value, &valueLen);
-            if (memchr(keyBuf, '=', keyLen) || memchr(keyBuf, '\0', keyLen) ||
-                memchr(valueBuf, '\0', valueLen)) {
-                useIndex = true;
-                break;
-            }
-        }
-        if (v->label) {
-            size_t labelLen;
-            const char *labelBuf = RedisModule_StringPtrLen(v->label, &labelLen);
-            useIndex |= memchr(labelBuf, '\0', labelLen) != NULL;
-        }
-        if (useIndex) {
-            QueryLabelsFromIndex(
-                name, len, v->subtype, v->prefix, v->prefixLen, QueryLabelsEmitToDict, v->agg);
-        } else
-            for (size_t i = 0; i < series->labelsCount; ++i) {
-                if (v->subtype == QueryLabelsSubtype_Labels)
-                    RedisModule_DictSet(v->agg, series->labels[i].key, NULL);
-                else if (!RedisModule_StringCompare(series->labels[i].key, v->label)) {
-                    if (!smallest ||
-                        RedisModule_StringCompare(series->labels[i].value, smallest) < 0)
-                        smallest = series->labels[i].value;
-                }
-            }
-        if (smallest)
-            RedisModule_DictSet(v->agg, smallest, NULL);
-    }
-    RedisModule_CloseKey(opened);
-    RedisModule_FreeString(NULL, key);
+    QueryLabelsFromIndex(
+        name, len, v->subtype, v->prefix, v->prefixLen, QueryLabelsEmitToDict, v->agg);
 }
 
 void QueryLabelsAggregate(RedisModuleCtx *ctx,
@@ -421,11 +379,9 @@ void QueryLabelsAggregate(RedisModuleCtx *ctx,
                           RedisModuleDict *agg) {
     RedisModuleString *prefix = QueryLabelsBuildPrefix(subtype, label);
     User_Ctx_t user = GetUserFromContext(ctx);
-    QueryLabelsVisitor visitor = {
-        .subtype = subtype, .label = label, .agg = agg, .user = user.user
-    };
+    QueryLabelsVisitor visitor = { .subtype = subtype, .agg = agg, .user = user.user };
     visitor.prefix = RedisModule_StringPtrLen(prefix, &visitor.prefixLen);
-    VisitQueryIndex(ctx, queries, false, QueryLabelsVisit, &visitor);
+    VisitQueryIndex(ctx, queries, QueryLabelsVisit, &visitor);
     FreeUser(&user);
     RedisModule_FreeString(NULL, prefix);
 }
