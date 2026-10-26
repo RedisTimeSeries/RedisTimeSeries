@@ -94,6 +94,8 @@ static void QueryPredicates_ObjectFree(void *arg) {
     QueryPredicates_FreeLimitLabels(predicate_list);
     QueryPredicates_FreeUserName(predicate_list);
     free(predicate_list->groupByLabel);
+    if (predicate_list->immediateQueryIndex)
+        RedisModule_FreeDict(NULL, predicate_list->immediateQueryIndex);
     free(predicate_list);
 }
 
@@ -1035,10 +1037,47 @@ static Record *SlotRangesReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES,
                                                         .replyParser = SlotRangesReplyParser };
 
-static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
-    QueryPredicates_Arg *queryArg = args;
+static void *PrepareSlotRangeBatch(RedisModuleCtx *ctx) {
+    return RedisModule_ClusterGetLocalSlotRanges(ctx);
+}
 
-    ApplyCtxUser(ctx, queryArg->userName);
+static void FreeSlotRangeBatch(RedisModuleCtx *ctx, void *batch) {
+    if (batch)
+        RedisModule_ClusterFreeSlotRanges(ctx, batch);
+}
+
+static bool PrepareSlotRanges(RedisModuleCtx *ctx, void *args, void *batch, void **prepared) {
+    const RedisModuleSlotRangeArray *src = batch;
+    size_t count = src ? src->num_ranges : 0;
+    size_t size = sizeof(RedisModuleSlotRangeArray) + count * sizeof(RedisModuleSlotRange);
+    RedisModuleSlotRangeArray *copy = calloc(1, size);
+    copy->num_ranges = count;
+    if (count)
+        memcpy(copy->ranges, src->ranges, count * sizeof(RedisModuleSlotRange));
+    *prepared = copy;
+    return false;
+}
+
+static void ReplyPreparedSlotRanges(RedisModuleCtx *ctx, void *args, void *prepared) {
+    const RedisModuleSlotRangeArray *sra = prepared;
+    RedisModule_ReplyWithArray(ctx, sra->num_ranges);
+    for (size_t i = 0; i < sra->num_ranges; ++i) {
+        RedisModule_ReplyWithArray(ctx, 2);
+        RedisModule_ReplyWithLongLong(ctx, sra->ranges[i].start);
+        RedisModule_ReplyWithLongLong(ctx, sra->ranges[i].end);
+    }
+}
+
+static const InternalCommandPreparation SlotRangesPreparation = {
+    .batchPrepare = PrepareSlotRangeBatch,
+    .batchFree = FreeSlotRangeBatch,
+    .prepare = PrepareSlotRanges,
+    .run = ReplyPreparedSlotRanges,
+    .free = free,
+};
+
+static MRangeArgs BuildInternalMRangeArgs(QueryPredicates_Arg *queryArg,
+                                         AggregationClass **aggClasses) {
     MRangeArgs mrangeArgs = { 0 };
     mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
     mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
@@ -1080,7 +1119,6 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.reverse = false;
     mrangeArgs.excludeEmpty = queryArg->excludeEmpty;
 
-    AggregationClass *aggClasses[TS_AGG_TYPES_MAX] = { 0 };
     if (queryArg->numAggClasses > 0) {
         for (size_t i = 0; i < queryArg->numAggClasses; i++) {
             aggClasses[i] = GetAggClass(queryArg->aggTypes[i]);
@@ -1094,8 +1132,19 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
         mrangeArgs.rangeArgs.timestampAlignment = queryArg->timestampAlignment;
     }
 
-    RedisModuleDict *qi =
-        QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+    return mrangeArgs;
+}
+
+static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+    ApplyCtxUser(ctx, queryArg->userName);
+    AggregationClass *aggClasses[TS_AGG_TYPES_MAX] = { 0 };
+    MRangeArgs mrangeArgs = BuildInternalMRangeArgs(queryArg, aggClasses);
+
+    RedisModuleDict *qi = queryArg->immediateQueryIndex;
+    queryArg->immediateQueryIndex = NULL;
+    if (!qi)
+        qi = QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
     if (queryArg->hasQueryPlan && queryArg->groupByLabel &&
         DistributedGroupSupported(queryArg->groupReducer)) {
         // Validate permissions on every match, including series without the group label.
@@ -1144,6 +1193,193 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     TS_INTERNAL_MRANGE_impl(ctx, args);
 }
+
+typedef struct PreparedMRange {
+    MRangeArgs args;
+    AggregationClass *classes[TS_AGG_TYPES_MAX];
+    ARR(Series *) series;
+    bool permissionError;
+    bool ownsGroupLabel;
+} PreparedMRange;
+
+/* These copies are independent of the keyspace: retention, expiry, backfills,
+ * defragmentation and deletion may proceed while the worker consumes them.
+ * Copy compressed chunks, not decompressed samples. EMPTY/TWA can search for
+ * valid neighbours beyond the requested interval, so preserve their full input. */
+static Series *SnapshotQuerySeries(const Series *src, const MRangeArgs *args, size_t *samples) {
+    Series *copy = calloc(1, sizeof(*copy));
+    *copy = *src;
+    copy->chunks = RedisModule_CreateDict(NULL);
+    copy->lastChunk = NULL;
+    copy->rules = NULL;
+    copy->srcKey = NULL;
+    copy->keyName = RedisModule_CreateStringFromString(NULL, src->keyName);
+    copy->labels = NULL;
+    copy->labelsCount = 0;
+    for (size_t i = 0; i < src->labelsCount; ++i) {
+        bool keep = args->withLabels;
+        for (size_t j = 0; !keep && j < args->numLimitLabels; ++j)
+            keep = RedisModule_StringCompare(src->labels[i].key, args->limitLabels[j]) == 0;
+        if (keep) {
+            copy->labels = realloc(copy->labels, (copy->labelsCount + 1) * sizeof(Label));
+            copy->labels[copy->labelsCount++] = (Label){
+                RedisModule_CreateStringFromString(NULL, src->labels[i].key),
+                RedisModule_CreateStringFromString(NULL, src->labels[i].value)};
+        }
+    }
+    bool full = args->rangeArgs.aggregationArgs.empty;
+    for (size_t i = 0; i < args->rangeArgs.aggregationArgs.numClasses; ++i)
+        full |= args->rangeArgs.aggregationArgs.classes[i]->type == TS_AGG_TWA;
+    timestamp_t start;
+    seriesEncodeTimestamp(&start, args->rangeArgs.startTimestamp);
+    RedisModuleDictIter *it = full
+        ? RedisModule_DictIteratorStartC(src->chunks, "^", NULL, 0)
+        : RedisModule_DictIteratorStartC(src->chunks, "<=", &start, sizeof(start));
+    size_t keylen;
+    Chunk_t *chunk;
+    char *key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    if (!key && !full) {
+        RedisModule_DictIteratorReseekC(it, "^", NULL, 0);
+        key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    }
+    while (key) {
+        if (!full && src->funcs->GetFirstTimestamp(chunk) > args->rangeArgs.endTimestamp)
+            break;
+        Chunk_t *cloned = src->funcs->CloneChunk(chunk);
+        RedisModule_DictSetC(copy->chunks, key, keylen, cloned);
+        if (chunk == src->lastChunk)
+            copy->lastChunk = cloned;
+        *samples += src->funcs->GetNumOfSample(chunk);
+        key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    }
+    RedisModule_DictIteratorStop(it);
+    return copy;
+}
+
+static bool CanPrepareMRange(RedisModuleCtx *ctx, void *args) {
+    /* LATEST consults a live source compaction rule; retain its synchronous path. */
+    QueryPredicates_Arg *query = args;
+    if (query->latest)
+        return false;
+    /* Small scans cost less than snapshotting and waking a worker. Inspect only
+     * metadata here; prepare repeats selection if it was deferred, so labels or
+     * keys changed while waiting cannot leave us with stale candidates. */
+    RedisModuleDict *keys = QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
+    RedisModuleDictIter *it = RedisModule_DictIteratorStartC(keys, "^", NULL, 0);
+    size_t samples = 0;
+    RedisModuleString *name;
+    while (samples < 8192 && (name = RedisModule_DictNext(ctx, it, NULL))) {
+        RedisModuleKey *key;
+        Series *series;
+        if (GetSeries(ctx, name, &key, &series, REDISMODULE_READ,
+                      GetSeriesFlags_SilentOperation) == GetSeriesResult_Success) {
+            samples += min(series->totalSamples, 8192);
+            RedisModule_CloseKey(key);
+        } else {
+            RedisModule_DictIteratorStop(it);
+            it = RedisModule_DictIteratorStart(keys, ">", name);
+        }
+        RedisModule_FreeString(ctx, name);
+    }
+    RedisModule_DictIteratorStop(it);
+    if (samples < 8192) {
+        /* LibMR immediately invokes the synchronous callback when eligibility
+         * is false. No event-loop turn or blocked-client wait can intervene. */
+        query->immediateQueryIndex = keys;
+        return false;
+    }
+    RedisModule_FreeDict(ctx, keys);
+    return true;
+}
+
+static bool PrepareMRange(RedisModuleCtx *ctx, void *args, void *batch, void **prepared) {
+    QueryPredicates_Arg *query = args;
+    PreparedMRange *p = calloc(1, sizeof(*p));
+    p->args = BuildInternalMRangeArgs(query, p->classes);
+    p->ownsGroupLabel = query->hasQueryPlan && query->groupByLabel;
+    p->series = array_new(Series *, 8);
+    *prepared = p;
+    ApplyCtxUser(ctx, query->userName);
+    RedisModuleDict *keys = QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
+    p->permissionError = CheckDictSeriesPermissions(
+        ctx, keys, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError;
+    size_t samples = 0;
+    if (!p->permissionError) {
+        RedisModuleDictIter *it = RedisModule_DictIteratorStartC(keys, "^", NULL, 0);
+        RedisModuleString *name;
+        while ((name = RedisModule_DictNext(ctx, it, NULL))) {
+            RedisModuleKey *key;
+            Series *series;
+            if (GetSeries(ctx, name, &key, &series, REDISMODULE_READ,
+                          GetSeriesFlags_SilentOperation) == GetSeriesResult_Success) {
+                Series *copy = SnapshotQuerySeries(series, &p->args, &samples);
+                p->series = array_append(p->series, copy);
+                RedisModule_CloseKey(key);
+            } else {
+                RedisModule_DictIteratorStop(it);
+                it = RedisModule_DictIteratorStart(keys, ">", name);
+            }
+            RedisModule_FreeString(ctx, name);
+        }
+        RedisModule_DictIteratorStop(it);
+    }
+    RedisModule_FreeDict(ctx, keys);
+    ReleaseCtxUser(ctx);
+    return samples >= 1024;
+}
+
+static void RunPreparedMRange(RedisModuleCtx *ctx, void *args, void *prepared) {
+    QueryPredicates_Arg *query = args;
+    PreparedMRange *p = prepared;
+    if (p->permissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
+        return;
+    }
+    if (query->hasQueryPlan && query->groupByLabel && DistributedGroupSupported(query->groupReducer)) {
+        DistributedGroups *groups = DistributedGroups_New(query->groupReducer);
+        for (size_t i = 0; i < array_len(p->series); ++i)
+            DistributedGroups_AddSeries(groups, p->series[i], query->groupByLabel,
+                                        &p->args.rangeArgs, p->args.excludeEmpty);
+        DistributedGroups_ReplyPartial(ctx, groups);
+        DistributedGroups_Free(groups);
+        return;
+    }
+    ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    size_t count = 0;
+    for (size_t i = 0; i < array_len(p->series); ++i) {
+        EnrichedChunk *first = NULL;
+        AbstractIterator *probe = NULL;
+        if (p->args.excludeEmpty) {
+            probe = SeriesQueryIfNonEmpty(p->series[i], &p->args.rangeArgs, false, &first);
+            if (!probe)
+                continue;
+        }
+        ReplySeriesArrayPos(ctx, p->series[i], p->args.withLabels,
+                            (RedisModuleString **)p->args.limitLabels, p->args.numLimitLabels,
+                            &p->args.rangeArgs, false, false, probe, first);
+        ++count;
+    }
+    ReplySetMapOrArrayLength(ctx, count, false);
+}
+
+static void FreePreparedMRange(void *prepared) {
+    PreparedMRange *p = prepared;
+    for (size_t i = 0; i < array_len(p->series); ++i)
+        FreeSeries(p->series[i]);
+    array_free(p->series);
+    /* Only GROUPBY creates an owned temporary label in BuildInternalMRangeArgs. */
+    if (p->ownsGroupLabel)
+        RedisModule_FreeString(NULL, p->args.limitLabels[0]);
+    free(p);
+}
+
+static const InternalCommandPreparation MRangePreparation = {
+    .canPrepare = CanPrepareMRange,
+    .prepare = PrepareMRange,
+    .run = RunPreparedMRange,
+    .free = FreePreparedMRange,
+};
 
 // Parse one shard reply element into N Series (one per agg type).
 // minNumAgg is the minimum number of Series to produce; when samples are absent the caller
@@ -1602,6 +1838,8 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterInternalCommand(
         "TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
+    MR_RegisterInternalCommandPreparation("TS.INTERNAL_SLOT_RANGES", &SlotRangesPreparation);
+    MR_RegisterInternalCommandPreparation("TS.INTERNAL_MRANGE", &MRangePreparation);
     MR_RegisterInternalCommand("TS.INTERNAL_MGET", &MgetCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_QUERYINDEX", &QueryIndexCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand(

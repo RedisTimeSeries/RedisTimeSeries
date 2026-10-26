@@ -100,7 +100,9 @@ def _check_internal_replies(protocol):
             grouped = entries(coordinator.execute_command('TS.MRANGE', '-', '+',
                 'FILTER', 'test=weighted', 'GROUPBY', 'group', 'REDUCE', reducer))
             env.assertEqual(list(grouped), [b'group=all'])
-            env.assertEqual(float(grouped[b'group=all'][0][1]), value)
+            # Shards complete in any order; weighted floating-point merges can round differently.
+            env.assertTrue(math.isclose(float(grouped[b'group=all'][0][1]), value,
+                                        rel_tol=1e-12, abs_tol=1e-12))
             nan_value = float(grouped[b'group=all'][1][1])
             if reducer in ('count', 'countnan', 'countall'):
                 env.assertEqual(nan_value, 0 if reducer == 'count' else 8)

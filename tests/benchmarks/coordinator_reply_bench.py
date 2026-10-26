@@ -162,14 +162,18 @@ def main():
     parser.add_argument('--clients', type=int, default=48, help='Total connections across coordinators')
     parser.add_argument('--workers', type=int, default=3)
     parser.add_argument('--series', type=int, default=96)
+    parser.add_argument('--samples', type=int, default=60, help='Samples stored per series')
+    parser.add_argument('--range-samples', type=int, help='Query only this many newest samples')
     parser.add_argument('--pipeline', type=int, default=2)
     parser.add_argument('--cases', nargs='+', choices=['narrow_avg', 'narrow_balanced', 'broad_avg', 'multi_avg_sum',
-                                                     'group_avg', 'mget', 'raw'])
+                                                     'group_avg', 'mget', 'raw', 'no_match'])
     args = parser.parse_args()
     if not args.redis_server or not args.memtier:
         parser.error('redis-server and memtier_benchmark must be installed or supplied explicitly')
-    if min(args.shards, args.repeats, args.seconds, args.clients, args.workers, args.series, args.pipeline) < 1:
+    if min(args.shards, args.repeats, args.seconds, args.clients, args.workers, args.series, args.samples, args.pipeline) < 1:
         parser.error('numeric workload parameters must be positive')
+    if args.range_samples is not None and not 1 <= args.range_samples <= args.samples:
+        parser.error('--range-samples must be between 1 and --samples')
     coordinators = args.shards if args.coordinators == 'all' else 1
     if args.clients % coordinators:
         parser.error('clients must be divisible by the number of coordinators')
@@ -179,7 +183,7 @@ def main():
         parser.error('module must be an existing file')
     cluster = Cluster(args.module, args.shards, args.root, args.redis_server, args.base_port, args.workers)
     try:
-        cluster.seed(series=args.series)
+        cluster.seed(series=args.series, samples=args.samples)
         (cluster.root / 'workload.json').write_text(json.dumps(vars(args), indent=2))
         cases = {
             'narrow_avg': 'TS.MRANGE 6000000 6059999 AGGREGATION avg 60000 FILTER measurement=cpu fieldname=usage_nice host=h1',
@@ -189,7 +193,12 @@ def main():
             'group_avg': 'TS.MRANGE 6000000 6059999 AGGREGATION avg 60000 FILTER measurement=cpu GROUPBY group REDUCE avg',
             'mget': 'TS.MGET FILTER measurement=cpu',
             'raw': 'TS.MRANGE 6000000 6059999 FILTER measurement=cpu',
+            'no_match': 'TS.MRANGE 6000000 6059999 AGGREGATION avg 60000 FILTER measurement=cpu host=absent',
         }
+        start = 6000000 + (args.samples - (args.range_samples or args.samples)) * 1000
+        end = 6000000 + args.samples * 1000 - 1
+        cases = {name: command.replace('6000000 6059999', f'{start} {end}')
+                 for name, command in cases.items()}
         if args.cases:
             cases = {k: cases[k] for k in args.cases}
         hosts = [next((f'h{i}' for i in range(args.series)

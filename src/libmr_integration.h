@@ -48,6 +48,8 @@ typedef struct QueryPredicates_Arg
     char *groupByLabel;
     long long perSeriesCount;
     TS_AGG_TYPES_T groupReducer;
+    // Local-only selection reused by the immediate synchronous cost fallback.
+    RedisModuleDict *immediateQueryIndex;
 } QueryPredicates_Arg;
 
 typedef struct StringRecord
