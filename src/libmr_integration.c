@@ -1068,12 +1068,18 @@ static void ReplyPreparedSlotRanges(RedisModuleCtx *ctx, void *args, void *prepa
     }
 }
 
+static void FreePreparedSlotRanges(void *prepared) {
+    /* Invoke the allocator macro: a bare `free` callback would select libc even
+     * when PrepareSlotRanges allocated through RedisModule_Calloc. */
+    free(prepared);
+}
+
 static const InternalCommandPreparation SlotRangesPreparation = {
     .batchPrepare = PrepareSlotRangeBatch,
     .batchFree = FreeSlotRangeBatch,
     .prepare = PrepareSlotRanges,
     .run = ReplyPreparedSlotRanges,
-    .free = free,
+    .free = FreePreparedSlotRanges,
 };
 
 static MRangeArgs BuildInternalMRangeArgs(QueryPredicates_Arg *queryArg,
