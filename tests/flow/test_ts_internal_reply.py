@@ -7,8 +7,10 @@ from concurrent.futures import ThreadPoolExecutor
 def _check_internal_replies(protocol):
     if RLEC_CLUSTER:
         Env().skip()
-    env = Env(env='oss-cluster', shardsCount=3, protocol=protocol,
+    env = Env(shardsCount=3, protocol=protocol,
               moduleArgs='LIBMR_PROTOCOL INTERNAL')
+    if not env.isCluster():
+        env.skip()
     for shard in range(1, 4):
         conn = env.getConnection(shard)
         config = conn.execute_command('CONFIG', 'GET', 'ts-libmr-protocol')
@@ -131,7 +133,9 @@ def test_internal_reply_chunk_boundaries_resp3():
 def test_internal_reply_empty_coordinators():
     if RLEC_CLUSTER:
         Env().skip()
-    env = Env(env='oss-cluster', shardsCount=3, protocol=2, moduleArgs='LIBMR_PROTOCOL INTERNAL')
+    env = Env(shardsCount=3, protocol=2, moduleArgs='LIBMR_PROTOCOL INTERNAL')
+    if not env.isCluster():
+        env.skip()
     with env.getClusterConnectionIfNeeded() as client:
         # Only one shard owns series; the other two first construct temporary Series
         # in their coordinator workers. Initialization must already have run on main.

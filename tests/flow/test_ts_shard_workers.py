@@ -12,8 +12,10 @@ from redis.crc import key_slot
 def worker_env(protocol=2):
     if RLEC_CLUSTER:
         Env().skip()
-    env = Env(env='oss-cluster', shardsCount=3, protocol=protocol,
+    env = Env(shardsCount=3, protocol=protocol,
               moduleArgs='LIBMR_PROTOCOL INTERNAL NUM_THREADS 3')
+    if not env.isCluster():
+        env.skip()
     for shard in range(1, 4):
         conn = env.getConnection(shard)
         conn.execute_command('DEBUG', 'MARK-INTERNAL-CLIENT')

@@ -1077,7 +1077,7 @@ static const InternalCommandPreparation SlotRangesPreparation = {
 };
 
 static MRangeArgs BuildInternalMRangeArgs(QueryPredicates_Arg *queryArg,
-                                         AggregationClass **aggClasses) {
+                                          AggregationClass **aggClasses) {
     MRangeArgs mrangeArgs = { 0 };
     mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
     mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
@@ -1144,7 +1144,8 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     RedisModuleDict *qi = queryArg->immediateQueryIndex;
     queryArg->immediateQueryIndex = NULL;
     if (!qi)
-        qi = QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+        qi = QueryIndex(
+            ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
     if (queryArg->hasQueryPlan && queryArg->groupByLabel &&
         DistributedGroupSupported(queryArg->groupReducer)) {
         // Validate permissions on every match, including series without the group label.
@@ -1194,7 +1195,8 @@ static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     TS_INTERNAL_MRANGE_impl(ctx, args);
 }
 
-typedef struct PreparedMRange {
+typedef struct PreparedMRange
+{
     MRangeArgs args;
     AggregationClass *classes[TS_AGG_TYPES_MAX];
     ARR(Series *) series;
@@ -1222,9 +1224,9 @@ static Series *SnapshotQuerySeries(const Series *src, const MRangeArgs *args, si
             keep = RedisModule_StringCompare(src->labels[i].key, args->limitLabels[j]) == 0;
         if (keep) {
             copy->labels = realloc(copy->labels, (copy->labelsCount + 1) * sizeof(Label));
-            copy->labels[copy->labelsCount++] = (Label){
-                RedisModule_CreateStringFromString(NULL, src->labels[i].key),
-                RedisModule_CreateStringFromString(NULL, src->labels[i].value)};
+            copy->labels[copy->labelsCount++] =
+                (Label){ RedisModule_CreateStringFromString(NULL, src->labels[i].key),
+                         RedisModule_CreateStringFromString(NULL, src->labels[i].value) };
         }
     }
     bool full = args->rangeArgs.aggregationArgs.empty;
@@ -1232,9 +1234,9 @@ static Series *SnapshotQuerySeries(const Series *src, const MRangeArgs *args, si
         full |= args->rangeArgs.aggregationArgs.classes[i]->type == TS_AGG_TWA;
     timestamp_t start;
     seriesEncodeTimestamp(&start, args->rangeArgs.startTimestamp);
-    RedisModuleDictIter *it = full
-        ? RedisModule_DictIteratorStartC(src->chunks, "^", NULL, 0)
-        : RedisModule_DictIteratorStartC(src->chunks, "<=", &start, sizeof(start));
+    RedisModuleDictIter *it =
+        full ? RedisModule_DictIteratorStartC(src->chunks, "^", NULL, 0)
+             : RedisModule_DictIteratorStartC(src->chunks, "<=", &start, sizeof(start));
     size_t keylen;
     Chunk_t *chunk;
     char *key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
@@ -1264,15 +1266,16 @@ static bool CanPrepareMRange(RedisModuleCtx *ctx, void *args) {
     /* Small scans cost less than snapshotting and waking a worker. Inspect only
      * metadata here; prepare repeats selection if it was deferred, so labels or
      * keys changed while waiting cannot leave us with stale candidates. */
-    RedisModuleDict *keys = QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
+    RedisModuleDict *keys =
+        QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
     RedisModuleDictIter *it = RedisModule_DictIteratorStartC(keys, "^", NULL, 0);
     size_t samples = 0;
     RedisModuleString *name;
     while (samples < 8192 && (name = RedisModule_DictNext(ctx, it, NULL))) {
         RedisModuleKey *key;
         Series *series;
-        if (GetSeries(ctx, name, &key, &series, REDISMODULE_READ,
-                      GetSeriesFlags_SilentOperation) == GetSeriesResult_Success) {
+        if (GetSeries(ctx, name, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation) ==
+            GetSeriesResult_Success) {
             samples += min(series->totalSamples, 8192);
             RedisModule_CloseKey(key);
         } else {
@@ -1300,9 +1303,11 @@ static bool PrepareMRange(RedisModuleCtx *ctx, void *args, void *batch, void **p
     p->series = array_new(Series *, 8);
     *prepared = p;
     ApplyCtxUser(ctx, query->userName);
-    RedisModuleDict *keys = QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
-    p->permissionError = CheckDictSeriesPermissions(
-        ctx, keys, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+    RedisModuleDict *keys =
+        QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
+    p->permissionError =
+        CheckDictSeriesPermissions(
+            ctx, keys, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
         GetSeriesResult_PermissionError;
     size_t samples = 0;
     if (!p->permissionError) {
@@ -1311,8 +1316,9 @@ static bool PrepareMRange(RedisModuleCtx *ctx, void *args, void *batch, void **p
         while ((name = RedisModule_DictNext(ctx, it, NULL))) {
             RedisModuleKey *key;
             Series *series;
-            if (GetSeries(ctx, name, &key, &series, REDISMODULE_READ,
-                          GetSeriesFlags_SilentOperation) == GetSeriesResult_Success) {
+            if (GetSeries(
+                    ctx, name, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation) ==
+                GetSeriesResult_Success) {
                 Series *copy = SnapshotQuerySeries(series, &p->args, &samples);
                 p->series = array_append(p->series, copy);
                 RedisModule_CloseKey(key);
@@ -1336,11 +1342,15 @@ static void RunPreparedMRange(RedisModuleCtx *ctx, void *args, void *prepared) {
         RTS_ReplyKeyPermissionsError(ctx);
         return;
     }
-    if (query->hasQueryPlan && query->groupByLabel && DistributedGroupSupported(query->groupReducer)) {
+    if (query->hasQueryPlan && query->groupByLabel &&
+        DistributedGroupSupported(query->groupReducer)) {
         DistributedGroups *groups = DistributedGroups_New(query->groupReducer);
         for (size_t i = 0; i < array_len(p->series); ++i)
-            DistributedGroups_AddSeries(groups, p->series[i], query->groupByLabel,
-                                        &p->args.rangeArgs, p->args.excludeEmpty);
+            DistributedGroups_AddSeries(groups,
+                                        p->series[i],
+                                        query->groupByLabel,
+                                        &p->args.rangeArgs,
+                                        p->args.excludeEmpty);
         DistributedGroups_ReplyPartial(ctx, groups);
         DistributedGroups_Free(groups);
         return;
@@ -1355,9 +1365,16 @@ static void RunPreparedMRange(RedisModuleCtx *ctx, void *args, void *prepared) {
             if (!probe)
                 continue;
         }
-        ReplySeriesArrayPos(ctx, p->series[i], p->args.withLabels,
-                            (RedisModuleString **)p->args.limitLabels, p->args.numLimitLabels,
-                            &p->args.rangeArgs, false, false, probe, first);
+        ReplySeriesArrayPos(ctx,
+                            p->series[i],
+                            p->args.withLabels,
+                            (RedisModuleString **)p->args.limitLabels,
+                            p->args.numLimitLabels,
+                            &p->args.rangeArgs,
+                            false,
+                            false,
+                            probe,
+                            first);
         ++count;
     }
     ReplySetMapOrArrayLength(ctx, count, false);
