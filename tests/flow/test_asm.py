@@ -68,7 +68,8 @@ def test_asm_keeps_no_evict():
 
     def assert_flags_follow_series(env):
         wait_for_valid_cluster(env)
-        # The old owner trims the migrated series after the migration completes, so wait for its index to shrink.
+        # KEYS lists only the slots a node owns, but INFO blessed_keys still counts the blessed series the old owner
+        # hasn't trimmed yet, so wait for its index to shrink.
         deadline = time.time() + get_timeout()
         while not all(count == len(keys & blessed) for keys, count in views()) and time.time() < deadline:
             time.sleep(0.1)
