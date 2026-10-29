@@ -126,10 +126,13 @@ def run_load(cluster, commands, args, stem, seconds, profile=False):
             paths.append(path)
             log = path.with_suffix('.log').open('w')
             logs.append(log)
+            command_args = []
+            for query in ([command] if isinstance(command, str) else command):
+                command_args += ['--command', query]
             processes.append(subprocess.Popen([
                 args.memtier, '-s', '127.0.0.1', '-p', str(port), '-t', '1',
                 '-c', str(args.clients // len(cluster.ports)), '--pipeline', str(args.pipeline),
-                '--test-time', str(seconds), '--command', command, '--hide-histogram',
+                '--test-time', str(seconds), *command_args, '--hide-histogram',
                 '--json-out-file', str(path)], stdout=log, stderr=subprocess.STDOUT))
         monitor = threading.Thread(target=observe, daemon=True)
         monitor.start()
