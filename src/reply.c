@@ -242,7 +242,10 @@ void ReplyWithSeriesLabelsWithLimitC(RedisModuleCtx *ctx,
                     RedisModule_ReplyWithArray(ctx, 2);
                 }
                 RedisModule_ReplyWithString(ctx, series->labels[j].key);
-                RedisModule_ReplyWithString(ctx, series->labels[j].value);
+                if (series->labels[j].value)
+                    RedisModule_ReplyWithString(ctx, series->labels[j].value);
+                else
+                    RedisModule_ReplyWithNull(ctx);
                 found = true;
                 break;
             }

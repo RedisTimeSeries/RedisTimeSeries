@@ -31,6 +31,9 @@ static MRRecordType *SlotRangesRecordType = NULL;
 static MRRecordType *SeriesListRecordType = NULL;
 static MRRecordType *StringListRecordType = NULL;
 
+// Distinct from every LibMR step type, so peeking cannot consume a following GEARS step.
+#define MRANGE_PLAN_V1 0x54534d525031LL
+
 static void QueryPredicates_FreeUserName(QueryPredicates_Arg *predicate_list) {
     if (predicate_list->userName) {
         RedisModule_FreeString(NULL, predicate_list->userName);
@@ -90,6 +93,9 @@ static void QueryPredicates_ObjectFree(void *arg) {
     QueryPredicateList_Free(predicate_list->predicates);
     QueryPredicates_FreeLimitLabels(predicate_list);
     QueryPredicates_FreeUserName(predicate_list);
+    free(predicate_list->groupByLabel);
+    if (predicate_list->immediateQueryIndex)
+        RedisModule_FreeDict(NULL, predicate_list->immediateQueryIndex);
     free(predicate_list);
 }
 
@@ -222,6 +228,14 @@ static void QueryPredicates_ArgSerialize(WriteSerializationCtx *sctx, void *arg,
         }
     }
     MR_SerializationCtxWriteLongLong(sctx, predicate_list->excludeEmpty, error);
+    if (predicate_list->hasQueryPlan) {
+        // MRANGE must be the final execution step: legacy readers stop before this trailer.
+        MR_SerializationCtxWriteLongLong(sctx, MRANGE_PLAN_V1, error);
+        const char *group = predicate_list->groupByLabel ?: "";
+        MR_SerializationCtxWriteBuffer(sctx, group, strlen(group) + 1, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->perSeriesCount, error);
+        MR_SerializationCtxWriteLongLong(sctx, predicate_list->groupReducer, error);
+    }
 }
 
 static void SerializationCtxWriteRedisString(WriteSerializationCtx *sctx,
@@ -259,6 +273,7 @@ static void QueryPredicates_CleanupFailedDeserialization(QueryPredicates_Arg *pr
     }
     free(predicates->predicates);
     QueryPredicates_FreeLimitLabels(predicates);
+    free(predicates->groupByLabel);
     free(predicates);
 }
 
@@ -358,6 +373,18 @@ static void *QueryPredicates_ArgDeserialize_impl(ReaderSerializationCtx *sctx,
         }
     }
     predicates->excludeEmpty = MR_SerializationCtxReadLongLong(sctx, error);
+
+    if (!*error && MR_SerializationCtxReadOptionalMarker(sctx, MRANGE_PLAN_V1)) {
+        predicates->hasQueryPlan = true;
+        size_t len;
+        const char *group = MR_SerializationCtxReadBuffer(sctx, &len, error);
+        if (*error || len == 0 || group[len - 1] != '\0')
+            goto err;
+        if (len > 1)
+            predicates->groupByLabel = strdup(group);
+        predicates->perSeriesCount = MR_SerializationCtxReadLongLong(sctx, error);
+        predicates->groupReducer = MR_SerializationCtxReadLongLong(sctx, error);
+    }
 
     if (unlikely(expect_resp && *error)) {
         goto err;
@@ -1010,11 +1037,54 @@ static Record *SlotRangesReplyParser(const redisReply *reply) {
 static InternalCommandCallbacks SlotRangesCallbacks = { .command = TS_INTERNAL_SLOT_RANGES,
                                                         .replyParser = SlotRangesReplyParser };
 
-static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
-    QueryPredicates_Arg *queryArg = args;
+static void *PrepareSlotRangeBatch(RedisModuleCtx *ctx) {
+    return RedisModule_ClusterGetLocalSlotRanges(ctx);
+}
 
-    ApplyCtxUser(ctx, queryArg->userName);
-    MRangeArgs mrangeArgs;
+static void FreeSlotRangeBatch(RedisModuleCtx *ctx, void *batch) {
+    if (batch)
+        RedisModule_ClusterFreeSlotRanges(ctx, batch);
+}
+
+static bool PrepareSlotRanges(RedisModuleCtx *ctx, void *args, void *batch, void **prepared) {
+    const RedisModuleSlotRangeArray *src = batch;
+    size_t count = src ? src->num_ranges : 0;
+    size_t size = sizeof(RedisModuleSlotRangeArray) + count * sizeof(RedisModuleSlotRange);
+    RedisModuleSlotRangeArray *copy = calloc(1, size);
+    copy->num_ranges = count;
+    if (count)
+        memcpy(copy->ranges, src->ranges, count * sizeof(RedisModuleSlotRange));
+    *prepared = copy;
+    return false;
+}
+
+static void ReplyPreparedSlotRanges(RedisModuleCtx *ctx, void *args, void *prepared) {
+    const RedisModuleSlotRangeArray *sra = prepared;
+    RedisModule_ReplyWithArray(ctx, sra->num_ranges);
+    for (size_t i = 0; i < sra->num_ranges; ++i) {
+        RedisModule_ReplyWithArray(ctx, 2);
+        RedisModule_ReplyWithLongLong(ctx, sra->ranges[i].start);
+        RedisModule_ReplyWithLongLong(ctx, sra->ranges[i].end);
+    }
+}
+
+static void FreePreparedSlotRanges(void *prepared) {
+    /* Invoke the allocator macro: a bare `free` callback would select libc even
+     * when PrepareSlotRanges allocated through RedisModule_Calloc. */
+    free(prepared);
+}
+
+static const InternalCommandPreparation SlotRangesPreparation = {
+    .batchPrepare = PrepareSlotRangeBatch,
+    .batchFree = FreeSlotRangeBatch,
+    .prepare = PrepareSlotRanges,
+    .run = ReplyPreparedSlotRanges,
+    .free = FreePreparedSlotRanges,
+};
+
+static MRangeArgs BuildInternalMRangeArgs(QueryPredicates_Arg *queryArg,
+                                          AggregationClass **aggClasses) {
+    MRangeArgs mrangeArgs = { 0 };
     mrangeArgs.rangeArgs.startTimestamp = queryArg->startTimestamp;
     mrangeArgs.rangeArgs.endTimestamp = queryArg->endTimestamp;
     mrangeArgs.rangeArgs.latest = queryArg->latest;
@@ -1033,6 +1103,21 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     // mrange_done)
     mrangeArgs.withLabels = true;
     mrangeArgs.numLimitLabels = 0;
+    if (queryArg->hasQueryPlan) {
+        mrangeArgs.withLabels = queryArg->withLabels;
+        mrangeArgs.numLimitLabels = queryArg->limitLabelsSize;
+        memcpy(mrangeArgs.limitLabels,
+               queryArg->limitLabels,
+               queryArg->limitLabelsSize * sizeof(*queryArg->limitLabels));
+        mrangeArgs.rangeArgs.count = queryArg->perSeriesCount;
+        if (queryArg->groupByLabel) {
+            // Grouped client replies contain group/reducer/source metadata, not source labels.
+            mrangeArgs.withLabels = false;
+            mrangeArgs.numLimitLabels = 1;
+            mrangeArgs.limitLabels[0] = RedisModule_CreateString(
+                NULL, queryArg->groupByLabel, strlen(queryArg->groupByLabel));
+        }
+    }
     mrangeArgs.queryPredicates = queryArg->predicates;
     mrangeArgs.groupByLabel = NULL;
     mrangeArgs.groupByReducerArgs.aggregationClass = NULL;
@@ -1040,7 +1125,6 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
     mrangeArgs.reverse = false;
     mrangeArgs.excludeEmpty = queryArg->excludeEmpty;
 
-    AggregationClass *aggClasses[TS_AGG_TYPES_MAX] = { 0 };
     if (queryArg->numAggClasses > 0) {
         for (size_t i = 0; i < queryArg->numAggClasses; i++) {
             aggClasses[i] = GetAggClass(queryArg->aggTypes[i]);
@@ -1054,9 +1138,61 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
         mrangeArgs.rangeArgs.timestampAlignment = queryArg->timestampAlignment;
     }
 
-    RedisModuleDict *qi =
-        QueryIndex(ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
-    replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    return mrangeArgs;
+}
+
+static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
+    QueryPredicates_Arg *queryArg = args;
+    ApplyCtxUser(ctx, queryArg->userName);
+    AggregationClass *aggClasses[TS_AGG_TYPES_MAX] = { 0 };
+    MRangeArgs mrangeArgs = BuildInternalMRangeArgs(queryArg, aggClasses);
+
+    RedisModuleDict *qi = queryArg->immediateQueryIndex;
+    queryArg->immediateQueryIndex = NULL;
+    if (!qi)
+        qi = QueryIndex(
+            ctx, mrangeArgs.queryPredicates->list, mrangeArgs.queryPredicates->count, NULL);
+    if (queryArg->hasQueryPlan && queryArg->groupByLabel &&
+        DistributedGroupSupported(queryArg->groupReducer)) {
+        // Validate permissions on every match, including series without the group label.
+        if (CheckDictSeriesPermissions(
+                ctx, qi, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+            GetSeriesResult_PermissionError) {
+            RTS_ReplyKeyPermissionsError(ctx);
+        } else {
+            DistributedGroups *groups = DistributedGroups_New(queryArg->groupReducer);
+            RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(qi, "^", NULL, 0);
+            RedisModuleString *name;
+            while ((name = RedisModule_DictNext(ctx, iter, NULL))) {
+                RedisModuleKey *key;
+                Series *series;
+                if (GetSeries(ctx,
+                              name,
+                              &key,
+                              &series,
+                              REDISMODULE_READ,
+                              GetSeriesFlags_SilentOperation) == GetSeriesResult_Success) {
+                    DistributedGroups_AddSeries(groups,
+                                                series,
+                                                queryArg->groupByLabel,
+                                                &mrangeArgs.rangeArgs,
+                                                mrangeArgs.excludeEmpty);
+                    RedisModule_CloseKey(key);
+                } else {
+                    RedisModule_DictIteratorStop(iter);
+                    iter = RedisModule_DictIteratorStart(qi, ">", name);
+                }
+                RedisModule_FreeString(ctx, name);
+            }
+            RedisModule_DictIteratorStop(iter);
+            DistributedGroups_ReplyPartial(ctx, groups);
+            DistributedGroups_Free(groups);
+        }
+    } else {
+        replyUngroupedMultiRange(ctx, qi, &mrangeArgs);
+    }
+    if (queryArg->hasQueryPlan && queryArg->groupByLabel)
+        RedisModule_FreeString(NULL, mrangeArgs.limitLabels[0]);
     RedisModule_FreeDict(ctx, qi);
     ReleaseCtxUser(ctx);
 }
@@ -1064,6 +1200,250 @@ static void TS_INTERNAL_MRANGE_impl(RedisModuleCtx *ctx, void *args) {
 static void TS_INTERNAL_MRANGE(RedisModuleCtx *ctx, void *args) {
     TS_INTERNAL_MRANGE_impl(ctx, args);
 }
+
+typedef struct PreparedMRange
+{
+    MRangeArgs args;
+    AggregationClass *classes[TS_AGG_TYPES_MAX];
+    ARR(Series *) series;
+    bool permissionError;
+    bool ownsGroupLabel;
+} PreparedMRange;
+
+/* These copies are independent of the keyspace: retention, expiry, backfills,
+ * defragmentation and deletion may proceed while the worker consumes them.
+ * Copy compressed chunks, not decompressed samples. EMPTY/TWA can search for
+ * valid neighbours beyond the requested interval, so preserve their full input. */
+static Series *SnapshotQuerySeries(const Series *src, const MRangeArgs *args, size_t *samples) {
+    Series *copy = calloc(1, sizeof(*copy));
+    *copy = *src;
+    copy->chunks = RedisModule_CreateDict(NULL);
+    copy->lastChunk = NULL;
+    copy->rules = NULL;
+    copy->srcKey = NULL;
+    copy->keyName = RedisModule_CreateStringFromString(NULL, src->keyName);
+    copy->labels = NULL;
+    copy->labelsCount = 0;
+    for (size_t i = 0; i < src->labelsCount; ++i) {
+        bool keep = args->withLabels;
+        for (size_t j = 0; !keep && j < args->numLimitLabels; ++j)
+            keep = RedisModule_StringCompare(src->labels[i].key, args->limitLabels[j]) == 0;
+        if (keep) {
+            copy->labels = realloc(copy->labels, (copy->labelsCount + 1) * sizeof(Label));
+            copy->labels[copy->labelsCount++] =
+                (Label){ RedisModule_CreateStringFromString(NULL, src->labels[i].key),
+                         RedisModule_CreateStringFromString(NULL, src->labels[i].value) };
+        }
+    }
+    bool full = args->rangeArgs.aggregationArgs.empty;
+    for (size_t i = 0; i < args->rangeArgs.aggregationArgs.numClasses; ++i)
+        full |= args->rangeArgs.aggregationArgs.classes[i]->type == TS_AGG_TWA;
+    timestamp_t start;
+    seriesEncodeTimestamp(&start, args->rangeArgs.startTimestamp);
+    RedisModuleDictIter *it =
+        full ? RedisModule_DictIteratorStartC(src->chunks, "^", NULL, 0)
+             : RedisModule_DictIteratorStartC(src->chunks, "<=", &start, sizeof(start));
+    size_t keylen;
+    Chunk_t *chunk;
+    char *key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    if (!key && !full) {
+        RedisModule_DictIteratorReseekC(it, "^", NULL, 0);
+        key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    }
+    while (key) {
+        if (!full && src->funcs->GetFirstTimestamp(chunk) > args->rangeArgs.endTimestamp)
+            break;
+        Chunk_t *cloned = src->funcs->CloneChunk(chunk);
+        RedisModule_DictSetC(copy->chunks, key, keylen, cloned);
+        if (chunk == src->lastChunk)
+            copy->lastChunk = cloned;
+        *samples += src->funcs->GetNumOfSample(chunk);
+        key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    }
+    RedisModule_DictIteratorStop(it);
+    return copy;
+}
+
+#define SHARD_AGGREGATION_WORKER_MIN_SAMPLES 1024
+#define SHARD_RAW_WORKER_MIN_SAMPLES 8192
+
+/* Estimate work from the chunks the snapshot would copy, without decoding them.
+ * A selective query can have substantial aggregation work in just one series.
+ * Conversely, a large series can have a cheap query over its newest chunk. */
+static size_t EstimateQuerySamples(const Series *series,
+                                   const QueryPredicates_Arg *query,
+                                   size_t limit) {
+    bool full = query->aggEmpty;
+    for (size_t i = 0; i < query->numAggClasses; ++i)
+        full |= query->aggTypes[i] == TS_AGG_TWA;
+    if (full || (query->startTimestamp == 0 && query->endTimestamp >= series->lastTimestamp))
+        return min(series->totalSamples, limit);
+
+    timestamp_t start;
+    seriesEncodeTimestamp(&start, query->startTimestamp);
+    RedisModuleDictIter *it =
+        RedisModule_DictIteratorStartC(series->chunks, "<=", &start, sizeof(start));
+    size_t keylen;
+    Chunk_t *chunk;
+    char *key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    if (!key) {
+        RedisModule_DictIteratorReseekC(it, "^", NULL, 0);
+        key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    }
+    size_t samples = 0;
+    while (key && samples < limit) {
+        if (series->funcs->GetFirstTimestamp(chunk) > query->endTimestamp)
+            break;
+        samples += min(series->funcs->GetNumOfSample(chunk), limit - samples);
+        key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    }
+    RedisModule_DictIteratorStop(it);
+    return samples;
+}
+
+static bool CanPrepareMRange(RedisModuleCtx *ctx, void *args) {
+    /* LATEST consults a live source compaction rule; retain its synchronous path. */
+    QueryPredicates_Arg *query = args;
+    if (query->latest)
+        return false;
+    /* Small scans cost less than snapshotting and waking a worker. Estimate the
+     * selected chunks, not the total stored history. Explicit aggregations can
+     * benefit from workers with fewer samples than the raw-reply path. Inspect
+     * only metadata here; deferred preparation repeats selection so changed
+     * labels or keys cannot leave us with stale candidates. */
+    const size_t minimum =
+        query->numAggClasses ? SHARD_AGGREGATION_WORKER_MIN_SAMPLES : SHARD_RAW_WORKER_MIN_SAMPLES;
+    RedisModuleDict *keys =
+        QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
+    RedisModuleDictIter *it = RedisModule_DictIteratorStartC(keys, "^", NULL, 0);
+    size_t samples = 0;
+    RedisModuleString *name;
+    while (samples < minimum && (name = RedisModule_DictNext(ctx, it, NULL))) {
+        RedisModuleKey *key;
+        Series *series;
+        if (GetSeries(ctx, name, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation) ==
+            GetSeriesResult_Success) {
+            samples += EstimateQuerySamples(series, query, minimum - samples);
+            RedisModule_CloseKey(key);
+        } else {
+            RedisModule_DictIteratorStop(it);
+            it = RedisModule_DictIteratorStart(keys, ">", name);
+        }
+        RedisModule_FreeString(ctx, name);
+    }
+    RedisModule_DictIteratorStop(it);
+    if (samples < minimum) {
+        /* LibMR immediately invokes the synchronous callback when eligibility
+         * is false. No event-loop turn or blocked-client wait can intervene. */
+        query->immediateQueryIndex = keys;
+        return false;
+    }
+    RedisModule_FreeDict(ctx, keys);
+    return true;
+}
+
+static bool PrepareMRange(RedisModuleCtx *ctx, void *args, void *batch, void **prepared) {
+    QueryPredicates_Arg *query = args;
+    PreparedMRange *p = calloc(1, sizeof(*p));
+    p->args = BuildInternalMRangeArgs(query, p->classes);
+    p->ownsGroupLabel = query->hasQueryPlan && query->groupByLabel;
+    p->series = array_new(Series *, 8);
+    *prepared = p;
+    ApplyCtxUser(ctx, query->userName);
+    RedisModuleDict *keys =
+        QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
+    p->permissionError =
+        CheckDictSeriesPermissions(
+            ctx, keys, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError;
+    size_t samples = 0;
+    if (!p->permissionError) {
+        RedisModuleDictIter *it = RedisModule_DictIteratorStartC(keys, "^", NULL, 0);
+        RedisModuleString *name;
+        while ((name = RedisModule_DictNext(ctx, it, NULL))) {
+            RedisModuleKey *key;
+            Series *series;
+            if (GetSeries(
+                    ctx, name, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation) ==
+                GetSeriesResult_Success) {
+                Series *copy = SnapshotQuerySeries(series, &p->args, &samples);
+                p->series = array_append(p->series, copy);
+                RedisModule_CloseKey(key);
+            } else {
+                RedisModule_DictIteratorStop(it);
+                it = RedisModule_DictIteratorStart(keys, ">", name);
+            }
+            RedisModule_FreeString(ctx, name);
+        }
+        RedisModule_DictIteratorStop(it);
+    }
+    RedisModule_FreeDict(ctx, keys);
+    ReleaseCtxUser(ctx);
+    return samples >= SHARD_AGGREGATION_WORKER_MIN_SAMPLES;
+}
+
+static void RunPreparedMRange(RedisModuleCtx *ctx, void *args, void *prepared) {
+    QueryPredicates_Arg *query = args;
+    PreparedMRange *p = prepared;
+    if (p->permissionError) {
+        RTS_ReplyKeyPermissionsError(ctx);
+        return;
+    }
+    if (query->hasQueryPlan && query->groupByLabel &&
+        DistributedGroupSupported(query->groupReducer)) {
+        DistributedGroups *groups = DistributedGroups_New(query->groupReducer);
+        for (size_t i = 0; i < array_len(p->series); ++i)
+            DistributedGroups_AddSeries(groups,
+                                        p->series[i],
+                                        query->groupByLabel,
+                                        &p->args.rangeArgs,
+                                        p->args.excludeEmpty);
+        DistributedGroups_ReplyPartial(ctx, groups);
+        DistributedGroups_Free(groups);
+        return;
+    }
+    ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
+    size_t count = 0;
+    for (size_t i = 0; i < array_len(p->series); ++i) {
+        EnrichedChunk *first = NULL;
+        AbstractIterator *probe = NULL;
+        if (p->args.excludeEmpty) {
+            probe = SeriesQueryIfNonEmpty(p->series[i], &p->args.rangeArgs, false, &first);
+            if (!probe)
+                continue;
+        }
+        ReplySeriesArrayPos(ctx,
+                            p->series[i],
+                            p->args.withLabels,
+                            (RedisModuleString **)p->args.limitLabels,
+                            p->args.numLimitLabels,
+                            &p->args.rangeArgs,
+                            false,
+                            false,
+                            probe,
+                            first);
+        ++count;
+    }
+    ReplySetMapOrArrayLength(ctx, count, false);
+}
+
+static void FreePreparedMRange(void *prepared) {
+    PreparedMRange *p = prepared;
+    for (size_t i = 0; i < array_len(p->series); ++i)
+        FreeSeries(p->series[i]);
+    array_free(p->series);
+    /* Only GROUPBY creates an owned temporary label in BuildInternalMRangeArgs. */
+    if (p->ownsGroupLabel)
+        RedisModule_FreeString(NULL, p->args.limitLabels[0]);
+    free(p);
+}
+
+static const InternalCommandPreparation MRangePreparation = {
+    .canPrepare = CanPrepareMRange,
+    .prepare = PrepareMRange,
+    .run = RunPreparedMRange,
+    .free = FreePreparedMRange,
+};
 
 // Parse one shard reply element into N Series (one per agg type).
 // minNumAgg is the minimum number of Series to produce; when samples are absent the caller
@@ -1084,12 +1464,10 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
     const redisReply *labelsElement = reply->element[1];
     RedisModule_Assert(labelsElement->type == REDIS_REPLY_ARRAY);
     if (labelsElement->elements > 0) {
-        static RedisModuleString *LABELS = NULL;
-        if (LABELS == NULL)
-            LABELS = RedisModule_CreateString(rts_staticCtx, "LABELS", 6);
-        size_t argc = 1 + 2 * labelsElement->elements;
-        RedisModuleString *argv[argc];
-        argv[0] = LABELS;
+        // These are already parsed shard results, not client command arguments.
+        // Construct the owned labels once instead of copying them through an argv array.
+        cCtx.labelsCount = labelsElement->elements;
+        cCtx.labels = calloc(cCtx.labelsCount, sizeof(*cCtx.labels));
         for (size_t i = 0; i < labelsElement->elements; i++) {
             const redisReply *labelElement = labelsElement->element[i];
             RedisModule_Assert(labelElement->type == REDIS_REPLY_ARRAY);
@@ -1097,59 +1475,61 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
             RedisModule_Assert(labelElement->element[0]->type == REDIS_REPLY_STRING &&
                                (labelElement->element[1]->type == REDIS_REPLY_STRING ||
                                 labelElement->element[1]->type == REDIS_REPLY_NIL));
-            RedisModuleString *lname = RedisModule_CreateString(
-                rts_staticCtx, labelElement->element[0]->str, labelElement->element[0]->len);
-            RedisModuleString *lvalue = NULL;
-            if (labelElement->element[1]->type == REDIS_REPLY_STRING)
-                lvalue = RedisModule_CreateString(
-                    rts_staticCtx, labelElement->element[1]->str, labelElement->element[1]->len);
-            argv[1 + 2 * i] = lname;
-            argv[2 + 2 * i] = lvalue;
+            const redisReply *key = labelElement->element[0];
+            const redisReply *value = labelElement->element[1];
+            RedisModule_Assert(key->len > 0);
+            cCtx.labels[i].key = RedisModule_CreateString(NULL, key->str, key->len);
+            if (value->type == REDIS_REPLY_STRING) {
+                RedisModule_Assert(value->len > 0 && strpbrk(value->str, "(),") == NULL);
+                cCtx.labels[i].value = RedisModule_CreateString(NULL, value->str, value->len);
+            }
         }
-        int r = parseLabelsFromArgs(argv, argc, &cCtx.labelsCount, &cCtx.labels, true);
-        RedisModule_Assert(r == REDISMODULE_OK);
-        for (size_t i = 1; i < argc; i++)
-            if (argv[i] != NULL)
-                RedisModule_FreeString(rts_staticCtx, argv[i]);
     }
 
     const redisReply *samplesElement = reply->element[2];
     RedisModule_Assert(samplesElement->type == REDIS_REPLY_ARRAY);
 
+    // Shard replies are transient query results. When they fit in one regular chunk,
+    // avoid compressing them during reply parsing just to decompress them at reply time.
+    // Keep larger replies compressed to avoid increasing their temporary sample storage.
+    const bool singleSample =
+        samplesElement->elements == 2 && samplesElement->element[0]->type == REDIS_REPLY_INTEGER;
+    const size_t sampleCount = singleSample ? 1 : samplesElement->elements;
+    if (sampleCount <= cCtx.chunkSizeBytes / sizeof(Sample)) {
+        cCtx.options = SERIES_OPT_UNCOMPRESSED;
+        cCtx.chunkSizeBytes = max(sampleCount, 1) * sizeof(Sample);
+    }
+
     // Detect numAgg from first sample: [ts, v0, v1, ...] → elements-1; compact [ts,val] → 1.
     // Never go below minNumAgg: empty keys must produce as many Series as populated ones so
     // mrange_done_internal's flat-list stride stays consistent.
-    size_t numAgg = minNumAgg;
+    size_t numAgg = max(minNumAgg, 1);
     if (samplesElement->elements > 0) {
         const redisReply *first = samplesElement->element[0];
         if (first->type == REDIS_REPLY_ARRAY && first->elements > 2)
-            numAgg = max(first->elements - 1, minNumAgg);
+            numAgg = max(first->elements - 1, numAgg);
     }
 
     // Build N Series — only series[0] carries labels.
     ARR(Series *) result = array_new(Series *, numAgg);
-    for (size_t a = 0; a < numAgg; a++) {
+    RedisModuleString *firstName =
+        RedisModule_CreateString(rts_staticCtx, nameElement->str, nameElement->len);
+    // Transfer labels unconditionally, including replies with no samples.
+    result = array_append(result, NewSeries(firstName, &cCtx));
+    for (size_t a = 1; a < numAgg; a++) {
         RedisModuleString *sname =
             RedisModule_CreateString(rts_staticCtx, nameElement->str, nameElement->len);
-        if (a == 0) {
-            result = array_append(result, NewSeries(sname, &cCtx));
-            // cCtx.labels now owned by series[0]; clear so later iterations don't share it.
-            cCtx.labels = NULL;
-            cCtx.labelsCount = 0;
-        } else {
-            CreateCtx emptyCCtx = { .chunkSizeBytes = TSGlobalConfig.chunkSizeBytes,
-                                    .options = SERIES_OPT_COMPRESSED_GORILLA,
-                                    .duplicatePolicy = DP_NONE };
-            result = array_append(result, NewSeries(sname, &emptyCCtx));
-        }
+        CreateCtx emptyCCtx = { .chunkSizeBytes = cCtx.chunkSizeBytes,
+                                .options = cCtx.options,
+                                .duplicatePolicy = DP_NONE };
+        result = array_append(result, NewSeries(sname, &emptyCCtx));
     }
 
     // Compact single-sample form [ts, value] only exists for single-agg/raw.
     if (numAgg == 1 && samplesElement->elements == 2 &&
         samplesElement->element[0]->type == REDIS_REPLY_INTEGER) {
         api_timestamp_t ts = samplesElement->element[0]->integer;
-        double val;
-        parse_double_cstr(samplesElement->element[1]->str, samplesElement->element[1]->len, &val);
+        double val = ShardReplyDouble(samplesElement->element[1]);
         SeriesAddSample(result[0], ts, val);
         return result;
     }
@@ -1161,10 +1541,8 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
         RedisModule_Assert(sampleElement->element[0]->type == REDIS_REPLY_INTEGER);
         api_timestamp_t ts = sampleElement->element[0]->integer;
         for (size_t a = 0; a < numAgg; a++) {
-            double val;
             // element type may appear as status string for values starting with '+'/'-'
-            parse_double_cstr(
-                sampleElement->element[1 + a]->str, sampleElement->element[1 + a]->len, &val);
+            double val = ShardReplyDouble(sampleElement->element[1 + a]);
             SeriesAddSample(result[a], ts, val);
         }
     }
@@ -1173,6 +1551,16 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
 
 static Record *SeriesListReplyParser(const redisReply *reply) {
     RedisModule_Assert(reply->type == REDIS_REPLY_ARRAY);
+
+    if (reply->elements == 3 && reply->element[0]->type == REDIS_REPLY_STRING &&
+        reply->element[0]->len == strlen(TS_GROUP_REPLY_VERSION) &&
+        memcmp(reply->element[0]->str, TS_GROUP_REPLY_VERSION, strlen(TS_GROUP_REPLY_VERSION)) ==
+            0) {
+        SeriesListRecord *record =
+            (SeriesListRecord *)SeriesListRecord_Create(array_new(Series *, 1), 1);
+        record->groups = DistributedGroups_Parse(reply);
+        return &record->base;
+    }
 
     // First pass: determine numAgg from populated keys without allocating Series.
     // Empty keys have zero samples so they cannot reveal the agg count on their own.
@@ -1514,6 +1902,8 @@ int register_mr(RedisModuleCtx *ctx, long long numThreads) {
     MR_RegisterInternalCommand(
         "TS.INTERNAL_SLOT_RANGES", &SlotRangesCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_MRANGE", &MrangeCallbacks, QueryPredicatesType);
+    MR_RegisterInternalCommandPreparation("TS.INTERNAL_SLOT_RANGES", &SlotRangesPreparation);
+    MR_RegisterInternalCommandPreparation("TS.INTERNAL_MRANGE", &MRangePreparation);
     MR_RegisterInternalCommand("TS.INTERNAL_MGET", &MgetCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand("TS.INTERNAL_QUERYINDEX", &QueryIndexCallbacks, QueryPredicatesType);
     MR_RegisterInternalCommand(
@@ -1939,12 +2329,14 @@ static Record *SeriesListRecord_Create(ARR(Series *) seriesList, size_t numAggCl
         (SeriesListRecord *)MR_RecordCreate(SeriesListRecordType, sizeof(*result));
     result->seriesList = seriesList;
     result->numAggClasses = numAggClasses;
+    result->groups = NULL;
     return &result->base;
 }
 
 static void SeriesListRecord_Free(void *base) {
     SeriesListRecord *record = base;
     array_free_ex(record->seriesList, FreeSeries(*(Series **)ptr));
+    DistributedGroups_Free(record->groups);
     free(record);
 }
 

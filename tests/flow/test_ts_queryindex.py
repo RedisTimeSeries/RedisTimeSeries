@@ -1,7 +1,54 @@
 import pytest
 import redis
+from itertools import chain
 # from utils import Env
 from includes import *
+
+
+def test_filter_resolution_after_label_changes():
+    env = Env()
+    labels = {}
+    with env.getClusterConnectionIfNeeded() as client, env.getConnection(1) as coordinator:
+        for i in range(96):
+            key = f'resolved:{i}'
+            labels[key] = {'family': 'resolved', 'selection': 'rare' if i < 16 else 'other',
+                           'colour': 'a' if i < 8 else 'b'}
+            client.execute_command('TS.CREATE', key, 'LABELS', *chain.from_iterable(labels[key].items()))
+            client.execute_command('TS.ADD', key, 0, i)
+
+        def check():
+            cases = [
+                (['colour=(a,b)', 'optional='], lambda item: 'optional' not in item),
+                (['colour!=(a,missing)'], lambda item: item.get('colour') not in ('a', 'missing')),
+                (['colour=(a,a,b)'], lambda item: item.get('colour') in ('a', 'b')),
+                (['optional=(yes)'], lambda item: item.get('optional') == 'yes'),
+            ]
+            for filters, matches in cases:
+                expected = {key.encode() for key, item in labels.items()
+                            if item['selection'] == 'rare' and matches(item)}
+                filters = ['family=resolved', 'selection=rare', *filters]
+                env.assertEqual(set(coordinator.execute_command('TS.QUERYINDEX', *filters)), expected)
+                reply = coordinator.execute_command('TS.MRANGE', 0, 0, 'FILTER', *filters)
+                actual = set(reply) if isinstance(reply, dict) else {row[0] for row in reply}
+                env.assertEqual(actual, expected)
+
+        check()
+        # Remove an entire posting list, then recreate it in a later command.
+        for i in range(8):
+            key = f'resolved:{i}'
+            labels[key]['colour'] = 'b'
+            client.execute_command('TS.ALTER', key, 'LABELS', *chain.from_iterable(labels[key].items()))
+        check()
+        for i in range(4):
+            key = f'resolved:{i}'
+            labels[key].update(colour='a', optional='yes')
+            client.execute_command('TS.ALTER', key, 'LABELS', *chain.from_iterable(labels[key].items()))
+        check()
+        for i in range(16):
+            key = f'resolved:{i}'
+            client.delete(key)
+            del labels[key]
+        check()
 
 
 def test_label_index():

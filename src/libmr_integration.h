@@ -4,6 +4,7 @@
 #include "indexer.h"
 #include "query_language.h"
 #include "tsdb.h"
+#include "distributed_group.h"
 
 #ifndef REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
 #define REDIS_TIMESERIES_CLEAN_MR_INTEGRATION_H
@@ -42,6 +43,13 @@ typedef struct QueryPredicates_Arg
     FilterByValueArgs filterByValueArgs;
     FilterByTSArgs filterByTSArgs;
     bool excludeEmpty;
+    // Optional trailer on the final INTERNAL MRANGE step. Older shards ignore it.
+    bool hasQueryPlan;
+    char *groupByLabel;
+    long long perSeriesCount;
+    TS_AGG_TYPES_T groupReducer;
+    // Local-only selection reused by the immediate synchronous cost fallback.
+    RedisModuleDict *immediateQueryIndex;
 } QueryPredicates_Arg;
 
 typedef struct StringRecord
@@ -103,6 +111,7 @@ typedef struct SeriesListRecord
     Record base;
     ARR(Series *) seriesList;
     size_t numAggClasses; // >1: seriesList has numAggClasses Series per key (multi-agg pre-agg)
+    DistributedGroups *groups; // versioned partial GROUPBY result; NULL for legacy replies
 } SeriesListRecord;
 
 typedef struct StringListRecord
