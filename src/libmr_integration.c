@@ -1264,25 +1264,66 @@ static Series *SnapshotQuerySeries(const Series *src, const MRangeArgs *args, si
     return copy;
 }
 
+#define SHARD_AGGREGATION_WORKER_MIN_SAMPLES 1024
+#define SHARD_RAW_WORKER_MIN_SAMPLES 8192
+
+/* Estimate work from the chunks the snapshot would copy, without decoding them.
+ * A selective query can have substantial aggregation work in just one series.
+ * Conversely, a large series can have a cheap query over its newest chunk. */
+static size_t EstimateQuerySamples(const Series *series,
+                                   const QueryPredicates_Arg *query,
+                                   size_t limit) {
+    bool full = query->aggEmpty;
+    for (size_t i = 0; i < query->numAggClasses; ++i)
+        full |= query->aggTypes[i] == TS_AGG_TWA;
+    if (full || (query->startTimestamp == 0 && query->endTimestamp >= series->lastTimestamp))
+        return min(series->totalSamples, limit);
+
+    timestamp_t start;
+    seriesEncodeTimestamp(&start, query->startTimestamp);
+    RedisModuleDictIter *it =
+        RedisModule_DictIteratorStartC(series->chunks, "<=", &start, sizeof(start));
+    size_t keylen;
+    Chunk_t *chunk;
+    char *key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    if (!key) {
+        RedisModule_DictIteratorReseekC(it, "^", NULL, 0);
+        key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    }
+    size_t samples = 0;
+    while (key && samples < limit) {
+        if (series->funcs->GetFirstTimestamp(chunk) > query->endTimestamp)
+            break;
+        samples += min(series->funcs->GetNumOfSample(chunk), limit - samples);
+        key = RedisModule_DictNextC(it, &keylen, (void **)&chunk);
+    }
+    RedisModule_DictIteratorStop(it);
+    return samples;
+}
+
 static bool CanPrepareMRange(RedisModuleCtx *ctx, void *args) {
     /* LATEST consults a live source compaction rule; retain its synchronous path. */
     QueryPredicates_Arg *query = args;
     if (query->latest)
         return false;
-    /* Small scans cost less than snapshotting and waking a worker. Inspect only
-     * metadata here; prepare repeats selection if it was deferred, so labels or
-     * keys changed while waiting cannot leave us with stale candidates. */
+    /* Small scans cost less than snapshotting and waking a worker. Estimate the
+     * selected chunks, not the total stored history. Explicit aggregations can
+     * benefit from workers with fewer samples than the raw-reply path. Inspect
+     * only metadata here; deferred preparation repeats selection so changed
+     * labels or keys cannot leave us with stale candidates. */
+    const size_t minimum =
+        query->numAggClasses ? SHARD_AGGREGATION_WORKER_MIN_SAMPLES : SHARD_RAW_WORKER_MIN_SAMPLES;
     RedisModuleDict *keys =
         QueryIndex(ctx, query->predicates->list, query->predicates->count, NULL);
     RedisModuleDictIter *it = RedisModule_DictIteratorStartC(keys, "^", NULL, 0);
     size_t samples = 0;
     RedisModuleString *name;
-    while (samples < 8192 && (name = RedisModule_DictNext(ctx, it, NULL))) {
+    while (samples < minimum && (name = RedisModule_DictNext(ctx, it, NULL))) {
         RedisModuleKey *key;
         Series *series;
         if (GetSeries(ctx, name, &key, &series, REDISMODULE_READ, GetSeriesFlags_SilentOperation) ==
             GetSeriesResult_Success) {
-            samples += min(series->totalSamples, 8192);
+            samples += EstimateQuerySamples(series, query, minimum - samples);
             RedisModule_CloseKey(key);
         } else {
             RedisModule_DictIteratorStop(it);
@@ -1291,7 +1332,7 @@ static bool CanPrepareMRange(RedisModuleCtx *ctx, void *args) {
         RedisModule_FreeString(ctx, name);
     }
     RedisModule_DictIteratorStop(it);
-    if (samples < 8192) {
+    if (samples < minimum) {
         /* LibMR immediately invokes the synchronous callback when eligibility
          * is false. No event-loop turn or blocked-client wait can intervene. */
         query->immediateQueryIndex = keys;
@@ -1338,7 +1379,7 @@ static bool PrepareMRange(RedisModuleCtx *ctx, void *args, void *batch, void **p
     }
     RedisModule_FreeDict(ctx, keys);
     ReleaseCtxUser(ctx);
-    return samples >= 1024;
+    return samples >= SHARD_AGGREGATION_WORKER_MIN_SAMPLES;
 }
 
 static void RunPreparedMRange(RedisModuleCtx *ctx, void *args, void *prepared) {

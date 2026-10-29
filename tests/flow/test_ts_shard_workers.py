@@ -54,7 +54,8 @@ def check_worker_ranges(protocol):
                 keys.append(key)
                 client.execute_command('TS.CREATE', key, 'ENCODING', encoding,
                                        'CHUNK_SIZE', 128, 'RETENTION', 15000,
-                                       'LABELS', 'test', 'worker', 'group', 'all')
+                                       'LABELS', 'test', 'worker', 'group', 'all',
+                                       'encoding', encoding)
                 pipe = client.pipeline(transaction=False)
                 for i in range(6000):
                     pipe.execute_command('TS.ADD', key, i * 3, (i % 11) - 5)
@@ -69,10 +70,15 @@ def check_worker_ranges(protocol):
             multi = 'TS.MREVRANGE' if reverse else 'TS.MRANGE'
             for lo, hi in ((0, 18000), (2100, 14800), (18000, 18100)):
                 for opts in options:
-                    expected = {key.encode(): client.execute_command(local, key, lo, hi, *opts)
-                                for key in keys}
-                    cases.append(([multi, lo, hi, *opts, 'SELECTED_LABELS', 'group',
-                                   'FILTER', 'test=worker'], expected))
+                    # A selective encoding filter leaves one series per shard,
+                    # below the old stored-sample eligibility threshold.
+                    for encoding in (None, 'COMPRESSED', 'UNCOMPRESSED'):
+                        selected = [key for key in keys if encoding is None or key.endswith(':' + encoding)]
+                        expected = {key.encode(): client.execute_command(local, key, lo, hi, *opts)
+                                    for key in selected}
+                        filters = ['test=worker'] + ([f'encoding={encoding}'] if encoding else [])
+                        cases.append(([multi, lo, hi, *opts, 'SELECTED_LABELS', 'group',
+                                       'FILTER', *filters], expected))
 
         def check(shard):
             with env.getConnection(shard) as conn:
@@ -91,7 +97,7 @@ def test_worker_ranges_resp3():
     check_worker_ranges(3)
 
 
-def test_worker_snapshots_during_replacement():
+def check_snapshots_during_replacement(sample_count, aggregate=False):
     env = worker_env()
     keys = [f'replace:{{{tag}}}' for tag in tags_by_shard(env)]
     barrier = Barrier(9)
@@ -103,7 +109,7 @@ def test_worker_snapshots_during_replacement():
         pipe.delete(key)
         pipe.execute_command('TS.CREATE', key, 'LABELS', 'test', 'replacement',
                              'generation', generation)
-        for i in range(9000):
+        for i in range(sample_count):
             pipe.execute_command('TS.ADD', key, i, generation)
         pipe.execute()
 
@@ -121,13 +127,15 @@ def test_worker_snapshots_during_replacement():
         with env.getConnection(shard) as conn:
             barrier.wait(timeout=10)
             for _ in range(25):
-                reply = conn.execute_command('TS.MRANGE', '-', '+', 'WITHLABELS',
+                options = ['AGGREGATION', 'sum', 1000] if aggregate else []
+                reply = conn.execute_command('TS.MRANGE', '-', '+', *options, 'WITHLABELS',
                                              'FILTER', 'test=replacement')
                 env.assertEqual(len(reply), 3)
                 for key, labels, samples in reply:
                     generation = float(dict(labels)[b'generation'])
-                    env.assertEqual(len(samples), 9000)
-                    env.assertTrue(all(ts == i and float(value) == generation
+                    width = 1000 if aggregate else 1
+                    env.assertEqual(len(samples), sample_count // width)
+                    env.assertTrue(all(ts == i * width and float(value) == generation * width
                                        for i, (ts, value) in enumerate(samples)))
 
     with ThreadPoolExecutor(max_workers=9) as pool:
@@ -135,6 +143,14 @@ def test_worker_snapshots_during_replacement():
         tasks += [pool.submit(reader, shard) for shard in (1, 2, 3, 1, 2, 3)]
         for task in tasks:
             task.result()
+
+
+def test_worker_snapshots_during_replacement():
+    check_snapshots_during_replacement(9000)
+
+
+def test_selective_aggregation_snapshots_during_replacement():
+    check_snapshots_during_replacement(6000, aggregate=True)
 
 
 def test_worker_connection_recovery():
