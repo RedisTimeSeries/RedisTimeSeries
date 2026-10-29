@@ -564,29 +564,58 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     return res;
 }
 
-// A single index leaf can be scanned directly. Union filters reuse QueryIndex's
-// existing deduplicated result dictionary, which expiry cannot invalidate.
-size_t VisitQueryIndex(RedisModuleCtx *ctx,
-                       QueryPredicateList *queries,
-                       void (*visit)(RedisModuleCtx *, const char *, size_t, void *),
-                       void *data) {
-    RedisModuleDict *result = NULL, *source = tsLabelIndex;
+// Select the smallest live index leaf when possible. A union needs QueryIndex's
+// independent result dictionary for deduplication; the caller owns that dictionary.
+static RedisModuleDict *SelectQueryIndexSource(RedisModuleCtx *ctx,
+                                               QueryPredicateList *queries,
+                                               RedisModuleDict **result) {
+    RedisModuleDict *source = tsLabelIndex;
     RedisModuleDict **dicts = NULL;
-    size_t count = 0, visible = 0;
+    size_t count = 0;
     if (queries) {
         if (!queries->count)
-            return 0;
+            return NULL;
         PromoteSmallestPredicateToFront(ctx, queries->list, queries->count);
         if (!IS_INCLUSION(queries->list[0].type))
-            return 0;
+            return NULL;
         GetPredicateKeysDicts(ctx, queries->list, &dicts, &count);
         if (count == 1) {
             source = dicts[0];
         } else {
-            source = result = QueryIndex(ctx, queries->list, queries->count, NULL);
+            source = *result = QueryIndex(ctx, queries->list, queries->count, NULL);
         }
         free(dicts);
     }
+    return source;
+}
+
+// KeyExists may have deleted the current key and freed its index leaf. Resolve
+// the leaf again and seek past the owned key name without accessing the old leaf.
+static RedisModuleDictIter *ResumeQueryIndexAfterExpiry(RedisModuleCtx *ctx,
+                                                        QueryPredicateList *queries,
+                                                        RedisModuleString *key) {
+    RedisModuleDict *source = tsLabelIndex;
+    if (queries) {
+        RedisModuleDict **dicts = NULL;
+        size_t count = 0;
+        GetPredicateKeysDicts(ctx, queries->list, &dicts, &count);
+        source = count ? dicts[0] : NULL;
+        free(dicts);
+    }
+    size_t len;
+    const char *name = RedisModule_StringPtrLen(key, &len);
+    return source ? RedisModule_DictIteratorStartC(source, ">", (void *)name, len) : NULL;
+}
+
+// Check visibility immediately before each callback. Only live-index traversal
+// needs to restart after expiry; an independent QueryIndex result stays valid.
+size_t VisitQueryIndex(RedisModuleCtx *ctx,
+                       QueryPredicateList *queries,
+                       void (*visit)(RedisModuleCtx *, const char *, size_t, void *),
+                       void *data) {
+    RedisModuleDict *result = NULL;
+    RedisModuleDict *source = SelectQueryIndexSource(ctx, queries, &result);
+    size_t visible = 0;
     RedisModuleDictIter *iter =
         source ? RedisModule_DictIteratorStartC(source, "^", NULL, 0) : NULL;
     char *name;
@@ -611,14 +640,7 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
             // Stop frees iterator storage only. Re-resolve the potentially freed
             // leaf and resume strictly after the owned name, never stale pointers.
             RedisModule_DictIteratorStop(iter);
-            source = tsLabelIndex;
-            if (queries) {
-                GetPredicateKeysDicts(ctx, queries->list, &dicts, &count);
-                source = count ? dicts[0] : NULL;
-                free(dicts);
-            }
-            name = (char *)RedisModule_StringPtrLen(key, &len);
-            iter = source ? RedisModule_DictIteratorStartC(source, ">", name, len) : NULL;
+            iter = ResumeQueryIndexAfterExpiry(ctx, queries, key);
         }
         RedisModule_FreeString(NULL, key);
     }
