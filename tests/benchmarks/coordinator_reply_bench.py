@@ -58,7 +58,7 @@ class Cluster:
                 proc = subprocess.Popen([redis_server, str(node / 'redis.conf')],
                                         stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
                 self.processes.append(proc)
-                conn = redis.Redis(port=port, socket_timeout=20)
+                conn = redis.Redis(port=port, socket_timeout=20, protocol=2)
                 self.connections.append(conn)
                 self.wait(lambda: conn.ping(), proc)
                 # Never configure an unrelated server if a requested port was already in use.
