@@ -80,9 +80,18 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                             size_t predicate_count,
                             bool *hasPermissionError);
 
-// Returns a fresh dict of every currently-indexed series key (ts_key -> dummy).
-// Used by TS.QUERYLABELS when no FILTER is given ("all series").
-RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx);
+// Visit each matching, locally owned, logically live series once, in key-name order.
+// Used by QUERYINDEX reply generation (standalone, INTERNAL and GEARS) and by
+// QUERYLABELS aggregation, which reads labels only from visible series.
+// NULL queries scans all indexed series; an empty predicate list visits none.
+// Filters are applied before KeyExists checks Redis expiry/replica visibility.
+// Returns the number of callbacks. The name is valid only during the callback;
+// the callback must not mutate the keyspace or index, or retain the name pointer.
+// This does not replace QueryIndex used by MGET/MRANGE/MREVRANGE.
+size_t VisitQueryIndex(RedisModuleCtx *ctx,
+                       QueryPredicateList *queries,
+                       void (*visit)(RedisModuleCtx *, const char *, size_t, void *),
+                       void *data);
 
 // Builds the index-entry prefix for a LABELS or VALUES query (see QueryLabelsFromIndex).
 // Caller owns the returned string and must free it with RedisModule_FreeString(NULL, ...).
