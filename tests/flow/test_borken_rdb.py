@@ -222,7 +222,7 @@ def _patch_uncompressed_sample_counts(dump: bytes, new_num_samples: int,
     return bytes(b)
 
 
-def test_total_samples_mismatch_does_not_crash_on_delete_then_add(env):
+def test_total_samples_mismatch_uses_loaded_chunk_count(env):
     env.skipOnCluster()
 
     key = 'test_key'
@@ -232,12 +232,12 @@ def test_total_samples_mismatch_does_not_crash_on_delete_then_add(env):
         env.cmd('DUMP', key), new_num_samples=1, new_total_samples=0)
 
     env.cmd('DEL', key)
-    try:
-        env.cmd('RESTORE', key, 0, dump)
-    except Exception:
-        assert env.cmd('PING')
-        return
+    env.cmd('RESTORE', key, 0, dump)
 
+    info = env.cmd('TS.INFO', key)
+    info = dict(zip(info[::2], info[1::2]))
+    env.assertEqual(info['totalSamples'], 1)
+    env.assertEqual(env.cmd('TS.RANGE', key, '-', '+'), [[1, '42']])
     env.assertEqual(env.cmd('TS.DEL', key, 0, 1000), 1)
     env.assertEqual(env.cmd('TS.ADD', key, 2000, 43), 2000)
     assert env.cmd('PING')
