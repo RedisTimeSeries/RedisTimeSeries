@@ -1,206 +1,65 @@
-name: CI Full suite - MACOS
-# This is a full workflow for the production branches and tags, which
-# includes building and testing on all supported platforms, and
-# uploading the artifacts to S3.
-
-# TODO:
-#
-# 1. Remove the use of "readies" completely.
-# 2. Remove the use of all the scripts for anything and do everything
-#    right here in the workflow.
-# 3. Use the corresponding actions for the end goal: aws s3 upload
-#    action. This also will remove the need for the installation of aws-cli.
-#
-# More info: jobs.steps.uses: docker://alpine:3.8 for docker images,
-# To use the AWS CLI: https://hub.docker.com/r/amazon/aws-cli
-permissions:
-  id-token: write
-  contents: read
-
+name: MOD-20655 bounded macOS diagnostics
 on:
   workflow_dispatch:
-    inputs:
-      os:
-        description: "OS version to run the tests on. MacOS 13 - x86-64, MacOS 14 and 15 - ARM (Apple Chips)."
-        required: true
-        type: string
-        default: "macos-15"
-      run_valgrind:
-        description: 'Run valgrind on the tests'
-        type: boolean
-        default: false
-      run_sanitizer:
-        description: 'Run sanitizer on the tests'
-        type: boolean
-        default: false
-      redis-ref:
-        description: 'Redis ref to checkout'  # todo change per version/tag
-        type: string
-        required: true
-      quick:
-        description: 'Run quick tests'
-        type: boolean
-        default: false
-      build_only:
-        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
-        type: boolean
-        default: false
-      beta-version:
-        description: 'Beta version for S3 uploads'
-        type: string
-        required: false
-        default: ''
-  workflow_call:
-  # the defaults and options here are the same likes in "workflow_dispatch"
-    inputs:
-      os:
-        description: "OS version to run the tests on. MacOS 13 - x86-64, MacOS 14 and 15 - ARM (Apple Chips)."
-        required: false
-        type: string
-      run_valgrind:
-        description: 'Run valgrind on the tests'
-        type: boolean
-        default: false
-      run_sanitizer:
-        description: 'Run sanitizer on the tests'
-        type: boolean
-        default: false
-      redis-ref:
-        description: 'Redis ref to checkout'  # todo change per version/tag
-        type: string
-        required: true
-      quick:
-        description: 'Run quick tests'
-        type: boolean
-        default: false
-      build_only:
-        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
-        type: boolean
-        default: false
-      beta-version:
-        description: 'Beta version for S3 uploads'
-        type: string
-        required: false
-        default: ''
-
-
+permissions:
+  contents: read
 jobs:
-  setup-environment:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      redis-ref: ${{ steps.set-env.outputs.redis-ref }}
-      TAGGED: ${{ steps.set-env.outputs.TAGGED }}
-      TAG: ${{ steps.set-env.outputs.TAG }}
-      BRANCH: ${{ steps.set-env.outputs.BRANCH }}
-      TAG_OR_BRANCH: ${{ steps.set-env.outputs.TAG }}${{ steps.set-env.outputs.BRANCH }}
-      os: ${{ steps.set-matrix.outputs.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: set env
-        id: set-env
-        uses: ./.github/actions/setup-env
-        with:
-          github-ref: ${{ github.ref }}
-          redis-ref: ${{ inputs.redis-ref }}
-      - name: Set matrix
-        id: set-matrix
-        env:
-          OS_INPUT: ${{ inputs.os }}
-        run: |
-          if [ -z "$OS_INPUT" ]; then
-            OS='["macos-14", "macos-15", "macos-26", "macos-14-large", "macos-15-intel", "macos-26-intel"]'
-          else
-            # Convert space-separated list to JSON array (supports one or many).
-            OS="["
-            for os in $OS_INPUT; do
-              OS="${OS}\"${os}\","
-            done
-            OS="${OS%,}]"
-          fi
-          echo "${OS}"
-          echo "os=${OS}" >> $GITHUB_OUTPUT
-  macos:
+  reproduce:
+    runs-on: macos-26-intel
+    timeout-minutes: 25
     env:
-      TAGGED: ${{ needs.setup-environment.outputs.TAGGED }}
-      VERSION: ${{ needs.setup-environment.outputs.TAG }}
-      BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
-      TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH}}
-      PIP_BREAK_SYSTEM_PACKAGES: 1
-      # Expose the matrix runner label to the tests so they can skip on a specific runner.
-      RUNNER_LABEL: ${{ matrix.os }}
-    runs-on: ${{matrix.os}}
-    needs: setup-environment
-    strategy:
-      fail-fast: false
-      matrix:
-        # 6.0.20 can't be built due to Redis bug.
-        os: ${{fromJson(needs.setup-environment.outputs.os)}}
-    defaults:
-      run:
-        shell: bash -l -eo pipefail {0}
+      CC: /usr/bin/clang
+      CXX: /usr/bin/clang++
     steps:
-      - name: Install prerequisites
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/checkout@v5
+        with:
+          repository: redis/redis
+          ref: 41888396080aab24ad5218f2e45e66158e24884b
+          path: redis
+          submodules: recursive
+      - name: Prerequisites
         run: |
           brew install make coreutils autoconf automake pyenv-virtualenv libtool
-      - name: Full checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - name: Checkout Redis
-        uses: actions/checkout@v5
-        with:
-          repository: 'redis/redis'
-          ref: ${{ needs.setup-environment.outputs.redis-ref }}
-          path: 'redis'
-          submodules: recursive
-      - name: Setup macOS 26 SDK
-        if: startsWith(matrix.os, 'macos-26')
-        run: |
-          _SDK="$(xcrun --sdk macosx --show-sdk-path)"
-          echo "SDKROOT=$_SDK" >> $GITHUB_ENV
-          echo "CC=/usr/bin/clang" >> $GITHUB_ENV
-          echo "CXX=/usr/bin/clang++" >> $GITHUB_ENV
-      - name: Setup specific
+          echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
+      - name: Setup
         working-directory: .install
         run: ./install_script.sh
-      - name: Install python dependencies
-        uses: ./.github/actions/install-python-deps
-        with: 
-          use-venv: '1'
-          extra-packages-to-install: 'gevent'
-      - name: build
-        uses: ./.github/actions/build-module-and-redis
+      - uses: ./.github/actions/install-python-deps
         with:
           use-venv: '1'
-      - name: Run tests
-        if: ${{ !inputs.build_only }}
-        uses: ./.github/actions/run-tests
+          extra-packages-to-install: gevent
+      - uses: ./.github/actions/build-module-and-redis
         with:
           use-venv: '1'
-          quick: ${{inputs.quick && '1' || '0'}}
-      - name: Capture test results
-        if: ${{ always() && !inputs.build_only }}
-        uses: ./.github/actions/capture-test-results
+      - name: Three bounded original-test attempts
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          source venv/bin/activate
+          module_path=$(find "$PWD/bin" -name redistimeseries.so -type f | head -1)
+          test -n "$module_path"
+          export REDIS_SERVER="$PWD/redis/src/redis-server"
+          git rev-parse HEAD
+          git -C redis rev-parse HEAD
+          python -m pip show RLTest
+          cd tests/flow
+          for attempt in 1 2 3; do
+            gtimeout 75 python -m RLTest --oss-redis-path "$REDIS_SERVER" \
+              --module "$module_path" --enable-debug-command --enable-protected-configs \
+              --cluster_bus_port_protected_mode no --env oss-cluster --shards-count 3 \
+              --test-timeout 45 --test test_mod20655_diagnostics:test_expiry_diagnostics \
+              --log-dir "logs/mod20655-attempt-$attempt" 2>&1 | tee "mod20655-attempt-$attempt.log"
+          done
+      - uses: actions/upload-artifact@v6
+        if: always()
         with:
-          os-name: ${{ matrix.os }}
-      - name: Upload test artifacts
-        if: ${{ failure() && !inputs.build_only }}
-        uses: ./.github/actions/upload-artifacts
-        with:
-          image: ${{ matrix.os }}
-      - name: Pack module
-        if: ${{ !inputs.build_only }}
-        uses: ./.github/actions/pack-module
-        with:
-          use-venv: '1'
-          beta-version: ${{ inputs.beta-version }}
-      - name: Upload artifacts to S3
-        if: ${{ !inputs.build_only }}
-        uses: ./.github/actions/upload-artifacts-to-s3-without-make
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          github-ref: ${{ github.ref }}
-          beta-version: ${{ inputs.beta-version }}
+          name: mod20655-macos26-intel-diagnostics
+          path: |
+            tests/flow/logs/**
+            tests/flow/mod20655-attempt-*.log
+          retention-days: 7
+          if-no-files-found: warn
