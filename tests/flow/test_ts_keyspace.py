@@ -5,15 +5,15 @@ import time
 from includes import *
 
 
-def get_keyspace_message(pubsub):
+def get_keyspace_message(pubsub, timeout=1):
     # get_message can return None before the socket timeout (e.g. while
     # establishing the subscription). Wait for the next message, without
     # skipping unexpected messages or changing their order.
-    deadline = time.monotonic() + WAKE_TIMEOUT_SECS
+    deadline = time.monotonic() + timeout
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise AssertionError(f"No keyspace Pub/Sub message within {WAKE_TIMEOUT_SECS}s")
+            raise AssertionError(f"No keyspace Pub/Sub message within {timeout}s")
         msg = pubsub.get_message(timeout=remaining)
         if msg is not None:
             return msg
@@ -23,7 +23,9 @@ def subscribe_to_keyspace(env, conn):
     conn.execute_command('config', 'set', 'notify-keyspace-events', 'KEA')
     pubsub = conn.pubsub()
     pubsub.psubscribe('__key*')
-    env.assertEqual('psubscribe', get_keyspace_message(pubsub)['type'])
+    # Only subscription setup gets the longer suite budget; event delivery
+    # retains its original one-second limit.
+    env.assertEqual('psubscribe', get_keyspace_message(pubsub, WAKE_TIMEOUT_SECS)['type'])
     return pubsub
 
 
