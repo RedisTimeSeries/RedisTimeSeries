@@ -30,6 +30,61 @@ def test_asm_with_data():
         migrate_slots_back_and_forth(env, wait_for_valid_cluster)
 
 
+def test_asm_keeps_no_evict():
+    """
+    RED-213286: BLESS (Redis 8.12) marks a key NO-EVICT. ASM sends a series as RESTORE (which doesn't carry the flag)
+    followed by BLESS SET, so a blessed series must stay blessed on its new owner and leave the old owner's index.
+    """
+    env = Env(shardsCount=2, decodeResponses=True)
+    if env.env != "oss-cluster":
+        env.skip()
+    conns = [env.getConnection(i) for i in range(env.shardsCount)]
+    try:
+        conns[0].execute_command("BLESS", "GET", "missing")
+    except redis.exceptions.ResponseError as e:
+        if "unknown command" in str(e):
+            env.skip()
+
+    number_of_keys = 100
+    fill_ts_data(env, number_of_keys=number_of_keys, samples_per_key=10, label="test")
+    # Bless every other series, on the shard that holds it.
+    blessed = set()
+    for conn in conns:
+        for key in sorted(conn.execute_command("KEYS", "*"))[::2]:
+            conn.execute_command("BLESS", "SET", key, "NO-EVICT")
+            blessed.add(key)
+
+    def bless_scan(conn):
+        cursor, keys = "0", []
+        while True:
+            cursor, batch = conn.execute_command("BLESS", "SCAN", cursor, "NO-EVICT")
+            keys += batch
+            if cursor == "0":
+                return sorted(keys)
+
+    def views():
+        return [(set(conn.execute_command("KEYS", "*")), conn.execute_command("INFO", "stats")["blessed_keys"])
+                for conn in conns]
+
+    def assert_flags_follow_series(env):
+        wait_for_valid_cluster(env)
+        # KEYS lists only the slots a node owns, but INFO blessed_keys still counts the blessed series the old owner
+        # hasn't trimmed yet, so wait for its index to shrink.
+        deadline = time.time() + get_timeout()
+        while not all(count == len(keys & blessed) for keys, count in views()) and time.time() < deadline:
+            time.sleep(0.1)
+        current = views()
+        assert sum(len(keys) for keys, _ in current) == number_of_keys, [len(keys) for keys, _ in current]
+        for conn, (keys, count) in zip(conns, current):
+            assert count == len(keys & blessed), (count, len(keys & blessed))
+            assert bless_scan(conn) == sorted(keys & blessed)
+            for key in keys:
+                assert conn.execute_command("BLESS", "GET", key) == (["NO-EVICT"] if key in blessed else []), key
+
+    assert_flags_follow_series(env)
+    migrate_slots_back_and_forth(env, assert_flags_follow_series)
+
+
 def test_asm_with_data_and_queries_during_migrations():
     env = Env(shardsCount=2, decodeResponses=True, noLog=False, moduleArgs="ts-topology-events no")
     if env.env != "oss-cluster":
