@@ -1,314 +1,44 @@
-name: Flow Linux
-
+name: MOD-20654 bounded original-image diagnostics
 on:
   workflow_dispatch:
-    inputs:
-      redis-ref:
-        description: 'Redis ref to checkout'
-        type: string
-        required: true
-      arch:
-        description: 'Architecture (x64 or arm64)'
-        type: string
-        required: true
-        default: 'x64'
-      os:
-        description: 'OS to build on (space-separated, e.g. "jammy noble resolute rocky10")'
-        type: string
-        required: false
-        default: ''
-      run_valgrind:
-        description: 'Run valgrind on the tests'
-        type: boolean
-        default: false
-      run_sanitizer:
-        description: 'Run sanitizer on the tests'
-        type: boolean
-        default: false
-      quick:
-        description: 'Run quick tests'
-        type: boolean
-        default: false
-      build_only:
-        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
-        type: boolean
-        default: false
-      use_prebuilt_images:
-        description: 'Pull prebuilt Docker images instead of building locally'
-        type: boolean
-        default: true
-      shard_topologies:
-        description: 'Run each test topology as a separate parallel job (one per topology)'
-        type: boolean
-        default: false
-      beta-version:
-        description: 'Beta version for S3 uploads'
-        type: string
-        required: false
-        default: ''
-  workflow_call:
-    inputs:
-      redis-ref:
-        description: 'Redis ref to checkout'
-        type: string
-        required: true
-      arch:
-        description: 'Architecture (x64 or arm64)'
-        type: string
-        required: true
-      os:
-        description: 'OS to build on (space-separated, e.g. "jammy noble resolute rocky10")'
-        type: string
-        required: false
-        default: ''
-      run_valgrind:
-        description: 'Run valgrind on the tests'
-        type: boolean
-        default: false
-      run_sanitizer:
-        description: 'Run sanitizer on the tests'
-        type: boolean
-        default: false
-      quick:
-        description: 'Run quick tests'
-        type: boolean
-        default: false
-      build_only:
-        description: 'Only build the module (compile smoke); skip tests, pack and S3 upload'
-        type: boolean
-        default: false
-      use_prebuilt_images:
-        description: 'Pull prebuilt Docker images instead of building locally'
-        type: boolean
-        default: true
-      shard_topologies:
-        description: 'Run each test topology as a separate parallel job (one per topology)'
-        type: boolean
-        default: false
-      beta-version:
-        description: 'Beta version for S3 uploads'
-        type: string
-        required: false
-        default: ''
-
+permissions:
+  contents: read
+  packages: read
 jobs:
-  setup-environment:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      redis-ref: ${{ steps.set-env.outputs.redis-ref }}
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      runner: ${{ steps.set-runner.outputs.runner }}
-      TAGGED: ${{ steps.set-env.outputs.TAGGED }}
-      TAG: ${{ steps.set-env.outputs.TAG }}
-      BRANCH: ${{ steps.set-env.outputs.BRANCH }}
-      TAG_OR_BRANCH: ${{ steps.set-env.outputs.TAG }}${{ steps.set-env.outputs.BRANCH }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: set env
-        id: set-env
-        uses: ./.github/actions/setup-env
-        with:
-          github-ref: ${{ github.ref }}
-          redis-ref: ${{ inputs.redis-ref }}
-      - name: Set runner
-        id: set-runner
-        env:
-          ARCH: ${{ inputs.arch }}
-        run: |
-          if [ "$ARCH" == "arm64" ]; then
-            echo "runner=ubuntu-24.04-arm" >> "$GITHUB_OUTPUT"
-          else
-            echo "runner=ubuntu-latest" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Set matrix
-        id: set-matrix
-        env:
-          ARCH: ${{ inputs.arch }}
-          OS_INPUT: ${{ inputs.os }}
-          QUICK: ${{ inputs.quick }}
-          RUN_VALGRIND: ${{ inputs.run_valgrind }}
-          RUN_SANITIZER: ${{ inputs.run_sanitizer }}
-          SHARD_TOPOLOGIES: ${{ inputs.shard_topologies }}
-        run: |
-          OS="$OS_INPUT"
-          if [ -z "${OS}" ]; then
-            if [ "$ARCH" == "arm64" ]; then
-              OS="focal jammy rocky9 azurelinux3 amazonlinux2023 alpine noble resolute rocky8 rocky10 alma8 alma9 alma10 bookworm trixie mariner2"
-            else
-              OS="focal jammy rocky8 rocky9 amazonlinux2 amazonlinux2023 mariner2 azurelinux3 alpine noble resolute rocky10 alma8 alma9 alma10 bookworm trixie"
-            fi
-          fi
-          # Convert space-separated list to JSON array.
-          # Valgrind, the sanitizer, and any explicitly sharded full run are slow,
-          # so instead of running all test topologies sequentially in one job we
-          # shard them across parallel runners (one topology per job). Only shard
-          # full runs: QUICK=1 forces GEN-only in tests.sh, so sharding a quick run
-          # would just duplicate the GEN topology. Non-sharded runs keep a single
-          # entry per OS.
-          MATRIX="["
-          read -r -a OS_LIST <<< "$OS"
-          if [ "$QUICK" != "true" ] && { [ "$RUN_VALGRIND" == "true" ] || [ "$RUN_SANITIZER" == "true" ] || [ "$SHARD_TOPOLOGIES" == "true" ]; }; then
-            for os in "${OS_LIST[@]}"; do
-              for topo in gen slaves aof aof_slaves oss_cluster tls_cluster; do
-                MATRIX="${MATRIX}{\"os\": \"${os}\", \"topo\": \"${topo}\"},"
-              done
-            done
-          else
-            for os in "${OS_LIST[@]}"; do
-              MATRIX="${MATRIX}{\"os\": \"${os}\"},"
-            done
-          fi
-          MATRIX="${MATRIX%,}]"
-          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
-          echo "Generated matrix for ${ARCH}: ${MATRIX}"
-
-  build-linux:
-    name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}, ${{ needs.setup-environment.outputs.redis-ref }}
-    runs-on: ${{ needs.setup-environment.outputs.runner }}
-    needs: setup-environment
-    permissions:
-      contents: read
-      packages: read
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: ${{ fromJson(needs.setup-environment.outputs.matrix) }}
+  reproduce:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
     env:
-      TAGGED: ${{ needs.setup-environment.outputs.TAGGED }}
-      VERSION: ${{ needs.setup-environment.outputs.TAG }}
-      BRANCH: ${{ needs.setup-environment.outputs.BRANCH }}
-      TAG_OR_BRANCH: ${{ needs.setup-environment.outputs.TAG_OR_BRANCH }}
-      REDIS_REF: ${{ needs.setup-environment.outputs.redis-ref }}
-      IMAGE_ARCH: ${{ inputs.arch == 'x64' && 'x86' || 'arm' }}
-      IMAGE_OS: ${{ inputs.run_sanitizer && format('{0}-sanitizer', matrix.platform.os) || inputs.run_valgrind && format('{0}-valgrind', matrix.platform.os) || matrix.platform.os }}
+      DIAGNOSTIC_IMAGE: ghcr.io/redistimeseries/redistimeseries/redistimeseries-x86-jammy-valgrind@sha256:727de92a09a3607d38862e804a2c28279e05c34c934ed2abe0e693bb3cb02af0
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
-          submodules: 'recursive'
-
-      - name: Set Docker Image
-        run: |
-          repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
-          image_tag="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
-          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-${IMAGE_ARCH}-${IMAGE_OS}:${image_tag}" >> "$GITHUB_ENV"
-
-      - name: Pull Docker Image
-        id: pull-image
-        if: ${{ inputs.use_prebuilt_images }}
-        continue-on-error: true
+          submodules: recursive
+      - name: Pull original CI image
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          echo "::notice title=Docker image::Trying to pull prebuilt image ${DOCKER_IMAGE}"
-          docker pull "${DOCKER_IMAGE}"
-
-      - name: Use Pulled Docker Image
-        if: ${{ inputs.use_prebuilt_images && steps.pull-image.outcome == 'success' }}
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker pull "$DIAGNOSTIC_IMAGE"
+          docker image inspect "$DIAGNOSTIC_IMAGE" --format '{{json .RepoDigests}}'
+      - name: Build and run original topology test
+        timeout-minutes: 10
         run: |
-          echo "::notice title=Docker image::Using pulled prebuilt image ${DOCKER_IMAGE}"
-
-      - name: Build Docker Image
-        if: ${{ !inputs.use_prebuilt_images || steps.pull-image.outcome == 'failure' }}
+          set -euo pipefail
+          docker run --rm --name mod20654-diagnostic --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
+            -v "$PWD:/workspace" -w /workspace "$DIAGNOSTIC_IMAGE" \
+            bash -c 'set -o pipefail; redis-server --version; valgrind --version; timeout 540 make test VG=1 SAN= QUICK=0 TEST_TIMEOUT=180 TEST=test_topology_events:test_add_and_remove_node GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=1 TLS_CLUSTER=0 2>&1 | tee /workspace/mod20654-diagnostic.log'
+      - name: Cleanup test container
+        if: always()
         run: |
-          if [ "${{ steps.pull-image.outcome }}" = "failure" ]; then
-            echo "::notice title=Docker image::Prebuilt image pull failed; building locally: ${DOCKER_IMAGE}"
-          else
-            echo "::notice title=Docker image::Building image locally because prebuilt images are disabled: ${DOCKER_IMAGE}"
-          fi
-          docker build \
-            -f Dockerfile.${{ matrix.platform.os }} \
-            --build-arg REDIS_REF=${{ env.REDIS_REF }} \
-            --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
-            --build-arg VALGRIND=${{ inputs.run_valgrind && '1' || '' }} \
-            -t "${DOCKER_IMAGE}" \
-            .
-
-      - name: Build module
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            -e SAN=${{ inputs.run_sanitizer && 'address' || '' }} \
-            "${DOCKER_IMAGE}" \
-            make build
-
-      - name: Run tests
-        if: ${{ !inputs.build_only }}
-        env:
-          TOPO: ${{ matrix.platform.topo }}
-        run: |
-          # Capture test output to file for parsing by capture-test-results action
-          # The workspace is mounted, so test_output.log will be accessible outside the container
-          #
-          # For valgrind shards (TOPO set) run exactly one test topology per job so
-          # the slow valgrind variants execute in parallel across runners. Empty
-          # TOPO keeps the default behaviour (QUICK selects the variants to run).
-          TOPO_ARGS=""
-          case "${TOPO}" in
-            gen)         TOPO_ARGS="GEN=1 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0 TLS_CLUSTER=0" ;;
-            slaves)      TOPO_ARGS="GEN=0 SLAVES=1 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0 TLS_CLUSTER=0" ;;
-            aof)         TOPO_ARGS="GEN=0 SLAVES=0 AOF=1 AOF_SLAVES=0 OSS_CLUSTER=0 TLS_CLUSTER=0" ;;
-            aof_slaves)  TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=1 OSS_CLUSTER=0 TLS_CLUSTER=0" ;;
-            oss_cluster) TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=1 TLS_CLUSTER=0" ;;
-            tls_cluster) TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0 TLS_CLUSTER=1" ;;
-          esac
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            --cap-add=SYS_PTRACE \
-            --security-opt seccomp=unconfined \
-            -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-            "${DOCKER_IMAGE}" \
-            bash -c "make test \
-              VG=${{ inputs.run_valgrind && '1' || '0' }} \
-              SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
-              QUICK=${{ inputs.quick && '1' || '0' }} \
-              ${TOPO_ARGS} 2>&1 | tee /workspace/test_output.log; exit \${PIPESTATUS[0]}"
-
-      - name: Fix test log permissions
-        if: ${{ always() && !inputs.build_only }}
-        run: |
-          sudo chown -R "$(id -u)":"$(id -g)" tests || true
-          sudo chmod -R a+rX tests || true
-          sudo chown "$(id -u)":"$(id -g)" test_output.log || true
-
-      - name: Capture test results
-        if: ${{ always() && !inputs.build_only }}
-        uses: ./.github/actions/capture-test-results
+          docker rm -f mod20654-diagnostic 2>/dev/null || true
+          test -z "$(docker ps -aq --filter name=mod20654-diagnostic)"
+      - uses: actions/upload-artifact@v6
+        if: always()
         with:
-          os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
-
-      - name: Upload test artifacts
-        if: ${{ failure() && !inputs.build_only }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
+          name: mod20654-original-x86-diagnostics
           path: |
-            tests/**/*.log
-
-      - name: Pack module
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            -e BRANCH=${{ env.BRANCH }} \
-            -e VERSION=${{ env.VERSION }} \
-            -e BETA_VERSION=${{ inputs.beta-version }} \
-            "${DOCKER_IMAGE}" \
-            make pack SHOW=1
-
-      - name: Upload artifacts to S3
-        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
-        uses: ./.github/actions/upload-artifacts-to-s3-without-make
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          github-ref: ${{ github.ref }}
-          osnick: ${{ matrix.platform.os }}
-          beta-version: ${{ inputs.beta-version }}
+            mod20654-diagnostic.log
+            tests/flow/logs/**
+          retention-days: 7
+          if-no-files-found: warn
