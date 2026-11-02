@@ -62,6 +62,7 @@ help() {
 		SLAVES=0|1            Replication tests on standalone Redis
 		AOF_SLAVES=0|1        AOF together SLAVES persistency tests on standalone Redis
 		OSS_CLUSTER=0|1       General tests on Redis OSS Cluster
+		TLS_CLUSTER=0|1       General tests on Redis OSS Cluster with TLS (tls-cluster yes)
 		SHARDS=n              Number of shards (default: 3)
 
 		QUICK=1               Perform only one test variant
@@ -453,6 +454,10 @@ PARALLEL=${PARALLEL:-1}
 # due to Python "Can't pickle local object" problem in RLTest
 [[ $OS == macos ]] && PARALLEL=0
 
+# run Valgrind serially: at --parallelism nproc the runner oversubscribes CPU
+# (redis-server is ~30x slower under Valgrind), starving shards past LibMR's max-idle
+[[ $VG == 1 ]] && PARALLEL=0
+
 [[ $EXT == 1 || $EXT == run || $BB == 1 || $GDB == 1 ]] && PARALLEL=0
 
 if [[ -n $PARALLEL && $PARALLEL != 0 ]]; then
@@ -536,12 +541,14 @@ if [[ $QUICK != 1 ]]; then
 	AOF=${AOF:-1}
 	AOF_SLAVES=${AOF_SLAVES:-1}
 	OSS_CLUSTER=${OSS_CLUSTER:-1}
+	TLS_CLUSTER=${TLS_CLUSTER:-1}
 else
 	GEN=1
 	SLAVES=0
 	AOF=0
 	AOF_SLAVES=0
 	OSS_CLUSTER=0
+	TLS_CLUSTER=0
 fi
 
 if [[ $RLEC == 1 ]]; then
@@ -550,6 +557,7 @@ if [[ $RLEC == 1 ]]; then
 	AOF=0
 	AOF_SLAVES=0
 	OSS_CLUSTER=0
+	TLS_CLUSTER=0
 fi
 
 #-------------------------------------------------------------------------------- Running tests
@@ -557,6 +565,14 @@ fi
 if [[ $CLEAR_LOGS != 0 ]]; then
 	rm -rf $HERE/logs
 fi
+
+# cluster-bus-port-protected-mode is rejected by a redis that does not have it,
+# and a rejected directive stops the server from starting. It exists in redis 8.12
+# and up, where it also defaults to enabled and so refuses an unauthenticated
+# cluster bus, and in the 8.2.10/8.4.7/8.6.7/8.8.3/8.10.2 backports, where it
+# defaults to disabled. Set CLUSTER_BUS_PROTECTED_MODE= to omit it for an older redis.
+CLUSTER_BUS_ARGS="--cluster_bus_port_protected_mode ${CLUSTER_BUS_PROTECTED_MODE-no}"
+[[ -z ${CLUSTER_BUS_PROTECTED_MODE-no} ]] && CLUSTER_BUS_ARGS=""
 
 E=0
 [[ $GEN == 1 ]]         && { (run_tests "general tests"); (( E |= $? )); } || true
@@ -566,16 +582,27 @@ E=0
 if [[ $OSS_CLUSTER == 1 ]]; then
 	RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000"
 	if [[ -z $TEST || $TEST != test_ts_password ]]; then
-		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS" \
+		{ (RLTEST_ARGS="${RLTEST_ARGS} --env oss-cluster --shards-count $SHARDS $CLUSTER_BUS_ARGS" \
 			run_tests "tests on OSS cluster"); (( E |= $? )); } || true
 	fi
 	if [[ -z $TEST || $TEST == test_ts_password* ]]; then
 		RLTEST_ARGS_1="$RLTEST_ARGS"
 		RLTEST_TEST_ARGS_1=" --test test_ts_password"
-		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password" \
+		{ (RLTEST_ARGS="${RLTEST_ARGS_1} --env oss-cluster --shards-count $SHARDS --oss_password password $CLUSTER_BUS_ARGS" \
 		   RLTEST_TEST_ARGS="$RLTEST_TEST_ARGS_1" \
 		   run_tests "tests on OSS cluster with password"); (( E |= $? )); } || true
 	fi
+fi
+
+if [[ $TLS_CLUSTER == 1 ]]; then
+	TLS_DIR=$HERE/tls
+	if [[ ! -f $TLS_DIR/redis.crt ]]; then
+		bash $HERE/generate_tls_certs.sh
+	fi
+	{ (RLTEST_ARGS="${RLTEST_ARGS} --cluster_node_timeout 60000 --env oss-cluster --shards-count $SHARDS \
+			--tls --tls-cert-file $TLS_DIR/redis.crt --tls-key-file $TLS_DIR/redis.key \
+			--tls-ca-cert-file $TLS_DIR/ca.crt --tls-passphrase foobar" \
+		run_tests "tests on OSS cluster with TLS"); (( E |= $? )); } || true
 fi
 
 if [[ $RLEC == 1 ]]; then

@@ -40,7 +40,10 @@ if [ -n "${VALGRIND}" ]; then
 fi
 # `install` builds `all` first, so a single invocation keeps the compiler flags
 # consistent and avoids a redundant rebuild.
-make SANITIZER=${SANITIZER:-} REDIS_CFLAGS="${REDIS_EXTRA_CFLAGS}" install -j$(nproc)
+# BUILD_TLS=yes so flow tests can exercise TLS (incl. tls-cluster) topologies;
+# TLS ports/certs are opt-in at runtime via redis.conf, so this is a no-op for
+# every other topology.
+make SANITIZER=${SANITIZER:-} REDIS_CFLAGS="${REDIS_EXTRA_CFLAGS}" BUILD_TLS=yes install -j$(nproc)
 cd ..
 
 echo "Redis installed successfully"

@@ -3,6 +3,7 @@ name: Event CI
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 on:
   pull_request:
@@ -24,7 +25,7 @@ jobs:
       - name: set env
         id: set-env
         run: |
-          echo "redis-ref=$(.install/get-redis-ref.sh)" >> $GITHUB_OUTPUT
+          echo "redis-ref=$(.install/get-redis-ref.sh)" >> "$GITHUB_OUTPUT"
   linter:
     uses: ./.github/workflows/flow-linter.yml
     secrets: inherit
@@ -39,6 +40,7 @@ jobs:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
+      use_prebuilt_images: ${{ !contains(github.event.pull_request.labels.*.name, 'docker-image-changes') }}
       shard_topologies: true
     secrets: inherit
   build-linux-arm64-full:
@@ -49,6 +51,7 @@ jobs:
       os: jammy
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
       quick: false
+      use_prebuilt_images: ${{ !contains(github.event.pull_request.labels.*.name, 'docker-image-changes') }}
       shard_topologies: true
     secrets: inherit
   # Remaining OSes are a small, toolchain-diverse compile-only smoke set
@@ -60,6 +63,7 @@ jobs:
       arch: x64
       os: alpine amazonlinux2 azurelinux3 rocky9
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      use_prebuilt_images: ${{ !contains(github.event.pull_request.labels.*.name, 'docker-image-changes') }}
       build_only: true
     secrets: inherit
   build-linux-arm64-smoke:
@@ -69,6 +73,7 @@ jobs:
       arch: arm64
       os: alpine amazonlinux2023 azurelinux3 rocky9
       redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      use_prebuilt_images: ${{ !contains(github.event.pull_request.labels.*.name, 'docker-image-changes') }}
       build_only: true
     secrets: inherit
   macos:
@@ -98,5 +103,19 @@ jobs:
       # this adds replication/AOF/cluster/LibMR ASAN coverage without raising
       # the overall PR wall-clock.
       quick: false
+      use_prebuilt_images: ${{ !contains(github.event.pull_request.labels.*.name, 'docker-image-changes') }}
       run_sanitizer: true
     secrets: inherit
+  # Code coverage (instrumented build + lcov -> Codecov). Runs on PRs too, so
+  # Codecov posts a per-PR diff-coverage comment. Skipped on draft PRs; toggle
+  # off via the repo variable ENABLE_CODE_COVERAGE='false'. Uploads require the
+  # CODECOV_TOKEN repo secret.
+  coverage:
+    if: ${{ vars.ENABLE_CODE_COVERAGE != 'false' && !github.event.pull_request.draft }}
+    uses: ./.github/workflows/flow-coverage.yml
+    needs: [prepare-values]
+    with:
+      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
+      test-config: QUICK=1
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

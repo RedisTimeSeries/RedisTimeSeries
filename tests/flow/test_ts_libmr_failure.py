@@ -26,7 +26,7 @@ def verifyClusterInitialized(env):
             nodes = res[4]
             allConnected = True
             for n in nodes:
-                status = n[17]
+                status = n[-1]
                 if status != b'connected' and status != b'uninitialized':
                     allConnected = False
             if not allConnected:
@@ -141,7 +141,7 @@ def test_libmr_topology_change_during_mrange():
     Uses DEBUG SLEEP on a remote shard to guarantee the MRANGE execution is in-flight (waiting
     for that shard's reply) when we fire REFRESHCLUSTER on the initiator shard.
     """
-    env = Env()
+    env = Env(moduleArgs="ts-topology-events no")
     if env.shardsCount < 3:
         env.skip()
     if not env.is_cluster():

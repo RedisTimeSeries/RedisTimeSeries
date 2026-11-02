@@ -5,6 +5,7 @@
 #include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "libmr_integration.h"
+#include "module.h"
 #include "query_language.h"
 #include "reply.h"
 #include "resultset.h"
@@ -131,8 +132,7 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
         nodesResultsType = r->recordType;
 
         if (r->recordType == GetSeriesListRecordType()) {
-            SeriesListRecord *record = (SeriesListRecord *)r;
-            nodesResults = array_append(nodesResults, record->seriesList);
+            nodesResults = array_append(nodesResults, r); // keep full record for numAggClasses
             continue;
         }
         if (r->recordType == GetStringListRecordType()) {
@@ -163,11 +163,24 @@ __error:
     return NULL;
 }
 
+// Build coordinator RangeArgs from the original args: open the time window so the coordinator
+// accepts all pre-aggregated buckets from shards, skip re-aggregation, and clear FILTERBY
+// (shards already applied it per-series before reducing).
+static RangeArgs RangeArgsSkipReAggregation(const RangeArgs *src) {
+    RangeArgs a = *src;
+    a.skipAggregation = true;
+    a.filterByValueArgs.hasValue = false;
+    a.filterByTSArgs.hasValue = false;
+    a.startTimestamp = 0;
+    a.endTimestamp = UINT64_MAX;
+    return a;
+}
+
 static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
     MRangeArgs *args = &data->args;
     RedisModuleBlockedClient *bc = data->bc;
 
-    ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
+    ARR(SeriesListRecord *) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
 
@@ -177,42 +190,58 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
         ResultSet_GroupbyLabel(resultset, args->groupByLabel);
     } else {
         size_t totalLen = 0;
-        array_foreach(nodesResults, seriesList, totalLen += array_len(seriesList));
+        array_foreach(nodesResults, record, {
+            size_t N = (record->numAggClasses > 1) ? record->numAggClasses : 1;
+            totalLen += array_len(record->seriesList) / N;
+        });
         ReplyWithMapOrArray(ctx, totalLen, false);
     }
 
-    array_foreach(nodesResults, seriesList, {
-        array_foreach(seriesList, s, {
-            if (args->groupByLabel)
-                ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
-            else
+    // Shards always apply FILTERBY (aggregation or not); the coordinator must not re-apply it.
+    RangeArgs coordArgs = RangeArgsSkipReAggregation(&args->rangeArgs);
+    const RangeArgs *replyArgs = &coordArgs;
+
+    array_foreach(nodesResults, record, {
+        ARR(Series *) sl = record->seriesList;
+        size_t numAggTypes = (record->numAggClasses > 1) ? record->numAggClasses : 1;
+        size_t numKeys = array_len(sl) / numAggTypes;
+        for (size_t k = 0; k < numKeys; k++) {
+            Series **group = &sl[k * numAggTypes];
+            if (args->groupByLabel) {
+                ResultSet_AddSeries(
+                    resultset, group[0], RedisModule_StringPtrLen(group[0]->keyName, NULL));
+            } else if (numAggTypes > 1) {
+                ReplyMultiAggSeriesGroup(ctx,
+                                         group,
+                                         numAggTypes,
+                                         args->withLabels,
+                                         args->limitLabels,
+                                         args->numLimitLabels,
+                                         replyArgs,
+                                         args->reverse);
+            } else {
                 ReplySeriesArrayPos(ctx,
-                                    s,
+                                    group[0],
                                     args->withLabels,
                                     args->limitLabels,
                                     args->numLimitLabels,
-                                    &args->rangeArgs,
+                                    replyArgs,
                                     args->reverse,
-                                    false);
-        });
+                                    false,
+                                    NULL,
+                                    NULL);
+            }
+        }
     });
 
     if (args->groupByLabel) {
-        // Apply the reducer
-        RangeArgs rangeArgs = args->rangeArgs;
+        // Apply the reducer on pre-aggregated data (agg already stripped in coordArgs)
+        RangeArgs rangeArgs = coordArgs;
         rangeArgs.latest = false; // we already handled the latest flag in the client side
         ResultSet_ApplyReducer(ctx, resultset, &rangeArgs, &args->groupByReducerArgs);
 
         // Do not apply the aggregation on the resultset, do apply max results on the final result
-        RangeArgs minimizedArgs = args->rangeArgs;
-        minimizedArgs.startTimestamp = 0;
-        minimizedArgs.endTimestamp = UINT64_MAX;
-        minimizedArgs.aggregationArgs.numClasses = 0;
-        minimizedArgs.aggregationArgs.classes = NULL;
-        minimizedArgs.aggregationArgs.timeDelta = 0;
-        minimizedArgs.filterByTSArgs.hasValue = false;
-        minimizedArgs.filterByValueArgs.hasValue = false;
-        minimizedArgs.latest = false;
+        RangeArgs minimizedArgs = RangeArgs_ZeroProcessing(&coordArgs);
 
         replyResultSet(ctx,
                        resultset,
@@ -247,20 +276,12 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
         resultset = ResultSet_Create();
         ResultSet_GroupbyLabel(resultset, data->args.groupByLabel);
     } else {
-        size_t total_len = 0;
-        for (int i = 0; i < len; i++) {
-            Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-            if (raw_listRecord->recordType != GetListRecordType()) {
-                RedisModule_Log(ctx,
-                                "warning",
-                                "Unexpected record type: %s",
-                                raw_listRecord->recordType->type.type);
-                continue;
-            }
-            total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
-        }
-        ReplyWithMapOrArray(ctx, total_len, false);
+        // ponytail: postponed length — EXCLUDEEMPTY may skip series, so the real
+        // count is only known after emission (see ReplySetMapOrArrayLength below).
+        ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     }
+
+    long long replylen = 0;
 
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
@@ -282,6 +303,15 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
             tempSeries = array_append(tempSeries, s);
 
+            EnrichedChunk *first_chunk = NULL;
+            AbstractIterator *probe = NULL;
+            if (data->args.excludeEmpty) {
+                probe = SeriesQueryIfNonEmpty(
+                    s, &data->args.rangeArgs, data->args.reverse, &first_chunk);
+                if (!probe)
+                    continue;
+            }
+
             if (data->args.groupByLabel) {
                 ResultSet_AddSeries(resultset, s, RedisModule_StringPtrLen(s->keyName, NULL));
             } else {
@@ -292,9 +322,16 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
                                     data->args.numLimitLabels,
                                     &data->args.rangeArgs,
                                     data->args.reverse,
-                                    false);
+                                    false,
+                                    probe,
+                                    first_chunk);
+                replylen++;
             }
         }
+    }
+
+    if (!data->args.groupByLabel) {
+        ReplySetMapOrArrayLength(ctx, replylen, false);
     }
 
     if (data->args.groupByLabel) {
@@ -354,14 +391,14 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
 static void mget_done_internal(ExecutionCtx *eCtx,
                                RedisModuleCtx *ctx,
                                RedisModuleBlockedClient *bc) {
-    ARR(ARR(Series *)) nodesResults = collect_node_results(eCtx, ctx);
+    ARR(SeriesListRecord *) nodesResults = collect_node_results(eCtx, ctx);
     if (!nodesResults)
         goto __done;
 
     ReplyWithMapOrArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN, false);
     size_t len = 0;
-    array_foreach(nodesResults, seriesList, {
-        array_foreach(seriesList, s, {
+    array_foreach(nodesResults, record, {
+        array_foreach(record->seriesList, s, {
             if (!_ReplyMap(ctx))
                 RedisModule_ReplyWithArray(ctx, 3); // name, labels, sample
             RedisModule_ReplyWithString(ctx, s->keyName);
@@ -519,7 +556,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return REDISMODULE_ERR;
     }
 
-    QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
@@ -539,6 +576,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     queryArg->resp3 = _ReplyMap(ctx);
     queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->numAggClasses = 0;
 
     MRError *err = NULL;
 
@@ -583,14 +621,18 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
     args.reverse = reverse;
 
-    QueryPredicates_Arg *queryArg = malloc(sizeof *queryArg);
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = args.queryPredicates->count;
     queryArg->startTimestamp = args.rangeArgs.startTimestamp;
     queryArg->endTimestamp = args.rangeArgs.endTimestamp;
     queryArg->latest = args.rangeArgs.latest;
-    args.queryPredicates->ref++;
+    // Atomic even though this call site is main-thread-only: LibMR's own Duplicate/ObjectFree
+    // step-arg callbacks (QueryPredicates_Duplicate/QueryPredicates_ObjectFree) touch this same
+    // ref from their own execution threads over the object's life, so every mutation site has
+    // to stay atomic for the count to be consistent (see QueryPredicateList_Free in indexer.c).
+    __atomic_add_fetch(&args.queryPredicates->ref, 1, __ATOMIC_RELAXED);
     queryArg->predicates = args.queryPredicates;
     queryArg->withLabels = args.withLabels;
     queryArg->limitLabelsSize = args.numLimitLabels;
@@ -603,6 +645,24 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     }
 
     queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->excludeEmpty = args.excludeEmpty;
+    // Always send FILTERBY to shards; they apply it regardless of aggregation.
+    queryArg->filterByValueArgs = args.rangeArgs.filterByValueArgs;
+    queryArg->filterByTSArgs = args.rangeArgs.filterByTSArgs;
+    // Push aggregation to every shard for all cases (single-agg and multi-agg).
+    // Multi-agg + GROUPBY is rejected at parse time, so no special case is needed.
+    if (args.rangeArgs.aggregationArgs.numClasses > 0) {
+        queryArg->numAggClasses = args.rangeArgs.aggregationArgs.numClasses;
+        for (size_t i = 0; i < args.rangeArgs.aggregationArgs.numClasses; i++)
+            queryArg->aggTypes[i] = args.rangeArgs.aggregationArgs.classes[i]->type;
+        queryArg->aggTimeDelta = args.rangeArgs.aggregationArgs.timeDelta;
+        queryArg->aggBucketTS = args.rangeArgs.aggregationArgs.bucketTS;
+        queryArg->aggEmpty = args.rangeArgs.aggregationArgs.empty;
+        queryArg->alignment = args.rangeArgs.alignment;
+        queryArg->timestampAlignment = args.rangeArgs.timestampAlignment;
+    } else {
+        queryArg->numAggClasses = 0;
+    }
 
     MRError *err = NULL;
 
@@ -635,6 +695,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
     MRangeData *data = malloc(sizeof(struct MRangeData)); // freed by mrange_done
     data->bc = bc;
     data->args = args;
+
     MR_ExecutionSetOnDoneHandler(exec, mrange_done, data);
 
     MR_Run(exec);
@@ -644,20 +705,20 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
 }
 
 int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
-    QueryPredicates_Arg *queryArg = malloc(sizeof(QueryPredicates_Arg));
+    QueryPredicates_Arg *queryArg = calloc(1, sizeof(QueryPredicates_Arg));
     queryArg->shouldReturnNull = false;
     queryArg->refCount = 1;
     queryArg->count = queries->count;
     queryArg->startTimestamp = 0;
     queryArg->endTimestamp = 0;
-    queries->ref++;
+    __atomic_add_fetch(&queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
     queryArg->predicates = queries;
     queryArg->withLabels = false;
     queryArg->limitLabelsSize = 0;
     queryArg->limitLabels = NULL;
     queryArg->resp3 = _ReplySet(ctx);
-
     queryArg->userName = CopyCurrentUserName(ctx);
+    queryArg->numAggClasses = 0;
 
     MRError *err = NULL;
 
@@ -688,6 +749,130 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
 
     RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
     MR_ExecutionSetOnDoneHandler(exec, queryindex_done, bc);
+
+    MR_Run(exec);
+    MR_FreeExecution(exec);
+    MR_FreeExecutionBuilder(builder);
+    return REDISMODULE_OK;
+}
+
+static void querylabels_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
+    for (size_t i = 0; i < len; i++) {
+        Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
+        if (raw_listRecord->recordType != GetListRecordType()) {
+            RedisModule_Log(ctx,
+                            "warning",
+                            "Unexpected record type: %s",
+                            raw_listRecord->recordType->type.type);
+            continue;
+        }
+        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        for (size_t j = 0; j < list_len; j++) {
+            StringRecord *sr =
+                (StringRecord *)ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            RedisModule_DictSetC(agg, sr->str, sr->len, NULL);
+        }
+    }
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
+static void querylabels_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
+    ARR(ARR(RedisModuleString *)) nodesResults = collect_node_results(eCtx, ctx);
+    if (!nodesResults) {
+        return;
+    }
+
+    RedisModuleDict *agg = RedisModule_CreateDict(NULL);
+    array_foreach(nodesResults, stringList, {
+        array_foreach(stringList, s, { RedisModule_DictSet(agg, s, NULL); });
+    });
+    array_free(nodesResults);
+
+    ReplyWithKeySetFromDict(ctx, agg);
+    RedisModule_FreeDict(NULL, agg);
+}
+
+static void querylabels_done(ExecutionCtx *eCtx, void *privateData) {
+    RedisModuleBlockedClient *bc = privateData;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
+
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS:
+            querylabels_done_gears(eCtx, ctx);
+            break;
+        case LIBMR_PROTOCOL_INTERNAL:
+            querylabels_done_internal(eCtx, ctx);
+            break;
+        default:
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+    }
+
+    RTS_UnblockClient(bc, ctx);
+}
+
+int TSDB_querylabels_MR(RedisModuleCtx *ctx,
+                        QueryLabelsSubtype subtype,
+                        RedisModuleString *label,
+                        QueryPredicateList *queries) {
+    QueryLabelsArg *queryArg = calloc(1, sizeof(QueryLabelsArg));
+    queryArg->shouldReturnNull = false;
+    queryArg->refCount = 1;
+    queryArg->subtype = subtype;
+    queryArg->userName = CopyCurrentUserName(ctx);
+    if (label != NULL) {
+        queryArg->label = RedisModule_CreateStringFromString(NULL, label);
+    }
+    if (queries != NULL) {
+        __atomic_add_fetch(
+            &queries->ref, 1, __ATOMIC_RELAXED); // see rationale in TSDB_mrange_MR above
+        queryArg->predicates = queries;
+        queryArg->hasFilter = true;
+    }
+
+    ExecutionBuilder *builder = NULL;
+    switch (TSGlobalConfig.libmrProtocol) {
+        case LIBMR_PROTOCOL_GEARS: {
+            builder = MR_CreateExecutionBuilder("ShardQuerylabelsMapper", queryArg);
+            MR_ExecutionBuilderCollect(builder);
+            break;
+        }
+        case LIBMR_PROTOCOL_INTERNAL: {
+            builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
+            MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYLABELS", queryArg);
+            break;
+        }
+        default: {
+            RedisModule_ReplyWithError(ctx, "Unknown LibMR protocol");
+            return REDISMODULE_OK;
+        }
+    }
+
+    MRError *err = NULL;
+    Execution *exec = MR_CreateExecution(builder, &err);
+    if (err) {
+        RedisModule_ReplyWithError(ctx, MR_ErrorGetMessage(err));
+        // MR_CreateExecution always allocates and returns exec, even on error (it copies
+        // and dups every step's args before checking the error) - free it or exec plus its
+        // duplicated QueryLabelsArg reference leak on every failed call. That only drops
+        // the execution's dup'd reference though - also drop our own original reference
+        // (which in turn releases the extra QueryPredicateList ref taken above for FILTER).
+        MR_FreeExecution(exec);
+        QueryLabelsArg_ObjectFree(queryArg);
+        MR_FreeExecutionBuilder(builder);
+        return REDISMODULE_OK;
+    }
+
+    RedisModuleBlockedClient *bc = RTS_BlockClient(ctx, rts_free_rctx);
+    MR_ExecutionSetOnDoneHandler(exec, querylabels_done, bc);
 
     MR_Run(exec);
     MR_FreeExecution(exec);

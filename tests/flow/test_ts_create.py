@@ -47,6 +47,15 @@ def test_create_params():
             assert r.execute_command('TS.CREATE', 'a')  # filter exists
 
 
+def test_oversized_duplicate_policy_does_not_crash_server():
+    with Env().getClusterConnectionIfNeeded() as r:
+        oversized_policy = b'A' * (9 * 1024 * 1024)
+        with pytest.raises(redis.ResponseError):
+            r.execute_command('TS.CREATE', 'oversized-policy',
+                              'DUPLICATE_POLICY', oversized_policy)
+        assert r.ping()
+
+
 def test_create_retention():
     with Env().getClusterConnectionIfNeeded() as r:
         assert r.execute_command('TS.CREATE', 'tester', 'RETENTION', 1000)

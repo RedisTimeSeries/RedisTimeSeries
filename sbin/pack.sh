@@ -278,12 +278,6 @@ pack_deps() {
 NUMVER="$(NUMERIC=1 $SBIN/getver)"
 SEMVER="$($SBIN/getver)"
 
-# Override SEMVER with BETA_VERSION if provided (for nightly builds)
-if [[ -n $BETA_VERSION ]]; then
-	SEMVER="$BETA_VERSION"
-	echo "# Using beta version: $BETA_VERSION"
-fi
-
 if [[ -n $VARIANT ]]; then
 	_VARIANT="-${VARIANT}"
 fi
@@ -317,8 +311,9 @@ if [[ $WITH_GITSHA == 1 ]]; then
 fi
 
 if [[ -n $BETA_VERSION ]]; then
-	BETA_SUFFIX=$(echo "$BETA_VERSION" | cut -d'.' -f4,5,6)
-	BRANCH="${BRANCH}.${BETA_SUFFIX}"
+	SEMVER=${BETA_VERSION//[^A-Za-z0-9._-]/_}
+	BRANCH="$SEMVER"
+	echo "# Using beta version: $SEMVER"
 fi
 
 #----------------------------------------------------------------------------------------------

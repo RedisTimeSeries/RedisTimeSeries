@@ -109,8 +109,16 @@ void GroupList_ReplyResultSet(RedisModuleCtx *ctx,
                               const RangeArgs *args,
                               bool rev) {
     for (int i = 0; i < group->count; i++) {
-        ReplySeriesArrayPos(
-            ctx, group->list[i], withlabels, limitLabels, limitLabelsSize, args, rev, true);
+        ReplySeriesArrayPos(ctx,
+                            group->list[i],
+                            withlabels,
+                            limitLabels,
+                            limitLabelsSize,
+                            args,
+                            rev,
+                            true,
+                            NULL,
+                            NULL);
     }
 }
 

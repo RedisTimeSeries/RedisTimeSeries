@@ -61,7 +61,7 @@ runs:
           echo ::group::upload production release
             REF="${{ inputs.github-ref }}"
             PATTERN="refs/tags/v[0-9]+.*"
-            if [[ $REF =~ $PATTERN ]]; then
+            if [[ -z "${{ inputs.beta-version }}" && $REF =~ $PATTERN ]]; then
               echo "This is a tagged build"
               RELEASE=1 SHOW=1 VERBOSE=1 ./sbin/upload-artifacts
             fi

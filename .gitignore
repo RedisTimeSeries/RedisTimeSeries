@@ -26,8 +26,9 @@ wordlist.dic
 /1/
 *.clangd
 compile_commands.json
-
+tags
 .venv
 redis/
 temp-redis-config*
 .prepared
+/tests/flow/tls/

@@ -5,6 +5,14 @@ endif
 
 ROOT=.
 
+# Homebrew's unversioned openssl alias tracks the latest major release, while
+# RedisTimeSeries currently builds against openssl@4. Resolve the versioned
+# formula explicitly and export it for the hiredis, LibMR, and libevent builds.
+ifeq ($(shell uname -s),Darwin)
+openssl_prefix ?= $(shell brew --prefix openssl@4)
+export openssl_prefix
+endif
+
 # Standalone `make bootstrap` on a host with no python3 yet: skip Readies (which
 # errors during Makefile parse) and run install_script.sh first. The
 # installer detects OSNICK, installs system packages via .install/os/<osnick>.sh,
@@ -14,10 +22,19 @@ override ROOT:=$(shell cd $(ROOT) && pwd)
 INSTALL_SCRIPT_MODE ?= $(if $(filter Linux,$(shell uname -s)),sudo,)
 
 bootstrap:
+ifeq ($(filter list,$(MAKECMDGOALS)),list)
+	@cd $(ROOT)/.install && CHECK_DEPS=1 ./install_script.sh $(INSTALL_SCRIPT_MODE)
+else ifeq ($(filter dry-run,$(MAKECMDGOALS)),dry-run)
+	@cd $(ROOT)/.install && DRY_RUN=1 ./install_script.sh $(INSTALL_SCRIPT_MODE)
+else
 	@rm -rf $(ROOT)/venv
 	@cd $(ROOT)/.install && ./install_script.sh $(INSTALL_SCRIPT_MODE)
+endif
 
-.PHONY: bootstrap
+list: ; @:
+dry-run: ; @:
+
+.PHONY: bootstrap list dry-run
 
 else
 
@@ -93,6 +110,7 @@ make flow_tests    # run tests
   SLAVES=1         # run replication tests on standalone Redis topology
   AOF_SLAVES=1     # run AND and replication tests on standalone Redis topology
   OSS_CLUSTER=1    # run general tests on an OSS Cluster topology
+  TLS_CLUSTER=1    # run general tests on an OSS Cluster topology with TLS (tls-cluster yes)
   SHARDS=num       # run OSS cluster with `num` shards (default: 3)
   RLEC=1           # flow tests on RLEC
   COV=1            # perform coverage analysis
@@ -431,12 +449,17 @@ export AOF_SLAVES ?= 1
 export OSS_CLUSTER ?= 1
 endif
 
+# TLS_CLUSTER is opt-in only (needs a TLS-capable redis-server build + certs),
+# so it stays out of the QUICK/default variant set above.
+export TLS_CLUSTER ?= 0
+
 ifneq ($(RLEC),1)
 
 flow_tests: #$(TARGET)
 	$(SHOW)\
 	MODULE=$(realpath $(TARGET)) \
 	GEN=$(GEN) AOF=$(AOF) SLAVES=$(SLAVES) AOF_SLAVES=$(AOF_SLAVES) OSS_CLUSTER=$(OSS_CLUSTER) \
+	TLS_CLUSTER=$(TLS_CLUSTER) \
 	VALGRIND=$(VALGRIND) \
 	TEST=$(TEST) \
 	$(ROOT)/tests/flow/tests.sh

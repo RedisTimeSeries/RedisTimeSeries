@@ -57,7 +57,7 @@ MU_TEST(test_ts_create_command_info_structure) {
 MU_TEST(test_ts_createrule_command_info_structure) {
     // Test that TS_CREATERULE_INFO has correct basic properties
     mu_check(TS_CREATERULE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
-    mu_check(TS_CREATERULE_INFO.arity == -5); // At least 5 arguments: TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
+    mu_check(TS_CREATERULE_INFO.arity == -6); // At least 6 arguments: TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
     mu_check(TS_CREATERULE_INFO.since != NULL);
     mu_check(strcmp(TS_CREATERULE_INFO.since, "1.0.0") == 0);
     mu_check(TS_CREATERULE_INFO.summary != NULL);
@@ -458,6 +458,93 @@ MU_TEST(test_ts_queryindex_command_info_structure) {
     mu_check(strstr(TS_QUERYINDEX_INFO.complexity, "time-series that match") != NULL);
 }
 
+// Test that TS.QUERYLABELS command info is properly structured
+MU_TEST(test_ts_querylabels_command_info_structure) {
+    // Test that TS_QUERYLABELS_INFO has correct basic properties
+    mu_check(TS_QUERYLABELS_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_QUERYLABELS_INFO.arity == -2); // At least 2 arguments: TS.QUERYLABELS LABELS|VALUES
+    mu_check(TS_QUERYLABELS_INFO.since != NULL);
+    mu_check(strcmp(TS_QUERYLABELS_INFO.since, "8.10.0") == 0);
+    mu_check(TS_QUERYLABELS_INFO.summary != NULL);
+    mu_check(strstr(TS_QUERYLABELS_INFO.summary, "Get all label names") != NULL);
+    mu_check(strstr(TS_QUERYLABELS_INFO.summary, "all values of a given label") != NULL);
+    mu_check(TS_QUERYLABELS_INFO.complexity != NULL);
+    mu_check(strstr(TS_QUERYLABELS_INFO.complexity, "O(n)") != NULL);
+    mu_check(strstr(TS_QUERYLABELS_INFO.complexity, "time-series that match") != NULL);
+    // Multi-series command: routed by fan-out, so it carries no key specs
+    mu_check(TS_QUERYLABELS_INFO.key_specs == NULL);
+    mu_check(TS_QUERYLABELS_INFO.args != NULL);
+}
+
+// Test that TS.QUERYLABELS arguments are properly defined:
+//   TS.QUERYLABELS <LABELS | VALUES label> [FILTER filterExpr...]
+MU_TEST(test_querylabels_command_arguments) {
+    // First arg is the subtype selector: a oneof of LABELS | VALUES <label>
+    mu_check(strcmp(TS_QUERYLABELS_ARGS[0].name, "subtype") == 0);
+    mu_check(TS_QUERYLABELS_ARGS[0].type == REDISMODULE_ARG_TYPE_ONEOF);
+
+    const RedisModuleCommandArg *subtype_opts = TS_QUERYLABELS_ARGS[0].subargs;
+    mu_check(subtype_opts != NULL);
+
+    int found_labels = 0, found_values = 0;
+    for (int i = 0; subtype_opts[i].name != NULL; i++) {
+        if (strcmp(subtype_opts[i].name, "LABELS") == 0) {
+            found_labels = 1;
+            mu_check(subtype_opts[i].type == REDISMODULE_ARG_TYPE_PURE_TOKEN);
+        }
+        if (strcmp(subtype_opts[i].name, "VALUES") == 0) {
+            found_values = 1;
+            mu_check(subtype_opts[i].type == REDISMODULE_ARG_TYPE_BLOCK);
+
+            // The VALUES branch carries the VALUES token plus a label argument
+            const RedisModuleCommandArg *values_args = subtype_opts[i].subargs;
+            mu_check(values_args != NULL);
+            int found_values_token = 0, found_label = 0;
+            for (int j = 0; values_args[j].name != NULL; j++) {
+                if (strcmp(values_args[j].name, "VALUES") == 0) {
+                    found_values_token = 1;
+                    mu_check(values_args[j].type == REDISMODULE_ARG_TYPE_PURE_TOKEN);
+                }
+                if (strcmp(values_args[j].name, "label") == 0) {
+                    found_label = 1;
+                    mu_check(values_args[j].type == REDISMODULE_ARG_TYPE_STRING);
+                }
+            }
+            mu_check(found_values_token && found_label);
+        }
+    }
+    mu_check(found_labels && found_values);
+
+    // Second arg is an OPTIONAL FILTER block holding multiple filter expressions
+    // (unlike TS.MRANGE/TS.MGET, where FILTER is required)
+    int found_filter = 0;
+    for (int i = 0; TS_QUERYLABELS_ARGS[i].name != NULL; i++) {
+        if (strcmp(TS_QUERYLABELS_ARGS[i].name, "FILTER") == 0) {
+            found_filter = 1;
+            mu_check(TS_QUERYLABELS_ARGS[i].type == REDISMODULE_ARG_TYPE_BLOCK);
+            mu_check(TS_QUERYLABELS_ARGS[i].flags & REDISMODULE_CMD_ARG_OPTIONAL);
+
+            const RedisModuleCommandArg *filter_subargs = TS_QUERYLABELS_ARGS[i].subargs;
+            mu_check(filter_subargs != NULL);
+            int found_filter_token = 0, found_filter_expr = 0;
+            for (int j = 0; filter_subargs[j].name != NULL; j++) {
+                if (strcmp(filter_subargs[j].name, "FILTER") == 0) {
+                    found_filter_token = 1;
+                    mu_check(filter_subargs[j].type == REDISMODULE_ARG_TYPE_PURE_TOKEN);
+                }
+                if (strcmp(filter_subargs[j].name, "filterExpr") == 0) {
+                    found_filter_expr = 1;
+                    mu_check(filter_subargs[j].type == REDISMODULE_ARG_TYPE_STRING);
+                    mu_check(filter_subargs[j].flags & REDISMODULE_CMD_ARG_MULTIPLE);
+                }
+            }
+            mu_check(found_filter_token && found_filter_expr);
+            break;
+        }
+    }
+    mu_check(found_filter);
+}
+
 // Test that TS.INFO command info is properly structured
 MU_TEST(test_ts_info_command_info_structure) {
     // Test that TS_INFO_INFO has correct basic properties
@@ -651,6 +738,86 @@ MU_TEST(test_mrange_aggregation_options) {
     mu_check(found_aggregation);
 }
 
+// Test that TS.GET command info is properly structured
+MU_TEST(test_ts_get_command_info_structure) {
+    mu_check(TS_GET_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_GET_INFO.arity == -2); // At least 2 arguments: TS.GET key [LATEST]
+    mu_check(TS_GET_INFO.since != NULL);
+    mu_check(strcmp(TS_GET_INFO.since, "1.0.0") == 0);
+    mu_check(TS_GET_INFO.summary != NULL);
+    mu_check(strstr(TS_GET_INFO.summary, "Get the sample with the highest timestamp") != NULL);
+    mu_check(TS_GET_INFO.complexity != NULL);
+    mu_check(strstr(TS_GET_INFO.complexity, "O(1)") != NULL);
+    mu_check(TS_GET_INFO.key_specs != NULL);
+}
+
+// Test that TS.DEL command info is properly structured
+MU_TEST(test_ts_del_command_info_structure) {
+    mu_check(TS_DEL_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_DEL_INFO.arity == 4); // Exactly 4: TS.DEL key fromTimestamp toTimestamp
+    mu_check(TS_DEL_INFO.since != NULL);
+    mu_check(strcmp(TS_DEL_INFO.since, "1.6.0") == 0);
+    mu_check(TS_DEL_INFO.summary != NULL);
+    mu_check(strstr(TS_DEL_INFO.summary, "Delete all samples") != NULL);
+    mu_check(TS_DEL_INFO.complexity != NULL);
+    mu_check(strstr(TS_DEL_INFO.complexity, "O(N)") != NULL);
+    mu_check(TS_DEL_INFO.key_specs != NULL);
+}
+
+// Test that TS.DELETERULE command info is properly structured
+MU_TEST(test_ts_deleterule_command_info_structure) {
+    mu_check(TS_DELETERULE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_DELETERULE_INFO.arity == 3); // Exactly 3: TS.DELETERULE sourceKey destKey
+    mu_check(TS_DELETERULE_INFO.since != NULL);
+    mu_check(strcmp(TS_DELETERULE_INFO.since, "1.0.0") == 0);
+    mu_check(TS_DELETERULE_INFO.summary != NULL);
+    mu_check(strstr(TS_DELETERULE_INFO.summary, "Delete a compaction rule") != NULL);
+    mu_check(TS_DELETERULE_INFO.complexity != NULL);
+    mu_check(strstr(TS_DELETERULE_INFO.complexity, "O(1)") != NULL);
+    mu_check(TS_DELETERULE_INFO.key_specs != NULL);
+}
+
+// Test that TS.READ command info is properly structured
+MU_TEST(test_ts_read_command_info_structure) {
+    mu_check(TS_READ_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_READ_INFO.arity == -3); // At least 3 arguments: TS.READ key timestamp ...
+    mu_check(TS_READ_INFO.since != NULL);
+    mu_check(strcmp(TS_READ_INFO.since, "8.10.0") == 0);
+    mu_check(TS_READ_INFO.summary != NULL);
+    mu_check(strstr(TS_READ_INFO.summary, "Read:") != NULL);
+    mu_check(TS_READ_INFO.complexity != NULL);
+    mu_check(strstr(TS_READ_INFO.complexity, "O(log(n)+k)") != NULL);
+    mu_check(TS_READ_INFO.key_specs != NULL);
+}
+
+// Test that TS.NRANGE command info is properly structured
+MU_TEST(test_ts_nrange_command_info_structure) {
+    mu_check(TS_NRANGE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_NRANGE_INFO.arity == -5); // At least 5: TS.NRANGE numkeys key ... fromTimestamp toTimestamp
+    mu_check(TS_NRANGE_INFO.since != NULL);
+    mu_check(strcmp(TS_NRANGE_INFO.since, "8.10.0") == 0);
+    mu_check(TS_NRANGE_INFO.summary != NULL);
+    mu_check(strstr(TS_NRANGE_INFO.summary, "Query a range across multiple time series") != NULL);
+    mu_check(strstr(TS_NRANGE_INFO.summary, "forward direction") != NULL);
+    mu_check(TS_NRANGE_INFO.complexity != NULL);
+    mu_check(strstr(TS_NRANGE_INFO.complexity, "O(numkeys*(n/m+k))") != NULL);
+    mu_check(TS_NRANGE_INFO.key_specs != NULL);
+}
+
+// Test that TS.NREVRANGE command info is properly structured
+MU_TEST(test_ts_nrevrange_command_info_structure) {
+    mu_check(TS_NREVRANGE_INFO.version == REDISMODULE_COMMAND_INFO_VERSION);
+    mu_check(TS_NREVRANGE_INFO.arity == -5); // At least 5: TS.NREVRANGE numkeys key ... fromTimestamp toTimestamp
+    mu_check(TS_NREVRANGE_INFO.since != NULL);
+    mu_check(strcmp(TS_NREVRANGE_INFO.since, "8.10.0") == 0);
+    mu_check(TS_NREVRANGE_INFO.summary != NULL);
+    mu_check(strstr(TS_NREVRANGE_INFO.summary, "Query a range across multiple time series") != NULL);
+    mu_check(strstr(TS_NREVRANGE_INFO.summary, "reverse direction") != NULL);
+    mu_check(TS_NREVRANGE_INFO.complexity != NULL);
+    mu_check(strstr(TS_NREVRANGE_INFO.complexity, "O(numkeys*(n/m+k))") != NULL);
+    mu_check(TS_NREVRANGE_INFO.key_specs != NULL);
+}
+
 MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_add_command_info_structure);
     MU_RUN_TEST(test_ts_alter_command_info_structure);
@@ -661,11 +828,19 @@ MU_TEST_SUITE(command_info_test_suite) {
     MU_RUN_TEST(test_ts_range_command_info_structure);
     MU_RUN_TEST(test_ts_revrange_command_info_structure);
     MU_RUN_TEST(test_ts_queryindex_command_info_structure);
+    MU_RUN_TEST(test_ts_querylabels_command_info_structure);
+    MU_RUN_TEST(test_querylabels_command_arguments);
     MU_RUN_TEST(test_ts_info_command_info_structure);
     MU_RUN_TEST(test_ts_madd_command_info_structure);
     MU_RUN_TEST(test_ts_mget_command_info_structure);
     MU_RUN_TEST(test_ts_mrange_command_info_structure);
     MU_RUN_TEST(test_ts_mrevrange_command_info_structure);
+    MU_RUN_TEST(test_ts_get_command_info_structure);
+    MU_RUN_TEST(test_ts_del_command_info_structure);
+    MU_RUN_TEST(test_ts_deleterule_command_info_structure);
+    MU_RUN_TEST(test_ts_read_command_info_structure);
+    MU_RUN_TEST(test_ts_nrange_command_info_structure);
+    MU_RUN_TEST(test_ts_nrevrange_command_info_structure);
     MU_RUN_TEST(test_command_key_specs);
     MU_RUN_TEST(test_command_arguments);
     MU_RUN_TEST(test_mrange_command_arguments);

@@ -609,7 +609,7 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
     } else {
         SeriesUpsertSample(destSeries, start, val, DP_LAST);
     }
-    // Wake any TS.BGET waiters parked on the destination key, so a
+    // Wake any TS.READ waiters parked on the destination key, so a
     // compaction-rule bucket landing here triggers them just like a direct
     // write would.
     RedisModule_SignalKeyAsReady(ctx, rule->destKey);
@@ -1406,7 +1406,7 @@ AbstractIterator *SeriesQuery(Series *series,
             break;
     }
 
-    if (args->aggregationArgs.numClasses > 0) {
+    if (args->aggregationArgs.numClasses > 0 && !args->skipAggregation) {
         chain = (AbstractIterator *)AggregationIterator_New(chain,
                                                             args->aggregationArgs.numClasses,
                                                             args->aggregationArgs.classes,

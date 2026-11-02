@@ -624,7 +624,10 @@ static const RedisModuleCommandInfo TS_CREATERULE_INFO = {
     .summary = "Create a compaction rule",
     .complexity = "O(1)",
     .since = "1.0.0",
-    .arity = -5,
+    // TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration
+    // [alignTimestamp] -- 6 tokens minimum, matching the argc != 6 && argc != 7
+    // check in TSDB_createRule
+    .arity = -6,
     .key_specs = (RedisModuleCommandKeySpec *)TS_CREATERULE_KEYSPECS,
     .args = (RedisModuleCommandArg *)TS_CREATERULE_ARGS,
 };
@@ -723,9 +726,9 @@ static const RedisModuleCommandInfo TS_GET_INFO = {
 };
 
 // ===============================
-// TS.BGET key timestamp timeout [MIN_COUNT min_count] [MAX_COUNT max_count]
+// TS.READ key timestamp [BLOCK milliseconds min_count] [MAX_COUNT max_count]
 // ===============================
-static const RedisModuleCommandKeySpec TS_BGET_KEYSPECS[] = {
+static const RedisModuleCommandKeySpec TS_READ_KEYSPECS[] = {
     { .flags = REDISMODULE_CMD_KEY_RO,
       .begin_search_type = REDISMODULE_KSPEC_BS_INDEX,
       .bs.index = { .pos = 1 },
@@ -734,16 +737,16 @@ static const RedisModuleCommandKeySpec TS_BGET_KEYSPECS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandArg TS_BGET_ARGS[] = {
+static const RedisModuleCommandArg TS_READ_ARGS[] = {
     { .name = "key", .type = REDISMODULE_ARG_TYPE_KEY, .key_spec_index = 0 },
     { .name = "timestamp", .type = REDISMODULE_ARG_TYPE_STRING },
-    { .name = "timeout", .type = REDISMODULE_ARG_TYPE_INTEGER },
-    { .name = "MIN_COUNT",
+    { .name = "BLOCK",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
       .flags = REDISMODULE_CMD_ARG_OPTIONAL,
       .subargs =
           (RedisModuleCommandArg[]){
-              { .name = "min_count", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "MIN_COUNT" },
+              { .name = "milliseconds", .type = REDISMODULE_ARG_TYPE_INTEGER, .token = "BLOCK" },
+              { .name = "min_count", .type = REDISMODULE_ARG_TYPE_INTEGER },
               { 0 } } },
     { .name = "MAX_COUNT",
       .type = REDISMODULE_ARG_TYPE_BLOCK,
@@ -755,17 +758,17 @@ static const RedisModuleCommandArg TS_BGET_ARGS[] = {
     { 0 }
 };
 
-static const RedisModuleCommandInfo TS_BGET_INFO = {
+static const RedisModuleCommandInfo TS_READ_INFO = {
     .version = REDISMODULE_COMMAND_INFO_VERSION,
-    .summary = "Blocking GET: wait up to timeout ms or until min_count samples with timestamp >= "
-               "timestamp are available, then return up to max_count of the oldest such samples",
+    .summary = "Read: return up to max_count samples with timestamp >= timestamp. With BLOCK, "
+               "waits up to milliseconds ms until at least min_count qualifying samples exist",
     .complexity = "O(log(n)+k) where n is the number of samples in the series and k is the number "
                   "of returned samples",
     .since = "8.10.0",
     .tips = "dont_cache",
-    .arity = -4,
-    .key_specs = (RedisModuleCommandKeySpec *)TS_BGET_KEYSPECS,
-    .args = (RedisModuleCommandArg *)TS_BGET_ARGS,
+    .arity = -3,
+    .key_specs = (RedisModuleCommandKeySpec *)TS_READ_KEYSPECS,
+    .args = (RedisModuleCommandArg *)TS_READ_ARGS,
 };
 
 // ===============================
@@ -1213,6 +1216,53 @@ static const RedisModuleCommandInfo TS_QUERYINDEX_INFO = {
 };
 
 // ===============================
+// TS.QUERYLABELS <LABELS | VALUES label> [FILTER filterExpr...]
+// ===============================
+static const RedisModuleCommandArg TS_QUERYLABELS_VALUES_ARGS[] = {
+    { .name = "VALUES", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "VALUES" },
+    { .name = "label", .type = REDISMODULE_ARG_TYPE_STRING },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_QUERYLABELS_SUBTYPE_OPTIONS[] = {
+    { .name = "LABELS", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "LABELS" },
+    { .name = "VALUES",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .subargs = (RedisModuleCommandArg *)TS_QUERYLABELS_VALUES_ARGS },
+    { 0 }
+};
+
+static const RedisModuleCommandArg TS_QUERYLABELS_ARGS[] = {
+    { .name = "subtype",
+      .type = REDISMODULE_ARG_TYPE_ONEOF,
+      .subargs = (RedisModuleCommandArg *)TS_QUERYLABELS_SUBTYPE_OPTIONS },
+    { .name = "FILTER",
+      .type = REDISMODULE_ARG_TYPE_BLOCK,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .subargs =
+          (RedisModuleCommandArg[]){
+              { .name = "FILTER", .type = REDISMODULE_ARG_TYPE_PURE_TOKEN, .token = "FILTER" },
+              { .name = "filterExpr",
+                .type = REDISMODULE_ARG_TYPE_STRING,
+                .flags = REDISMODULE_CMD_ARG_MULTIPLE },
+              { 0 } } },
+    { 0 }
+};
+
+static const RedisModuleCommandInfo TS_QUERYLABELS_INFO = {
+    .version = REDISMODULE_COMMAND_INFO_VERSION,
+    .summary = "Get all label names, or all values of a given label, for time series matching a "
+               "filter list, or all series",
+    .complexity = "O(n) where n is the number of time-series that match the filters (all "
+                  "indexed series when FILTER is omitted)",
+    .since = "8.10.0",
+    .tips = "dont_cache",
+    .arity = -2,
+    .key_specs = NULL,
+    .args = (RedisModuleCommandArg *)TS_QUERYLABELS_ARGS,
+};
+
+// ===============================
 // TS.INFO key [DEBUG]
 // ===============================
 static const RedisModuleCommandKeySpec TS_INFO_KEYSPECS[] = {
@@ -1454,6 +1504,11 @@ static const RedisModuleCommandArg TS_MRANGE_ARGS[] = {
                 .type = REDISMODULE_ARG_TYPE_ONEOF,
                 .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
               { 0 } } },
+    { .name = "EXCLUDEEMPTY",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "EXCLUDEEMPTY",
+      .since = "8.10.0" },
     { 0 }
 };
 
@@ -1597,6 +1652,11 @@ static const RedisModuleCommandArg TS_MREVRANGE_ARGS[] = {
                 .type = REDISMODULE_ARG_TYPE_ONEOF,
                 .subargs = (RedisModuleCommandArg *)AGGREGATOR_OPTIONS },
               { 0 } } },
+    { .name = "EXCLUDEEMPTY",
+      .type = REDISMODULE_ARG_TYPE_PURE_TOKEN,
+      .flags = REDISMODULE_CMD_ARG_OPTIONAL,
+      .token = "EXCLUDEEMPTY",
+      .since = "8.10.0" },
     { 0 }
 };
 
@@ -1675,9 +1735,9 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     if (!cmd_get || RedisModule_SetCommandInfo(cmd_get, &TS_GET_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    // Register TS.BGET command info
-    RedisModuleCommand *cmd_bget = RedisModule_GetCommand(ctx, "TS.BGET");
-    if (!cmd_bget || RedisModule_SetCommandInfo(cmd_bget, &TS_BGET_INFO) == REDISMODULE_ERR)
+    // Register TS.READ command info
+    RedisModuleCommand *cmd_read = RedisModule_GetCommand(ctx, "TS.READ");
+    if (!cmd_read || RedisModule_SetCommandInfo(cmd_read, &TS_READ_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.RANGE command info
@@ -1706,6 +1766,12 @@ int RegisterTSCommandInfos(RedisModuleCtx *ctx) {
     RedisModuleCommand *cmd_queryindex = RedisModule_GetCommand(ctx, "TS.QUERYINDEX");
     if (!cmd_queryindex ||
         RedisModule_SetCommandInfo(cmd_queryindex, &TS_QUERYINDEX_INFO) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    // Register TS.QUERYLABELS command info
+    RedisModuleCommand *cmd_querylabels = RedisModule_GetCommand(ctx, "TS.QUERYLABELS");
+    if (!cmd_querylabels ||
+        RedisModule_SetCommandInfo(cmd_querylabels, &TS_QUERYLABELS_INFO) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     // Register TS.INFO command info

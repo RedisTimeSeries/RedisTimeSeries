@@ -261,6 +261,56 @@ MU_TEST(test_nan_mixed_compression) {
     Compressed_FreeChunk(chunk_varying);
 }
 
+MU_TEST(test_compressed_decode_is_bounded_by_size) {
+    const size_t size = 64;                 // 64 bytes -> 512 bits of real buffer
+    CompressedChunk *chunk = Compressed_NewChunk(size);
+    mu_assert(chunk != NULL, "create compressed chunk");
+
+    // Give the decoder a huge safety margin so a pre-fix, count-driven runaway stays
+    // inside the allocation (we are testing the cursor invariant, not a crash).
+    const size_t test_alloc = size + 4096;
+    chunk->data = (uint64_t *)realloc(chunk->data, test_alloc);
+    mu_assert(chunk->data != NULL, "grow test buffer");
+    memset(chunk->data, 0, test_alloc);
+
+    // Fill the real buffer so every decoded sample consumes 71 bits (timestamp
+    // control=1 -> readInteger 64-bit branch; value control=0 -> no readFloat).
+    // bit p -> byte p/8, LSB-first; per-sample unit = 6 ones, 64 zeros, 1 zero.
+    for (size_t bit = 0; bit < size * 8; ++bit) {
+        if ((bit % 71) < 6) {
+            ((unsigned char *)chunk->data)[bit / 8] |= (unsigned char)(1u << (bit % 8));
+        }
+    }
+
+    // Internally consistent metadata (would pass Compressed_ValidateLoadedChunk):
+    // idx = size*8 (max allowed), count = size*4 (so count-1 <= idx/2).
+    chunk->idx = size * 8;
+    chunk->count = size * 4;
+    chunk->baseTimestamp = 1000;
+    chunk->baseValue.d = 1.0;
+
+    ChunkIter_t *iter = Compressed_NewChunkIterator(chunk);
+    Sample sample;
+    uint64_t decoded = 0;
+    bool terminated = false;
+    for (uint64_t i = 0; i < chunk->count; ++i) {
+        ChunkResult rv = Compressed_ChunkIteratorGetNext(iter, &sample);
+        if (rv != CR_OK) {
+            terminated = true;
+            break;
+        }
+        decoded++;
+    }
+
+    // The decoder must stop once it reaches the end of the physical buffer instead
+    // of decoding all `count` samples out of thin air. Pre-fix this never triggers.
+    mu_assert(terminated, "decoder must return CR_END once the data buffer is exhausted");
+    mu_assert(decoded < chunk->count, "decoder must not honor the inflated count");
+
+    Compressed_FreeChunkIterator(iter);
+    Compressed_FreeChunk(chunk);
+}
+
 MU_TEST_SUITE(compressed_chunk_test_suite) {
     MU_RUN_TEST(test_compressed_upsert);
     MU_RUN_TEST(test_compressed_fail_appendInteger);
@@ -268,4 +318,5 @@ MU_TEST_SUITE(compressed_chunk_test_suite) {
     MU_RUN_TEST(test_Compressed_SplitChunk_odd);
     MU_RUN_TEST(test_Compressed_SplitChunk_force_realloc);
     MU_RUN_TEST(test_nan_mixed_compression);
+    MU_RUN_TEST(test_compressed_decode_is_bounded_by_size);
 }

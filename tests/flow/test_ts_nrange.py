@@ -183,7 +183,7 @@ def test_nrange_single_aggregator_rejected():
         keys = _setup_distinct(r, '{rx_bcast}')
         # a single aggregator for multiple keys is rejected: the count must
         # equal numkeys (one aggregator per key)
-        with pytest.raises(redis.ResponseError, match="aggregators"):
+        with pytest.raises(redis.ResponseError, match="AGGREGATION arguments"):
             r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
                               'AGGREGATION', 'avg', 2)
 
@@ -383,7 +383,7 @@ def test_nrange_errors():
             r.execute_command('TS.NRANGE', 3, keys[0], '-', '+')
 
         # aggregator count must equal numkeys (too few valid aggregators)
-        with pytest.raises(redis.ResponseError, match="aggregators"):
+        with pytest.raises(redis.ResponseError, match="AGGREGATION arguments"):
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min', 'max', 10)
 
@@ -391,14 +391,239 @@ def test_nrange_errors():
         with pytest.raises(redis.ResponseError, match="[Uu]nknown aggregation"):
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min', 'bogus', 'max', 10)
-        # the old comma-joined form is now an unknown aggregator token
-        with pytest.raises(redis.ResponseError, match="[Uu]nknown aggregation"):
+        # comma-joined token with bucket immediately after is a count mismatch (1 token for 3 keys)
+        with pytest.raises(redis.ResponseError, match="number of AGGREGATION arguments"):
             r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
                               'AGGREGATION', 'min,max,avg', 10)
+
+        # trailing comma in per-key spec
+        with pytest.raises(redis.ResponseError, match="Empty aggregation type"):
+            r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
+                              'AGGREGATION', 'avg,', 'min', 'max', 10)
+
+        # embedded empty token in per-key spec
+        with pytest.raises(redis.ResponseError, match="Empty aggregation type"):
+            r.execute_command('TS.NRANGE', 3, *keys, '-', '+',
+                              'AGGREGATION', 'avg,,sum', 'min', 'max', 10)
 
         # missing key
         with pytest.raises(redis.ResponseError):
             r.execute_command('TS.NRANGE', 1, '{rx_err}:nope', '-', '+')
+
+
+# ---------------------------------------------------------------------------
+# multi-agg per key (MOD-16299)
+# ---------------------------------------------------------------------------
+
+def _pivot_ref_multi(r, keys, lo, hi, aggs_per_key, bucket, rev=False):
+    """Reference pivot for multi-agg specs, matching the flat NRANGE reply format.
+
+    aggs_per_key: list of agg-spec strings, one per key, e.g. ['avg,max', 'sum']
+    Returns: [[ts, [v0a, v0b, v1a, ...]], ...]
+    """
+    cmd = 'TS.REVRANGE' if rev else 'TS.RANGE'
+    n_aggs = [spec.count(',') + 1 for spec in aggs_per_key]
+    maps = []
+    for k, spec in zip(keys, aggs_per_key):
+        rows = r.execute_command(cmd, k, lo, hi, 'AGGREGATION', spec, bucket)
+        maps.append({row[0]: list(row[1:]) for row in rows})
+    all_ts = set()
+    for m in maps:
+        all_ts |= set(m.keys())
+    result = []
+    for ts in sorted(all_ts, reverse=rev):
+        per_key = [m.get(ts, [b'NaN'] * n) for m, n in zip(maps, n_aggs)]
+        flat = [v for sublist in per_key for v in sublist]
+        result.append([ts, flat])
+    return result
+
+
+def test_nrange_multi_agg_mixed():
+    """key0 gets 2 aggs, key1 gets 1 agg -> flat format."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = _setup_distinct(r, '{rx_magg}')[:2]
+        res = r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
+                                'AGGREGATION', 'avg,max', 'sum', 2)
+        _assert_pivot(res, _pivot_ref_multi(r, keys, '-', '+',
+                                            ['avg,max', 'sum'], 2))
+
+
+def test_nrange_multi_agg_all_same():
+    """All keys get the same multi-agg spec -> flat format."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = _setup_distinct(r, '{rx_magg2}')[:2]
+        res = r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
+                                'AGGREGATION', 'min,max', 'min,max', 2)
+        _assert_pivot(res, _pivot_ref_multi(r, keys, '-', '+',
+                                            ['min,max', 'min,max'], 2))
+
+
+def test_nrange_multi_agg_single_key():
+    """Single key: splice is bypassed, comma-agg goes directly to the range
+    parser -> flat format."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = _setup_distinct(r, '{rx_magg3}')
+        res = r.execute_command('TS.NRANGE', 1, keys[0], '-', '+',
+                                'AGGREGATION', 'avg,sum', 2)
+        _assert_pivot(res, _pivot_ref_multi(r, [keys[0]], '-', '+',
+                                            ['avg,sum'], 2))
+
+
+def test_nrevrange_multi_agg():
+    """NREVRANGE with multi-agg per key -> flat format, descending order."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = _setup_distinct(r, '{rx_maggrev}')[:2]
+        res = r.execute_command('TS.NREVRANGE', 2, *keys, '-', '+',
+                                'AGGREGATION', 'sum,count', 'max', 3)
+        _assert_pivot(res, _pivot_ref_multi(r, keys, '-', '+',
+                                            ['sum,count', 'max'], 3, rev=True))
+
+
+def test_nrange_multi_agg_nan_fills_all_slots():
+    """When a key has no sample at a timestamp, ALL its agg slots are NaN."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = ['{rx_nan2}:a', '{rx_nan2}:b']
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        # key0 in [0,10) only; key1 spans both [0,10) and [10,20)
+        r.execute_command('TS.MADD', keys[0], 0, 1, keys[0], 5, 2)
+        r.execute_command('TS.MADD', keys[1], 0, 10, keys[1], 5, 20,
+                          keys[1], 10, 100)
+        res = r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
+                                'AGGREGATION', 'sum', 'sum,count', 10)
+        assert len(res) == 2
+        # bucket [0,10): flat=[sum_k0=3, sum_k1=30, count_k1=2]
+        assert res[0][0] == 0
+        assert _norm(res[0][1][0]) == 3.0
+        assert _norm(res[0][1][1]) == 30.0 and _norm(res[0][1][2]) == 2.0
+        # bucket [10,20): key0 missing -> NaN; key1=[sum=100, count=1]
+        assert res[1][0] == 10
+        assert _norm(res[1][1][0]) == 'NAN'
+        assert _norm(res[1][1][1]) == 100.0 and _norm(res[1][1][2]) == 1.0
+
+
+def test_nrange_empty_multi_agg():
+    """EMPTY + multi-agg: gap-filled buckets carry values_per_sample > 1."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = ['{rx_emptyma}:a', '{rx_emptyma}:b']
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        # k0 has a sample only in [0,10); k1 only in [10,20)
+        r.execute_command('TS.ADD', keys[0], 5, 10)
+        r.execute_command('TS.ADD', keys[1], 15, 20)
+        # k0 spec: avg,sum (2 aggs); k1 spec: max (1 agg)
+        res = r.execute_command('TS.NRANGE', 2, *keys, 0, 20,
+                                'AGGREGATION', 'avg,sum', 'max', 10, 'EMPTY')
+        assert len(res) == 2
+        # bucket [0,10): k0=[avg=10,sum=10], k1=[max=NaN]
+        assert res[0][0] == 0
+        assert [_norm(v) for v in res[0][1]] == [10.0, 10.0, 'NAN']
+        # bucket [10,20): k0=[avg=NaN,sum=NaN], k1=[max=20]
+        assert res[1][0] == 10
+        assert [_norm(v) for v in res[1][1]] == ['NAN', 'NAN', 20.0]
+
+
+def test_nrevrange_empty_multi_agg():
+    """NREVRANGE + EMPTY + multi-agg: gap-filled buckets in reverse order."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = ['{rx_remptyma}:a', '{rx_remptyma}:b']
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        r.execute_command('TS.ADD', keys[0], 5, 10)
+        r.execute_command('TS.ADD', keys[1], 15, 20)
+        res = r.execute_command('TS.NREVRANGE', 2, *keys, 0, 20,
+                                'AGGREGATION', 'avg,sum', 'max', 10, 'EMPTY')
+        assert len(res) == 2
+        # descending: bucket [10,20) first, then [0,10)
+        assert res[0][0] == 10
+        assert [_norm(v) for v in res[0][1]] == ['NAN', 'NAN', 20.0]
+        assert res[1][0] == 0
+        assert [_norm(v) for v in res[1][1]] == [10.0, 10.0, 'NAN']
+
+
+def test_nrange_multi_agg_too_many_tokens():
+    """More agg tokens than numkeys -> count mismatch error."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = _setup_distinct(r, '{rx_magerr}')[:2]
+        with pytest.raises(redis.ResponseError, match="number of AGGREGATION arguments"):
+            r.execute_command('TS.NRANGE', 2, *keys, '-', '+',
+                              'AGGREGATION', 'avg,max', 'sum', 'min', 10)
+
+
+def test_nrange_many_keys_single_agg():
+    """35 keys, one agg each — exercises the n > 30 path with no upper-bound overflow."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        n = 35
+        tag = '{rx_many}'
+        keys = [f'{tag}:k{i}' for i in range(n)]
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        for ts in range(10):
+            args = []
+            for i, k in enumerate(keys):
+                args += [k, ts, i * 10 + ts]
+            r.execute_command('TS.MADD', *args)
+        aggs = ['avg'] * n
+        res = r.execute_command('TS.NRANGE', n, *keys, '-', '+',
+                                'AGGREGATION', *aggs, 5)
+        _assert_pivot(res, _pivot_ref(r, keys, '-', '+', aggs=aggs, bucket=5))
+
+
+def test_nrange_many_keys_multi_agg():
+    """35 keys with mixed multi-agg specs (2 and 3 aggs per key) — exercises
+    the n * TS_AGG_TYPES_MAX upper-bound allocation with > 30 keys."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        n = 35
+        tag = '{rx_mmany}'
+        keys = [f'{tag}:k{i}' for i in range(n)]
+        for k in keys:
+            r.execute_command('TS.CREATE', k)
+        for ts in range(20):
+            args = []
+            for i, k in enumerate(keys):
+                args += [k, ts, i * 100 + ts]
+            r.execute_command('TS.MADD', *args)
+        # alternate between 2-agg and 3-agg specs across the 35 keys
+        aggs_per_key = ['min,max' if i % 2 == 0 else 'avg,sum,count' for i in range(n)]
+        res = r.execute_command('TS.NRANGE', n, *keys, '-', '+',
+                                'AGGREGATION', *aggs_per_key, 5)
+        _assert_pivot(res, _pivot_ref_multi(r, keys, '-', '+', aggs_per_key, 5))
+
+
+def test_nrange_all_single_agg_stays_flat():
+    """All single-agg per key -> flat format unchanged (backward compat)."""
+    e = Env()
+    e.skipOnCluster()
+    with e.getClusterConnectionIfNeeded() as r:
+        keys = _setup_distinct(r, '{rx_flat}')
+        aggs = ['sum', 'min', 'max']
+        res = r.execute_command('TS.NRANGE', len(keys), *keys, '-', '+',
+                                'AGGREGATION', *aggs, 2)
+        for row in res:
+            for v in row[1]:
+                assert not isinstance(v, list), \
+                    f"expected flat values but got nested list at ts {row[0]}"
+        _assert_pivot(res, _pivot_ref(r, keys, '-', '+', aggs=aggs, bucket=2))
 
 
 # ---------------------------------------------------------------------------
@@ -421,3 +646,22 @@ def test_nrange_crossslot():
             with pytest.raises((redis.ResponseError, redis.exceptions.RedisClusterException),
                                match='CROSSSLOT|same key slot'):
                 r.execute_command(cmd, 2, 'cs{a}', 'cs{b}', '-', '+')
+
+
+def test_nrange_crossslot_same_shard():
+    """CROSSSLOT is enforced even when keys are co-located on the same shard but in different slots.
+    This covers the ASM scenario: after a slot migrates, keys that were on the same shard end up
+    split — NRANGE must reject them the same way it rejects obviously cross-shard keys.
+
+    nrange_ss_1 -> slot 6911, nrange_ss_5 -> slot 6779: both in 5461-10922 (same shard in
+    RLTest's default 3-shard cluster), different slots."""
+    env = Env(decodeResponses=True)
+    if not env.isCluster():
+        env.skip()
+    with env.getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', 'nrange_ss_1')
+        r.execute_command('TS.CREATE', 'nrange_ss_5')
+        for cmd in ('TS.NRANGE', 'TS.NREVRANGE'):
+            with pytest.raises((redis.ResponseError, redis.exceptions.RedisClusterException),
+                               match='CROSSSLOT|same key slot'):
+                r.execute_command(cmd, 2, 'nrange_ss_1', 'nrange_ss_5', '-', '+')

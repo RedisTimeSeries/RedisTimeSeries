@@ -31,7 +31,10 @@ SANITIZER = os.getenv('SANITIZER', '')
 VALGRIND = (os.getenv('VALGRIND', '0') == '1') or (os.getenv('VG', '0') == '1')
 CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 
-# Upper bound on how long a "prompt" wake (e.g. TS.BGET woken by a key deletion)
+# CI matrix runner label (e.g. "macos-15-intel"), exported by the workflow. Empty locally.
+RUNNER_LABEL = os.getenv('RUNNER_LABEL', '')
+
+# Upper bound on how long a "prompt" wake (e.g. TS.READ woken by a key deletion)
 # may take before we consider it a regression. Scaled up under Valgrind/sanitizer
 # so the slower wake-up callback there can't produce a false failure.
 WAKE_TIMEOUT_SECS = 30 if (VALGRIND or SANITIZER) else 5
@@ -75,7 +78,7 @@ def verifyClusterInitialized(env):
     for conn in shardsConnections(env):
         try:
             conn.execute_command('debug', 'MARK-INTERNAL-CLIENT')
-        except Exception:
+        except redis.exceptions.ResponseError:
             pass # in case we run on older version of redis
         allConnected = False
         while not allConnected:
@@ -83,7 +86,7 @@ def verifyClusterInitialized(env):
             nodes = res[4]
             allConnected = True
             for n in nodes:
-                status = n[17]
+                status = n[-1]
                 if status != b'connected':
                     allConnected = False
             if not allConnected:
