@@ -58,8 +58,8 @@ def test_querylabels_index_compatibility():
                                 values)
 
 
-def test_query_snapshot_buffer_growth():
-    """Exercise small result buffers and both transitions to allocated storage."""
+def test_query_result_sizes():
+    """Check different result sizes and key lengths."""
     env = Env()
     for count, keylen in [(32, 16), (33, 16), (8, 256), (9, 256)]:
         env.flush()
@@ -68,7 +68,7 @@ def test_query_snapshot_buffer_growth():
             for i, key in enumerate(keys):
                 r.execute_command('TS.CREATE', key, 'LABELS', 'group', 'all', 'tag', str(i))
             shard = env.getConnection(1)
-            # Two predicates keep the result size unknown until traversal finishes.
+            # Check intersection results as well as label aggregation.
             env.assertEqual(sorted(shard.execute_command('TS.QUERYINDEX', 'group=all', 'tag!=')),
                             sorted(keys))
             for suffix in ([], ['FILTER', 'group=all']):

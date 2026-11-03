@@ -564,90 +564,36 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     return res;
 }
 
-// Select the smallest live index leaf when possible. A union needs QueryIndex's
-// independent result dictionary for deduplication; the caller owns that dictionary.
-static RedisModuleDict *SelectQueryIndexSource(RedisModuleCtx *ctx,
-                                               QueryPredicateList *queries,
-                                               RedisModuleDict **result) {
-    RedisModuleDict *source = tsLabelIndex;
-    RedisModuleDict **dicts = NULL;
-    size_t count = 0;
-    if (queries) {
-        if (!queries->count)
-            return NULL;
-        PromoteSmallestPredicateToFront(ctx, queries->list, queries->count);
-        if (!IS_INCLUSION(queries->list[0].type))
-            return NULL;
-        GetPredicateKeysDicts(ctx, queries->list, &dicts, &count);
-        if (count == 1) {
-            source = dicts[0];
-        } else {
-            source = *result = QueryIndex(ctx, queries->list, queries->count, NULL);
-        }
-        free(dicts);
+RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx) {
+    RedisModuleDict *res = RedisModule_CreateDict(ctx);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(tsLabelIndex, "^", NULL, 0);
+    char *currentKey;
+    size_t currentKeyLen;
+    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
     }
-    return source;
+    RedisModule_DictIteratorStop(iter);
+
+    TrimUnownedKeysDuringReshard(res);
+
+    return res;
 }
 
-// KeyExists may have deleted the current key and freed its index leaf. Resolve
-// the leaf again and seek past the owned key name without accessing the old leaf.
-static RedisModuleDictIter *ResumeQueryIndexAfterExpiry(RedisModuleCtx *ctx,
-                                                        QueryPredicateList *queries,
-                                                        RedisModuleString *key) {
-    RedisModuleDict *source = tsLabelIndex;
-    if (queries) {
-        RedisModuleDict **dicts = NULL;
-        size_t count = 0;
-        GetPredicateKeysDicts(ctx, queries->list, &dicts, &count);
-        source = count ? dicts[0] : NULL;
-        free(dicts);
+// Ask core about logical expiry without deleting keys or mutating the label index.
+bool IsSeriesVisible(RedisModuleCtx *ctx, const char *name, size_t len) {
+    int mode = REDISMODULE_READ | REDISMODULE_OPEN_KEY_NOEFFECTS;
+    // Enterprise's metadata-only mode avoids loading a value from flash. OSS does not expose it.
+    const int noLookup = 1 << 25; // REDISMODULE_OPEN_KEY_NO_LOOKUP in the Enterprise API
+    if (RedisModule_GetOpenKeyModesAll) {
+        mode |= RedisModule_GetOpenKeyModesAll() & noLookup;
     }
-    size_t len;
-    const char *name = RedisModule_StringPtrLen(key, &len);
-    return source ? RedisModule_DictIteratorStartC(source, ">", (void *)name, len) : NULL;
-}
-
-// Check visibility immediately before each callback. Only live-index traversal
-// needs to restart after expiry; an independent QueryIndex result stays valid.
-size_t VisitQueryIndex(RedisModuleCtx *ctx,
-                       QueryPredicateList *queries,
-                       void (*visit)(RedisModuleCtx *, const char *, size_t, void *),
-                       void *data) {
-    RedisModuleDict *result = NULL;
-    RedisModuleDict *source = SelectQueryIndexSource(ctx, queries, &result);
-    size_t visible = 0;
-    RedisModuleDictIter *iter =
-        source ? RedisModule_DictIteratorStartC(source, "^", NULL, 0) : NULL;
-    char *name;
-    size_t len;
-    while (iter && (name = RedisModule_DictNextC(iter, &len, NULL))) {
-        if (!result && queries &&
-            !_isKeySatisfyAllPredicates(ctx, name, len, queries->list, queries->count))
-            continue;
-        // Own the current name: KeyExists can synchronously expire it, removing
-        // its index entry and even freeing the whole source leaf. The visitor
-        // only reads the index or emits results; it must not modify the keyspace.
-        RedisModuleString *key = RedisModule_CreateString(NULL, name, len);
-        bool owned = !(isReshardTrimming || isAsmTrimming || isAsmImporting) ||
-                     (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(key);
-        bool exists = !owned || RedisModule_KeyExists(ctx, key);
-        if (owned && exists) {
-            name = (char *)RedisModule_StringPtrLen(key, &len);
-            visit(ctx, name, len, data);
-            ++visible;
-        }
-        if (!result && !exists) {
-            // Stop frees iterator storage only. Re-resolve the potentially freed
-            // leaf and resume strictly after the owned name, never stale pointers.
-            RedisModule_DictIteratorStop(iter);
-            iter = ResumeQueryIndexAfterExpiry(ctx, queries, key);
-        }
-        RedisModule_FreeString(NULL, key);
+    RedisModuleString *keyName = RedisModule_CreateString(NULL, name, len);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, mode);
+    bool visible = key != NULL;
+    if (key) {
+        RedisModule_CloseKey(key);
     }
-    if (iter)
-        RedisModule_DictIteratorStop(iter);
-    if (result)
-        RedisModule_FreeDict(ctx, result);
+    RedisModule_FreeString(NULL, keyName);
     return visible;
 }
 
@@ -659,7 +605,8 @@ RedisModuleString *QueryLabelsBuildPrefix(QueryLabelsSubtype subtype,
                      NULL, KV_PREFIX, RedisModule_StringPtrLen(labelFilter, NULL), "");
 }
 
-// Label keys can contain '='. For such a series, a KV entry's "key=value" content
+// Label keys can no longer contain '=' (parseLabelsFromArgs rejects it at creation), but
+// series indexed before that existed. For such a series, a KV entry's "key=value" content
 // is ambiguous: e.g. key "a=b" value "c" and key "a" value "b=c" both flatten differently,
 // but a VALUES(a) lookup can't tell "a=b=c" (real key "a=b") from a genuine key "a" without
 // cross-checking. A real key always has an exact "__key_index_"-prefixed leaf entry, so if

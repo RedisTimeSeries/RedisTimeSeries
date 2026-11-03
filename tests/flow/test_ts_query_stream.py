@@ -2,8 +2,8 @@ import time
 from includes import *
 
 
-def test_query_expiry_rebuilds_cursors():
-    """Expiry may remove several predicate leaves or the whole seed dictionary."""
+def test_query_expired_candidates():
+    """Ignore expired candidates in mixed and fully expired index leaves."""
     skip_on_rlec()
     env = Env()
     shards = [env.getConnection(i + 1) for i in range(env.shardsCount)]
@@ -22,7 +22,7 @@ def test_query_expiry_rebuilds_cursors():
                                         (300, [1, 257, 299]), (300, list(range(256, 300)))]:
                 env.flush()
                 with env.getClusterConnectionIfNeeded() as r:
-                    # Same slot ensures one traversal experiences every deletion.
+                    # Same slot keeps every candidate in one shard traversal.
                     keys = [(f'{{stream}}:{i:04d}' + 'x' * 300 + '\0tail').encode()
                             for i in range(count)]
                     for i, key in enumerate(keys):

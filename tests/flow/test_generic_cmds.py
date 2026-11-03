@@ -119,9 +119,11 @@ def test_queryindex_passive_expiration():
             time.sleep(2)
             # No key lookup before QUERYINDEX: EXISTS/TTL could expire the keys
             # themselves and hide a stale index result.
+            expired_before = [shard.info('stats')['expired_keys'] for shard in shards]
             env.assertEqual(shards[0].execute_command('TS.QUERYINDEX', 'only=expired'), [])
             env.assertEqual(shards[0].execute_command('TS.QUERYINDEX', 'expiry=mixed'), [b'live'])
             env.assertEqual(shards[0].execute_command('TS.QUERYINDEX', 'only=expired'), [])
+            env.assertEqual([shard.info('stats')['expired_keys'] for shard in shards], expired_before)
     finally:
         for shard in shards:
             shard.execute_command('DEBUG', 'SET-ACTIVE-EXPIRE', 1)
