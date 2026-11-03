@@ -23,7 +23,12 @@ def estimated_seconds(spec):
         client = {key: value for entry in client for key, value in entry.items()}
     if client['tool'] == 'memtier_benchmark':
         arguments = shlex.split(client['arguments'])
-        return 2 * float(arguments[arguments.index('--test-time') + 1])
+        dbconfig = config.get('dbconfig', {})
+        if isinstance(dbconfig, list):
+            dbconfig = {key: value for entry in dbconfig for key, value in entry.items()}
+        # Use the same per-side loading allowance as the TSBS query estimates below.
+        load_seconds = 300 if dbconfig.get('tool') == 'tsbs_load_redistimeseries' else 0
+        return 2 * (load_seconds + float(arguments[arguments.index('--test-time') + 1]))
     parameters = client['parameters']
     if isinstance(parameters, list):
         parameters = {key: value for entry in parameters for key, value in entry.items()}

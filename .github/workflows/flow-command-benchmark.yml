@@ -96,7 +96,7 @@ jobs:
           cp benchmark-redis/src/redis-server benchmark-redis/src/redis-benchmark benchmark-memtier/memtier_benchmark benchmark-bundle/bin/
           # Same TSBS binaries as the existing AWS benchmark runner, shared by both revisions.
           for tool in tsbs_load_redistimeseries tsbs_run_queries_redistimeseries; do
-            curl --fail --location --retry 3 \
+            curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
               "https://s3.amazonaws.com/benchmarks.redislabs/redistimeseries/tools/tsbs/${tool}_linux_amd64" \
               -o "benchmark-bundle/bin/$tool"
             chmod +x "benchmark-bundle/bin/$tool"
