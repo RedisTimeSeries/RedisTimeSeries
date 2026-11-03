@@ -433,19 +433,32 @@ void PromoteSmallestPredicateToFront(RedisModuleCtx *ctx,
     }
 }
 
+typedef struct ResolvedPredicate
+{
+    RedisModuleDict **dicts;
+    size_t count;
+    bool resolved;
+} ResolvedPredicate;
+
 static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
                                        const char *currentKey,
                                        size_t currentKeyLen,
                                        const QueryPredicate *index_predicate,
-                                       size_t predicate_count) {
-    RedisModuleDict **dicts = NULL;
-    size_t dicts_size;
+                                       size_t predicate_count,
+                                       ResolvedPredicate *resolved) {
     for (size_t i = 1; i < min(predicate_count, SIZE_MAX - 1); ++i) {
         bool inclusion = IS_INCLUSION(index_predicate[i].type);
-        GetPredicateKeysDicts(ctx, &index_predicate[i], &dicts, &dicts_size);
+        ResolvedPredicate *p = &resolved[i - 1];
+        /* The index cannot change during this uninterrupted main-thread query.
+         * Resolve lazily so predicates skipped by short-circuiting stay cheap;
+         * reuse the borrowed dictionaries for all other candidate keys. */
+        if (!p->resolved) {
+            GetPredicateKeysDicts(ctx, &index_predicate[i], &p->dicts, &p->count);
+            p->resolved = true;
+        }
         bool found = false;
-        for (size_t j = 0; j < dicts_size; j++) {
-            RedisModuleDict *curDict = dicts[j];
+        for (size_t j = 0; j < p->count; j++) {
+            RedisModuleDict *curDict = p->dicts[j];
             if (!curDict) { // empty dict
                 continue;
             }
@@ -456,8 +469,6 @@ static bool _isKeySatisfyAllPredicates(RedisModuleCtx *ctx,
                 found = true;
             }
         }
-        free(dicts);
-
         if ((inclusion && !found) || (!inclusion && found)) {
             return false;
         }
@@ -524,6 +535,7 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     RedisModuleDict **dicts = NULL;
     size_t dicts_size = 0;
     GetPredicateKeysDicts(ctx, &index_predicate[0], &dicts, &dicts_size);
+    ResolvedPredicate *resolved = NULL;
 
     // Resolve the user once for the whole multi-dict scan so ACL checks
     // below don't alloc/free a RedisModuleUser per candidate key.
@@ -548,8 +560,10 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
                     continue;
                 }
             }
+            if (!resolved && predicate_count > 1)
+                resolved = calloc(predicate_count - 1, sizeof(*resolved));
             if (_isKeySatisfyAllPredicates(
-                    ctx, currentKey, currentKeyLen, index_predicate, predicate_count)) {
+                    ctx, currentKey, currentKeyLen, index_predicate, predicate_count, resolved)) {
                 RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
             }
         }
@@ -558,6 +572,11 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
 
     FreeUser(&userCtx);
     free(dicts);
+    if (resolved) {
+        for (size_t i = 0; i < predicate_count - 1; ++i)
+            free(resolved[i].dicts);
+        free(resolved);
+    }
 
     TrimUnownedKeysDuringReshard(res);
 

@@ -48,6 +48,9 @@ typedef struct AggregationClass
 } AggregationClass;
 
 AggregationClass *GetAggClass(TS_AGG_TYPES_T aggType);
+// Merge a shard's finalized AVG and its valid-input count without forming mean * count.
+void AvgMergePartial(void *context, double mean, uint64_t count);
+void CountMergePartial(void *context, double count);
 int StringAggTypeToEnum(const char *agg_type);
 int RMStringLenAggTypeToEnum(RedisModuleString *aggTypeStr);
 int StringLenAggTypeToEnum(const char *agg_type, size_t len);

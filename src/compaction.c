@@ -280,6 +280,22 @@ void AvgReset(void *contextPtr) {
     _AvgInitContext(contextPtr);
 }
 
+void AvgMergePartial(void *contextPtr, double mean, uint64_t count) {
+    AvgContext *context = contextPtr;
+    if (!count)
+        return;
+    if (!context->cnt) {
+        context->val = mean;
+    } else {
+        long double oldMean = context->isOverflow ? context->val : context->val / context->cnt;
+        long double total = (long double)context->cnt + count;
+        context->val = oldMean * ((long double)context->cnt / total) +
+                       (long double)mean * ((long double)count / total);
+    }
+    context->cnt += count;
+    context->isOverflow = true; // val now stores a mean, as in the overflow-safe append path.
+}
+
 void AvgWriteContext(void *contextPtr, RedisModuleIO *io) {
     AvgContext *context = (AvgContext *)contextPtr;
     RedisModule_SaveDouble(io, context->val);
@@ -782,6 +798,11 @@ int CountFinalize(void *contextPtr, double *val) {
     FirstValueContext *context = (FirstValueContext *)contextPtr;
     *val = context->value;
     return TSDB_OK;
+}
+
+void CountMergePartial(void *contextPtr, double count) {
+    FirstValueContext *context = contextPtr;
+    context->value += count;
 }
 
 void FirstAppendValue(void *contextPtr, double value, timestamp_t ts) {

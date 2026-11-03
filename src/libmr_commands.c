@@ -184,6 +184,25 @@ static void mrange_done_internal(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRange
     if (!nodesResults)
         goto __done;
 
+    if (args->groupByLabel && DistributedGroupSupported(args->groupByReducerArgs.agg_type)) {
+        DistributedGroups *groups = DistributedGroups_New(args->groupByReducerArgs.agg_type);
+        RangeArgs range = RangeArgsSkipReAggregation(&args->rangeArgs);
+        range.latest = false;
+        array_foreach(nodesResults, record, {
+            if (record->groups) {
+                DistributedGroups_Merge(groups, record->groups);
+            } else {
+                // Older shards ignore the request trailer and return pre-aggregated series.
+                array_foreach(record->seriesList, series, {
+                    DistributedGroups_AddSeries(groups, series, args->groupByLabel, &range, false);
+                });
+            }
+        });
+        DistributedGroups_Reply(ctx, groups, args);
+        DistributedGroups_Free(groups);
+        goto __done;
+    }
+
     TS_ResultSet *resultset = NULL;
     if (args->groupByLabel) {
         resultset = ResultSet_Create();
@@ -555,6 +574,8 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (parseMGetCommand(ctx, argv, argc, &args) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
+    // An empty coordinator may first create Series while parsing a remote reply.
+    EnsureSeriesNotifications();
 
     QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
@@ -589,6 +610,7 @@ int TSDB_mget_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         }
         case LIBMR_PROTOCOL_INTERNAL: {
             builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderSetReplyParsingOnWorkers(builder);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MGET", queryArg);
             break;
@@ -620,6 +642,7 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         return REDISMODULE_OK;
     }
     args.reverse = reverse;
+    EnsureSeriesNotifications();
 
     QueryPredicates_Arg *queryArg = calloc(1, sizeof *queryArg);
     queryArg->shouldReturnNull = false;
@@ -675,8 +698,14 @@ int TSDB_mrange_MR(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, bool
         }
         case LIBMR_PROTOCOL_INTERNAL: {
             builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderSetReplyParsingOnWorkers(builder);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_MRANGE", queryArg);
+            queryArg->hasQueryPlan = true;
+            queryArg->groupByLabel = args.groupByLabel ? strdup(args.groupByLabel) : NULL;
+            queryArg->perSeriesCount = (!args.groupByLabel && !reverse) ? args.rangeArgs.count : -1;
+            queryArg->groupReducer =
+                args.groupByLabel ? args.groupByReducerArgs.agg_type : TS_AGG_NONE;
             break;
         }
         default: {
@@ -731,6 +760,7 @@ int TSDB_queryindex_MR(RedisModuleCtx *ctx, QueryPredicateList *queries) {
         }
         case LIBMR_PROTOCOL_INTERNAL: {
             builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderSetReplyParsingOnWorkers(builder);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYINDEX", queryArg);
             break;
@@ -846,6 +876,7 @@ int TSDB_querylabels_MR(RedisModuleCtx *ctx,
         }
         case LIBMR_PROTOCOL_INTERNAL: {
             builder = MR_CreateEmptyExecutionBuilder();
+            MR_ExecutionBuilderSetReplyParsingOnWorkers(builder);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_SLOT_RANGES", NULL);
             MR_ExecutionBuilderInternalCommand(builder, "TS.INTERNAL_QUERYLABELS", queryArg);
             break;

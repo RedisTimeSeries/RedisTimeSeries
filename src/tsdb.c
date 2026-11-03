@@ -165,8 +165,12 @@ int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
     return REDISMODULE_OK; // silence compiler
 }
 
-Series *NewSeries(RedisModuleString *keyName, const CreateCtx *cCtx) {
+void EnsureSeriesNotifications(void) {
     lazyModuleInitialize(rts_staticCtx);
+}
+
+Series *NewSeries(RedisModuleString *keyName, const CreateCtx *cCtx) {
+    EnsureSeriesNotifications();
     Series *newSeries = (Series *)calloc(1, sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
@@ -552,6 +556,8 @@ const char *SeriesGetCStringLabelValue(const Series *series, const char *labelKe
     for (int i = 0; i < series->labelsCount; i++) {
         const char *currLabel = RedisModule_StringPtrLen(series->labels[i].key, NULL);
         if (strcmp(currLabel, labelKey) == 0) {
+            if (series->labels[i].value == NULL)
+                return NULL; // A projected missing label is not a group value.
             return RedisModule_StringPtrLen(series->labels[i].value, len);
         }
     }
