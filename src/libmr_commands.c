@@ -5,6 +5,7 @@
 #include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "libmr_integration.h"
+#include "libmr_result_validation.h"
 #include "module.h"
 #include "query_language.h"
 #include "reply.h"
@@ -261,10 +262,11 @@ __done:
 }
 
 static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeData *data) {
-    RedisModuleBlockedClient *bc = data->bc;
-    RedisModuleCtx *rctx = RedisModule_GetThreadSafeContext(bc);
-
     if (unlikely(check_and_reply_on_error(eCtx, ctx))) {
+        goto __done;
+    }
+
+    if (!validate_gears_results(eCtx, ctx, GetListRecordType(), GetSeriesRecordType())) {
         goto __done;
     }
 
@@ -286,20 +288,10 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
     Series **tempSeries = array_new(Record *, len); // calloc(len, sizeof(Series *));
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
 
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
             Record *raw_record = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
-            if (raw_record->recordType != GetSeriesRecordType()) {
-                continue;
-            }
             Series *s = SeriesRecord_IntoSeries((SeriesRecord *)raw_record);
             tempSeries = array_append(tempSeries, s);
 
@@ -420,34 +412,30 @@ static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModule
     if (unlikely(check_and_reply_on_error(eCtx, ctx)))
         return;
 
+    const bool resp3 = _ReplyMap(ctx);
+    MRRecordType *expectedType = resp3 ? GetMapRecordType() : GetListRecordType();
+    if (!validate_gears_results(eCtx, ctx, expectedType, GetListRecordType()))
+        return;
+
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
-        total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
+        total_len += resp3 ? MapRecord_GetLen((MapRecord *)raw_listRecord)
+                           : ListRecord_GetLen((ListRecord *)raw_listRecord);
     }
-    RedisModule_ReplyWithArray(ctx, total_len);
+    // RESP3 shard maps contain alternating keys and values; RESP2 lists contain
+    // one nested array per series. Preserve that distinction when merging them.
+    ReplyWithMapOrArray(ctx, total_len, true);
 
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
 
-        size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
+        size_t list_len = resp3 ? MapRecord_GetLen((MapRecord *)raw_listRecord)
+                                : ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
-            Record *r = ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
+            Record *r = resp3 ? MapRecord_GetRecord((MapRecord *)raw_listRecord, j)
+                              : ListRecord_GetRecord((ListRecord *)raw_listRecord, j);
             r->recordType->sendReply(ctx, r);
         }
     }
@@ -499,30 +487,20 @@ static void queryindex_done_gears(ExecutionCtx *eCtx,
     if (unlikely(check_and_reply_on_error(eCtx, ctx)))
         return;
 
+    if (!validate_gears_results(eCtx, ctx, GetListRecordType(), GetStringRecordType())) {
+        return;
+    }
+
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     size_t total_len = 0;
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
         total_len += ListRecord_GetLen((ListRecord *)raw_listRecord);
     }
     RedisModule_ReplyWithSet(ctx, total_len);
 
     for (int i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
 
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
@@ -761,17 +739,14 @@ static void querylabels_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
         return;
     }
 
+    if (!validate_gears_results(eCtx, ctx, GetListRecordType(), GetStringRecordType())) {
+        return;
+    }
+
     RedisModuleDict *agg = RedisModule_CreateDict(NULL);
     size_t len = MR_ExecutionCtxGetResultsLen(eCtx);
     for (size_t i = 0; i < len; i++) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
-        if (raw_listRecord->recordType != GetListRecordType()) {
-            RedisModule_Log(ctx,
-                            "warning",
-                            "Unexpected record type: %s",
-                            raw_listRecord->recordType->type.type);
-            continue;
-        }
         size_t list_len = ListRecord_GetLen((ListRecord *)raw_listRecord);
         for (size_t j = 0; j < list_len; j++) {
             StringRecord *sr =
