@@ -51,6 +51,7 @@ jobs:
           profile: administrator
           profile-region: us-east-1
           async: true
+          ssh-key-name: tracebit_ci_canary
       - name: Pick OS
         id: pick-os
         env:
@@ -91,6 +92,7 @@ jobs:
           profile: administrator
           profile-region: us-east-1
           async: true
+          ssh-key-name: tracebit_ci_canary
       - name: Set Docker Image
         env:
           SELECTED_OS: ${{ needs.pick-os.outputs.os }}
@@ -133,7 +135,7 @@ jobs:
 
       - name: Build module
         run: |
-          docker run --rm \
+          python3 .github/scripts/tracebit-docker-run.py --rm \
             -v "${GITHUB_WORKSPACE}:/workspace" \
             -w /workspace \
             "${DOCKER_IMAGE}" \
@@ -141,7 +143,7 @@ jobs:
 
       - name: Run Random Traffic
         run: |
-          docker run --rm \
+          python3 .github/scripts/tracebit-docker-run.py --rm \
             -v "${GITHUB_WORKSPACE}:/workspace" \
             -w /workspace \
             "${DOCKER_IMAGE}" \
