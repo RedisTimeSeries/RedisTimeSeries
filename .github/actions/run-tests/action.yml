@@ -37,6 +37,11 @@ runs:
         if [[ "$INPUT_USE_VENV" == "1" ]]; then
           . venv/bin/activate
         fi
+        if [[ "${RUNNER_LABEL:-}" == "macos-26-intel" ]]; then
+          python3 -u .github/actions/run-tests/macos-resources.py &
+          resource_monitor=$!
+          trap 'kill "$resource_monitor" 2>/dev/null || true; wait "$resource_monitor" 2>/dev/null || true' EXIT
+        fi
         # Capture test output to file for parsing by capture-test-results action
         TEST_OUTPUT_FILE="$GITHUB_WORKSPACE/test_output.log"
         make test VG="$INPUT_RUN_VALGRIND" SAN="$INPUT_RUN_SANITIZER" QUICK="$INPUT_QUICK" \
