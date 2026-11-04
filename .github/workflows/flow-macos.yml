@@ -94,6 +94,7 @@ jobs:
       TAG: ${{ steps.set-env.outputs.TAG }}
       BRANCH: ${{ steps.set-env.outputs.BRANCH }}
       TAG_OR_BRANCH: ${{ steps.set-env.outputs.TAG }}${{ steps.set-env.outputs.BRANCH }}
+      os: ${{ steps.set-matrix.outputs.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -107,25 +108,20 @@ jobs:
         id: set-matrix
         env:
           OS_INPUT: ${{ inputs.os }}
-          QUICK: ${{ inputs.quick }}
-          BUILD_ONLY: ${{ inputs.build_only }}
         run: |
-          python3 - <<'PYTHON'
-          import json, os
-          platforms = os.environ['OS_INPUT'].split() or [
-              'macos-15', 'macos-26', 'macos-15-intel', 'macos-26-intel']
-          matrix = []
-          for platform in platforms:
-              # MOD-20156: isolate the long Intel suite on fresh runners per topology.
-              split = (platform == 'macos-26-intel' and
-                       os.environ['QUICK'] != 'true' and os.environ['BUILD_ONLY'] != 'true')
-              topologies = ['gen', 'slaves', 'aof', 'aof_slaves', 'oss_cluster', 'tls_cluster'] if split else ['']
-              matrix.extend({'os': platform, 'topo': topology} for topology in topologies)
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('matrix=' + json.dumps(matrix) + '\n')
-          PYTHON
+          if [ -z "$OS_INPUT" ]; then
+            OS='["macos-15", "macos-26", "macos-15-intel", "macos-26-intel"]'
+          else
+            # Convert space-separated list to JSON array (supports one or many).
+            OS="["
+            for os in $OS_INPUT; do
+              OS="${OS}\"${os}\","
+            done
+            OS="${OS%,}]"
+          fi
+          echo "${OS}"
+          echo "os=${OS}" >> $GITHUB_OUTPUT
   macos:
-    name: macos (${{ matrix.os }}${{ matrix.topo && format('-{0}', matrix.topo) || '' }})
     env:
       TAGGED: ${{ needs.setup-environment.outputs.TAGGED }}
       VERSION: ${{ needs.setup-environment.outputs.TAG }}
@@ -139,7 +135,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.setup-environment.outputs.matrix) }}
+        # 6.0.20 can't be built due to Redis bug.
+        os: ${{fromJson(needs.setup-environment.outputs.os)}}
     defaults:
       run:
         shell: bash -l -eo pipefail {0}
@@ -180,13 +177,6 @@ jobs:
       - name: Run tests
         if: ${{ !inputs.build_only }}
         uses: ./.github/actions/run-tests
-        env:
-          GEN: ${{ (matrix.topo == '' || matrix.topo == 'gen') && '1' || '0' }}
-          SLAVES: ${{ (matrix.topo == '' || matrix.topo == 'slaves') && '1' || '0' }}
-          AOF: ${{ (matrix.topo == '' || matrix.topo == 'aof') && '1' || '0' }}
-          AOF_SLAVES: ${{ (matrix.topo == '' || matrix.topo == 'aof_slaves') && '1' || '0' }}
-          OSS_CLUSTER: ${{ (matrix.topo == '' || matrix.topo == 'oss_cluster') && '1' || '0' }}
-          TLS_CLUSTER: ${{ (matrix.topo == '' || matrix.topo == 'tls_cluster') && '1' || '0' }}
         with:
           use-venv: '1'
           quick: ${{inputs.quick && '1' || '0'}}
@@ -194,20 +184,20 @@ jobs:
         if: ${{ always() && !inputs.build_only }}
         uses: ./.github/actions/capture-test-results
         with:
-          os-name: ${{ matrix.os }}${{ matrix.topo && format('-{0}', matrix.topo) || '' }}
+          os-name: ${{ matrix.os }}
       - name: Upload test artifacts
         if: ${{ failure() && !inputs.build_only }}
         uses: ./.github/actions/upload-artifacts
         with:
-          image: ${{ matrix.os }}${{ matrix.topo && format('-{0}', matrix.topo) || '' }}
+          image: ${{ matrix.os }}
       - name: Pack module
-        if: ${{ !inputs.build_only && (matrix.topo == '' || matrix.topo == 'gen') }}
+        if: ${{ !inputs.build_only }}
         uses: ./.github/actions/pack-module
         with:
           use-venv: '1'
           beta-version: ${{ inputs.beta-version }}
       - name: Upload artifacts to S3
-        if: ${{ !inputs.build_only && (matrix.topo == '' || matrix.topo == 'gen') }}
+        if: ${{ !inputs.build_only }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
