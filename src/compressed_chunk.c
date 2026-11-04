@@ -16,6 +16,7 @@
 
 #include <assert.h> // assert
 #include <limits.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>  // printf
 #include <stdlib.h> // malloc
@@ -518,20 +519,27 @@ void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io) {
 // Validates a compressed chunk that was loaded/deserialized from an untrusted source and,
 // when valid, installs read-ahead padding on its data buffer. `len` is the actual length of
 // the loaded `data` buffer. Returns true if the chunk is self-consistent and safe to decode.
-static bool Compressed_ValidateLoadedChunk(CompressedChunk *compchunk, size_t len) {
+static bool Compressed_ValidateLoadedChunk(CompressedChunk *compchunk,
+                                           size_t len,
+                                           const char **reason) {
     if (compchunk->data == NULL) {
+        *reason = "missing data buffer";
         return false;
     }
     if (len == 0) {
+        *reason = "empty data buffer";
         return false; /* Buffer size must be non-zero */
     }
     if (compchunk->idx > len * 8) {
+        *reason = "bit index exceeds buffer capacity";
         return false; /* Bit index can't exceed buffer size in bits */
     }
     if (compchunk->size != len) {
+        *reason = "size metadata does not match buffer length";
         return false; /* size metadata must match actual buffer length */
     }
     if (compchunk->size % sizeof(binary_t) != 0) {
+        *reason = "buffer size is not aligned to 8-byte words";
         return false; /* gorilla.c reads/writes data in binary_t (8-byte) words */
     }
     /* Every sample after the first costs >=2 bits to encode (appendInteger/appendFloat
@@ -539,12 +547,14 @@ static bool Compressed_ValidateLoadedChunk(CompressedChunk *compchunk, size_t le
      * Written as idx/2 < count-1 (equivalent to idx < 2*(count-1) for non-negative
      * integers) to avoid overflow when count is attacker-inflated near UINT64_MAX. */
     if (compchunk->count > 0 && compchunk->idx / 2 < compchunk->count - 1) {
+        *reason = "sample count exceeds encoded bit capacity";
         return false;
     }
     // Over-allocate so the decoder's bounded look-ahead can never touch unallocated memory.
     uint64_t *padded =
         (uint64_t *)realloc(compchunk->data, compchunk->size + GORILLA_DATA_READAHEAD_BYTES);
     if (padded == NULL) {
+        *reason = "failed to allocate decoder padding";
         return false;
     }
     compchunk->data = padded;
@@ -558,7 +568,7 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
 
     CompressedChunk *compchunk = (CompressedChunk *)rts_try_alloc(sizeof(*compchunk));
     if (compchunk == NULL) {
-        RedisModule_LogIOError(io, "error", "Failed to allocate chunk while loading from RDB");
+        RdbLoad_LogError(io, "Failed to allocate compressed chunk while loading from RDB");
         err = true;
         return TSDB_ERROR;
     }
@@ -578,7 +588,17 @@ int Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
 
     size_t len;
     compchunk->data = (uint64_t *)LoadStringBuffer_IOError(io, &len, err, TSDB_ERROR);
-    if (!Compressed_ValidateLoadedChunk(compchunk, len)) {
+    const char *reason = NULL;
+    if (!Compressed_ValidateLoadedChunk(compchunk, len, &reason)) {
+        RdbLoad_LogError(io,
+                         "compressed chunk: %s size=%" PRIu64 " buffer_len=%zu count=%" PRIu64
+                         " bit_index=%" PRIu64 " firstTimestamp=%" PRIu64,
+                         reason,
+                         (uint64_t)compchunk->size,
+                         len,
+                         (uint64_t)compchunk->count,
+                         (uint64_t)compchunk->idx,
+                         (uint64_t)compchunk->baseTimestamp);
         err = true;
         return TSDB_ERROR;
     }
@@ -615,7 +635,8 @@ int Compressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
 
     size_t len;
     compchunk->data = (uint64_t *)MR_ownedBufferFrom(sctx, &len);
-    if (!Compressed_ValidateLoadedChunk(compchunk, len)) {
+    const char *reason = NULL;
+    if (!Compressed_ValidateLoadedChunk(compchunk, len, &reason)) {
         Compressed_FreeChunk(compchunk);
         *chunk = NULL;
         return TSDB_ERROR;
