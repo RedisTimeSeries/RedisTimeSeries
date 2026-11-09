@@ -16,6 +16,11 @@ on:
       - '[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
+      baseline_branch:
+        description: 'Benchmark baseline branch; leave empty to compare against benchmark-baseline (manual runs never promote it)'
+        type: string
+        required: false
+        default: ''
       redis-ref:
         description: 'Redis ref to checkout (leave empty to use redis_ref from pack/ramp.yml)'
         required: false
@@ -26,6 +31,15 @@ on:
         type: boolean
         default: true
 jobs:
+  benchmark-comparison:
+    if: ${{ (github.event_name == 'schedule' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' }}
+    uses: ./.github/workflows/flow-benchmark-nightly.yml
+    permissions:
+      contents: write
+    with:
+      baseline_branch: ${{ inputs.baseline_branch || '' }}
+    secrets: inherit
+
   prepare-values:
     runs-on: ubuntu-latest
     outputs:
@@ -187,7 +201,7 @@ jobs:
   notify-results:
     name: Aggregate Results & Notify
     runs-on: ubuntu-latest
-    needs: [random-traffic, prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer, coverage]
+    needs: [benchmark-comparison, random-traffic, prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer, coverage]
     if: always() && (github.event_name == 'schedule' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
     permissions:
       actions: read
@@ -211,6 +225,7 @@ jobs:
           JOB_RESULTS=$(cat <<'EOF'
           {
             "coverage": "${{ needs.coverage.result }}",
+            "benchmark-comparison": "${{ needs.benchmark-comparison.result }}",
             "linter": "${{ needs.linter.result }}",
             "build-linux-x64": "${{ needs.build-linux-x64.result }}",
             "build-linux-arm64": "${{ needs.build-linux-arm64.result }}",
