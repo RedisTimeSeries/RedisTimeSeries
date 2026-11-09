@@ -240,7 +240,7 @@ jobs:
           else
             echo "::notice title=Docker image::Building image locally because prebuilt images are disabled: ${DOCKER_IMAGE}"
           fi
-          docker build \
+          bash .github/scripts/tracebit-docker.sh build \
             -f Dockerfile.${{ matrix.platform.os }} \
             --build-arg REDIS_REF=${{ env.REDIS_REF }} \
             --build-arg SANITIZER=${{ inputs.run_sanitizer && 'address' || '' }} \
@@ -250,7 +250,7 @@ jobs:
 
       - name: Build module
         run: |
-          python3 .github/scripts/tracebit-docker-run.py --rm \
+          bash .github/scripts/tracebit-docker.sh run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e SAN=${{ inputs.run_sanitizer && 'address' || '' }} \
@@ -277,7 +277,7 @@ jobs:
             oss_cluster) TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=1 TLS_CLUSTER=0" ;;
             tls_cluster) TOPO_ARGS="GEN=0 SLAVES=0 AOF=0 AOF_SLAVES=0 OSS_CLUSTER=0 TLS_CLUSTER=1" ;;
           esac
-          python3 .github/scripts/tracebit-docker-run.py --rm \
+          bash .github/scripts/tracebit-docker.sh run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             --cap-add=SYS_PTRACE \
@@ -314,7 +314,7 @@ jobs:
       - name: Pack module
         if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
         run: |
-          python3 .github/scripts/tracebit-docker-run.py --rm \
+          bash .github/scripts/tracebit-docker.sh run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e BRANCH=${{ env.BRANCH }} \
