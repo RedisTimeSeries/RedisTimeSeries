@@ -199,7 +199,6 @@ def _patch_uncompressed_sample_counts(dump: bytes, new_num_samples: int,
     base_ts, _ = read_uint_capture_offset()
     assert base_ts == 1
     old_num_samples, num_samples_off = read_uint_capture_offset()
-    assert old_num_samples == 1
     assert old_num_samples <= 63, "test assumes 1-byte rdb len encoding"
     size_bytes, _ = read_uint_capture_offset()
     assert size_bytes == chunk_size_bytes
@@ -222,7 +221,7 @@ def _patch_uncompressed_sample_counts(dump: bytes, new_num_samples: int,
     return bytes(b)
 
 
-def test_total_samples_mismatch_does_not_crash_on_delete_then_add(env):
+def test_total_samples_mismatch_uses_loaded_chunk_count(env):
     env.skipOnCluster()
 
     key = 'test_key'
@@ -232,14 +231,39 @@ def test_total_samples_mismatch_does_not_crash_on_delete_then_add(env):
         env.cmd('DUMP', key), new_num_samples=1, new_total_samples=0)
 
     env.cmd('DEL', key)
-    try:
-        env.cmd('RESTORE', key, 0, dump)
-    except Exception:
-        assert env.cmd('PING')
-        return
+    env.cmd('RESTORE', key, 0, dump)
+
+    info = env.cmd('TS.INFO', key)
+    info = dict(zip(info[::2], info[1::2]))
+    env.assertEqual(info[b'totalSamples'], 1)
+    env.assertEqual(env.cmd('TS.RANGE', key, '-', '+'), [[1, b'42']])
 
     env.assertEqual(env.cmd('TS.DEL', key, 0, 1000), 1)
     env.assertEqual(env.cmd('TS.ADD', key, 2000, 43), 2000)
+    assert env.cmd('PING')
+
+
+def test_underreported_total_samples_by_one_uses_loaded_chunk_count(env):
+    env.skipOnCluster()
+
+    key = 'test_key'
+    env.cmd('TS.CREATE', key, 'UNCOMPRESSED')
+    for timestamp in range(1, 6):
+        env.cmd('TS.ADD', key, timestamp, timestamp + 41)
+    dump = _patch_uncompressed_sample_counts(
+        env.cmd('DUMP', key), new_num_samples=5, new_total_samples=4)
+
+    env.cmd('DEL', key)
+    env.cmd('RESTORE', key, 0, dump)
+
+    info = env.cmd('TS.INFO', key)
+    info = dict(zip(info[::2], info[1::2]))
+    env.assertEqual(info[b'totalSamples'], 5)
+    env.assertEqual(env.cmd('TS.RANGE', key, '-', '+'),
+                    [[timestamp, str(timestamp + 41).encode()] for timestamp in range(1, 6)])
+
+    env.assertEqual(env.cmd('TS.DEL', key, 0, 1000), 5)
+    env.assertEqual(env.cmd('TS.ADD', key, 2000, 47), 2000)
     assert env.cmd('PING')
 
 
