@@ -1,3 +1,4 @@
+[![Protected by Tracebit Community Edition](.github/assets/tracebit-badge.svg)](https://community.tracebit.com/supplychainattacks)
 [![Release](https://img.shields.io/github/release/RedisTimeSeries/RedisTimeSeries.svg?sort=semver&kill_cache=1)](https://github.com/RedisTimeSeries/RedisTimeSeries/releases/latest)
 [![CircleCI](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master.svg?style=svg)](https://circleci.com/gh/RedisTimeSeries/RedisTimeSeries/tree/master)
 [![Dockerhub](https://img.shields.io/docker/pulls/redis/redis-stack-server?label=redis-stack-server)](https://hub.docker.com/r/redis/redis-stack-server/)
