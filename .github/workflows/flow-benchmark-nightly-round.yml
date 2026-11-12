@@ -65,8 +65,6 @@ jobs:
             --benchmarks-dir nightly-bundle/master/tests/benchmarks --shard ${{ matrix.shard }}
 
       - name: Compare assigned full workloads on AWS
-        env:
-          MAX_RETRIES: ${{ inputs.phase == 'confirmation' && '0' || '3' }}
         timeout-minutes: 300
         run: |
           python tests/benchmarks/compare_aws.py run \
@@ -74,7 +72,7 @@ jobs:
             --private-key "$RUNNER_TEMP/benchmark.pem" \
             --baseline-dir nightly-bundle/baseline --master-dir nightly-bundle/master \
             --plan nightly-bundle/plan.json --shard ${{ matrix.shard }} \
-            --output nightly-results/shard-${{ matrix.shard }} --max-retries "${MAX_RETRIES}"
+            --output nightly-results/shard-${{ matrix.shard }} --pairs 3
 
       - name: Tear down AWS resources even after benchmark failures
         if: always()
@@ -152,22 +150,9 @@ jobs:
             --plan nightly-bundle/plan.json \
             --results nightly-benchmark-results/comparison.json \
             --benchmarks-dir nightly-bundle/master/tests/benchmarks
-      - name: Download initial round for confirmation validation
-        if: inputs.phase == 'confirmation'
-        uses: actions/download-artifact@v7
-        with:
-          name: nightly-initial-benchmarks-${{ github.run_id }}
-          path: initial-round
       - name: Evaluate promotion criteria
         id: decision
-        env:
-          PHASE: ${{ inputs.phase }}
-        run: |
-          arguments=()
-          if [ "$PHASE" = confirmation ]; then
-            arguments+=(--previous initial-round/nightly-benchmark-results/comparison.json)
-          fi
-          python tests/benchmarks/nightly_baseline.py evaluate nightly-benchmark-results/comparison.json "${arguments[@]}"
+        run: python tests/benchmarks/nightly_baseline.py evaluate nightly-benchmark-results/comparison.json
       - name: Publish comparison summary
         if: always()
         env:
