@@ -131,6 +131,7 @@ void QueryLabelsArg_ObjectFree(void *arg);
 
 MRRecordType *GetMapRecordType();
 MRRecordType *GetListRecordType();
+MRRecordType *GetStringRecordType();
 MRRecordType *GetSeriesRecordType();
 MRRecordType *GetSlotRangesRecordType();
 MRRecordType *GetSeriesListRecordType();
