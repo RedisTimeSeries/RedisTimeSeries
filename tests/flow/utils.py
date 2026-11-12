@@ -351,6 +351,8 @@ def added_slaves_to_cluster(env):
 
             cluster_node_timeout = shard.getConnection().config_get("cluster-node-timeout")["cluster-node-timeout"]
             enable_debug_command = "no" if shard.enableDebugCommand is False else "yes"
+            # Mirror the master's test-bus setting; older Redis returns an empty dict.
+            protected_mode = shard.getConnection().config_get("cluster-bus-port-protected-mode")
             cmd = [shard.redisBinaryPath, "--port", str(replica_port),
                    "--cluster-enabled", "yes",
                    "--cluster-config-file", cluster_config_file,
@@ -359,6 +361,8 @@ def added_slaves_to_cluster(env):
                    "--dir", shard.dbDirPath,
                    "--dbfilename", f"replica-{replica_port}.rdb",
                    "--logfile", f"replica-{replica_port}.log"]
+            for option, value in protected_mode.items():
+                cmd += [f"--{option}", value]
             for pos, module in enumerate(shard.modulePath or []):
                 cmd += ["--loadmodule", module]
                 module_args = shard.moduleArgs[pos] if shard.moduleArgs else None
@@ -367,14 +371,23 @@ def added_slaves_to_cluster(env):
                         if arg.strip():
                             cmd += arg.split(" ")
             # Not mirrored from the masters yet: tls-*, masterauth/requirepass, appendonly, etc.
-            spawned.append((subprocess.Popen(cmd), replica_port, cluster_config_file))
+            process = subprocess.Popen(cmd)
+            spawned.append((process, replica_port, cluster_config_file))
 
             replica_conn = redis.Redis(port=replica_port, decode_responses=True)
+            start_time = time.time()
             while True:
                 try:
                     replica_conn.ping()
                     break
                 except redis.ConnectionError:
+                    if process.poll() is not None:
+                        raise RuntimeError(
+                            f"Replica on port {replica_port} exited with code {process.returncode} "
+                            f"before serving; see replica-{replica_port}.log or stderr for rejected config"
+                        )
+                    if time.time() - start_time > 60:
+                        raise TimeoutError(f"Replica on port {replica_port} did not serve in 60s")
                     time.sleep(0.1)
             replica_conn.execute_command("cluster", "meet", "127.0.0.1", shard.getMasterPort())
             while master_id not in replica_conn.execute_command("cluster", "nodes"):
