@@ -34,7 +34,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BASELINE_BRANCH: ${{ inputs.baseline_branch }}
-        run: python tests/benchmarks/nightly_baseline.py resolve
+        run: |
+          # Debug: compare a single candidate build against itself, including identical SHAs.
+          echo "baseline=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "candidate=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
   build:
     needs: resolve
@@ -64,14 +68,6 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Check out pinned baseline
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.resolve.outputs.baseline }}
-          path: benchmark-baseline
-          submodules: recursive
-          persist-credentials: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -82,14 +78,11 @@ jobs:
           sudo apt-get install -y build-essential cmake libclang-dev autoconf automake libtool pkg-config libssl-dev
           python -m pip install -r benchmark-driver/tests/benchmarks/requirements.txt
 
-      - name: Build both pinned revisions
+      - name: Build candidate once for both sides (debug)
         run: |
-          for source in benchmark-master benchmark-baseline; do
-            # Keep embedded source paths identical without reusing build artifacts.
-            mv "$source" benchmark-build
-            (cd benchmark-build && make -j"$(nproc)" build)
-            mv benchmark-build "$source"
-          done
+          mv benchmark-master benchmark-build
+          (cd benchmark-build && make -j"$(nproc)" build)
+          mv benchmark-build benchmark-master
 
       - name: Package shared builds and distribute all workloads
         env:
@@ -97,14 +90,15 @@ jobs:
         run: |
           mkdir -p nightly-bundle/{master,baseline}/bin/linux-x64-release nightly-bundle/master/tests
           cp benchmark-master/bin/linux-x64-release/redistimeseries.so nightly-bundle/master/bin/linux-x64-release/
-          cp benchmark-baseline/bin/linux-x64-release/redistimeseries.so nightly-bundle/baseline/bin/linux-x64-release/
+          cp benchmark-master/bin/linux-x64-release/redistimeseries.so nightly-bundle/baseline/bin/linux-x64-release/
+          cmp nightly-bundle/baseline/bin/linux-x64-release/redistimeseries.so nightly-bundle/master/bin/linux-x64-release/redistimeseries.so
           sha256sum nightly-bundle/{baseline,master}/bin/linux-x64-release/redistimeseries.so
           cp -R benchmark-master/tests/benchmarks nightly-bundle/master/tests/
           python - <<'PYTHON'
           import json, subprocess
           from pathlib import Path
           revisions = {label: subprocess.check_output(['git', '-C', path, 'rev-parse', 'HEAD'], text=True).strip()
-                       for label, path in [('baseline', 'benchmark-baseline'), ('master', 'benchmark-master')]}
+                       for label, path in [('baseline', 'benchmark-master'), ('master', 'benchmark-master')]}
           Path('nightly-bundle/revisions.json').write_text(json.dumps(revisions))
           PYTHON
           python benchmark-driver/tests/benchmarks/benchmark_jobs.py plan --aws --bundle nightly-bundle --shards 5

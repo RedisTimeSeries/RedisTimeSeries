@@ -66,7 +66,7 @@ jobs:
 
       - name: Compare assigned full workloads on AWS
         env:
-          MAX_RETRIES: ${{ inputs.phase == 'confirmation' && '0' || '3' }}
+          MAX_RETRIES: '0' # Debug: expose single-pair variation.
         timeout-minutes: 300
         run: |
           python tests/benchmarks/compare_aws.py run \
@@ -142,7 +142,7 @@ jobs:
       - name: Publish final throughput to Grafana data source
         id: grafana
         continue-on-error: true # Publication must not block benchmark-based promotion.
-        if: ${{ !cancelled() && inputs.phase == 'initial' }}
+        if: ${{ false }} # Debug results must not enter the production Grafana series.
         env:
           PERFORMANCE_RTS_HOST: ${{ secrets.PERFORMANCE_RTS_HOST }}
           PERFORMANCE_RTS_PORT: ${{ secrets.PERFORMANCE_RTS_PORT }}
