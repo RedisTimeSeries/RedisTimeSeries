@@ -60,6 +60,10 @@ A Redis time series comprises:
 
   For example, the following compaction: {10 minutes; avg; 10 years} will store the average of the raw values measured in each 10-minutes time frame - for 10 years.
 
+### Blocking reads
+
+`TS.READ key timestamp BLOCK milliseconds min_count` waits for qualifying samples even if the key is missing or is removed while waiting. Recreating the key does not reset the cursor or timeout. `BLOCK 0` waits indefinitely until enough qualifying samples arrive or the client is disconnected or explicitly unblocked. In Redis OSS Cluster, a slot ownership change interrupts the read with `MOVED`; the client can retry on the new owner. On timeout, the command returns the available qualifying samples, possibly an empty array.
+
 ## Examples of time series
 - Sensor data: e.g., temperatures or fan velocity for a server in a server farm
 - Historical prices of a stock
