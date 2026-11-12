@@ -1203,6 +1203,10 @@ CompactionRule *NewRule(RedisModuleString *destKey,
         return NULL;
     }
     rule->aggClass = GetAggClass(aggType);
+    if (rule->aggClass == NULL) {
+        free(rule);
+        return NULL;
+    }
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext(false);
     rule->bucketDuration = bucketDuration;
