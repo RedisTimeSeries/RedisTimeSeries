@@ -34,7 +34,7 @@ CODE_COVERAGE = os.getenv('CODE_COVERAGE', '0') == '1'
 # CI matrix runner label (e.g. "macos-15-intel"), exported by the workflow. Empty locally.
 RUNNER_LABEL = os.getenv('RUNNER_LABEL', '')
 
-# Upper bound on how long a "prompt" wake (e.g. TS.READ woken by a key deletion)
+# Upper bound on how long a "prompt" wake (e.g. TS.READ woken by a sample)
 # may take before we consider it a regression. Scaled up under Valgrind/sanitizer
 # so the slower wake-up callback there can't produce a false failure.
 WAKE_TIMEOUT_SECS = 30 if (VALGRIND or SANITIZER) else 5

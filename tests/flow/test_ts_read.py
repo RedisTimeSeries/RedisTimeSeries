@@ -2,6 +2,7 @@ import time
 from threading import Thread
 
 from includes import *
+from utils import slot_table
 
 
 # ---------------------------------------------------------------------------
@@ -342,32 +343,6 @@ def test_read_block_zero_blocks_forever_until_sample_arrives():
                     message="BLOCK 0 must wake promptly once a qualifying sample arrives")
     env.assertEqual(slot["error"], None)
     env.assertEqual(slot["result"], [[100, b"1"]])
-
-
-def test_read_block_zero_wakes_on_del():
-    """BLOCK 0 (infinite) must also unblock on key deletion, not hang forever."""
-    env = Env()
-    if env.is_cluster():
-        env.skip()
-
-    r = env.getConnection()
-    _seed(r, "ts", [(100, "1.0")])
-
-    t, slot = _start_read(env, "ts", 0, block_ms=0, min_count=5)
-    time.sleep(0.3)
-    env.assertTrue(t.is_alive(), message="BLOCK 0 should be parked")
-
-    t0 = time.time()
-    assert r.execute_command("DEL", "ts") == 1
-
-    t.join(timeout=WAKE_TIMEOUT_SECS)
-    elapsed = time.time() - t0
-    env.assertFalse(t.is_alive(),
-                    message="DEL must wake a BLOCK 0 client (took %.3fs)" % elapsed)
-    env.assertEqual(slot["error"], None)
-    env.assertEqual(slot["result"], [])
-    env.assertTrue(elapsed < WAKE_TIMEOUT_SECS,
-                   message="DEL wake must be immediate, took %.3fs" % elapsed)
 
 
 # ---------------------------------------------------------------------------
@@ -794,133 +769,160 @@ def test_read_without_block_respects_max_count():
     env.assertEqual(res, [[100, b"1"], [200, b"2"]])
 
 
-# ---------------------------------------------------------------------------
-# 16. Key deletion unblocks a parked READ client well before its timeout.
-#     Regression: TS.READ previously used BlockClientOnKeys (BLPOP-style)
-#     which ignored delete signals, so deleting the key left the client
-#     parked until block_ms — leaking the connection and hanging CI.
-# ---------------------------------------------------------------------------
+def _raw_read_connection(conn):
+    # Read the server's reply without redis-py following MOVED or retrying.
+    return conn.connection_pool.connection_class(**{
+        **conn.connection_pool.connection_kwargs,
+        "socket_timeout": WAKE_TIMEOUT_SECS,
+    })
 
-def test_read_del_wakes_parked_client():
-    env = Env()
-    if env.is_cluster():
+
+def test_read_cluster_migration_redirects_blocked_client():
+    env = Env(shardsCount=2, decodeResponses=True)
+    if env.env != "oss-cluster":
         env.skip()
 
-    r = env.getConnection()
-    _seed(r, "ts", [(100, "1.0")])
+    source, target = env.getConnection(1), env.getConnection(2)
+    source_id = source.execute_command("CLUSTER", "MYID")
+    target_id = target.execute_command("CLUSTER", "MYID")
+    target_port = target.connection_pool.connection_kwargs["port"]
 
-    # Server-side block timeout set to 2x the prompt-wake bound so a prompt
-    # return is unambiguously the deletion wake, not a timeout flush (both scale
-    # for Valgrind via WAKE_TIMEOUT_SECS).
-    t, slot = _start_read(env, "ts", 0, WAKE_TIMEOUT_SECS * 2 * 1000, min_count=5)
-    time.sleep(0.3)
-    env.assertTrue(t.is_alive(), message="READ should be parked waiting for more samples")
+    # Cover both a migrated series and a read waiting for a not-yet-created key.
+    for slot, exists in enumerate((True, False)):
+        key = "moving:{%s}" % slot_table[slot]
+        stationary = "stationary:{%s}" % slot_table[slot + 2]
+        if exists:
+            source.execute_command("TS.ADD", key, 1, 1)
+        source.execute_command("TS.ADD", stationary, 1, 1)
+        reader = _raw_read_connection(source)
+        unaffected = _raw_read_connection(source)
+        try:
+            for conn, name in ((reader, key), (unaffected, stationary)):
+                conn.send_command("TS.READ", name, 1000, "BLOCK",
+                                  WAKE_TIMEOUT_SECS * 2 * 1000, 1)
+            _wait_for_parked_readers(source, 2)
 
-    t0 = time.time()
-    assert r.execute_command("DEL", "ts") == 1
+            target.execute_command("CLUSTER", "SETSLOT", slot, "IMPORTING", source_id)
+            source.execute_command("CLUSTER", "SETSLOT", slot, "MIGRATING", target_id)
+            result = source.execute_command("MIGRATE", "127.0.0.1", target_port, key, 0, 5000)
+            env.assertEqual(result, "OK" if exists else "NOKEY")
+            # MIGRATE deleting the source key must not produce an empty reply.
+            _wait_for_parked_readers(source, 2)
+            for conn in (target, source):
+                conn.execute_command("CLUSTER", "SETSLOT", slot, "NODE", target_id)
 
-    t.join(timeout=WAKE_TIMEOUT_SECS)
-    elapsed = time.time() - t0
-    env.assertFalse(t.is_alive(),
-                    message="DEL must wake the parked READ client (took %.3fs)" % elapsed)
-    env.assertEqual(slot["error"], None)
-    env.assertEqual(slot["result"], [])
-    env.assertTrue(elapsed < WAKE_TIMEOUT_SECS,
-                   message="DEL wake must be immediate, took %.3fs" % elapsed)
+            try:
+                reply = reader.read_response()
+                env.assertTrue(False, message="Expected MOVED, got %r" % (reply,))
+            except redis.exceptions.ResponseError as error:
+                env.assertEqual(str(error), "MOVED %d 127.0.0.1:%d" % (slot, target_port))
+            reader.send_command("PING")
+            env.assertEqual(reader.read_response(), "PONG")
 
-
-def test_read_unlink_wakes_parked_client():
-    env = Env()
-    if env.is_cluster():
-        env.skip()
-
-    r = env.getConnection()
-    _seed(r, "ts", [(100, "1.0")])
-
-    t, slot = _start_read(env, "ts", 0, WAKE_TIMEOUT_SECS * 2 * 1000, min_count=5)
-    time.sleep(0.3)
-    env.assertTrue(t.is_alive(), message="READ should be parked")
-
-    t0 = time.time()
-    assert r.execute_command("UNLINK", "ts") == 1
-
-    t.join(timeout=WAKE_TIMEOUT_SECS)
-    elapsed = time.time() - t0
-    env.assertFalse(t.is_alive(),
-                    message="UNLINK must wake the parked READ client (took %.3fs)" % elapsed)
-    env.assertEqual(slot["error"], None)
-    env.assertEqual(slot["result"], [])
-    env.assertTrue(elapsed < WAKE_TIMEOUT_SECS,
-                   message="UNLINK wake must be immediate, took %.3fs" % elapsed)
-
-
-def test_read_flushall_wakes_parked_client():
-    env = Env()
-    if env.is_cluster():
-        env.skip()
-
-    r = env.getConnection()
-    _seed(r, "ts", [(100, "1.0")])
-
-    t, slot = _start_read(env, "ts", 0, WAKE_TIMEOUT_SECS * 2 * 1000, min_count=5)
-    time.sleep(0.3)
-    env.assertTrue(t.is_alive(), message="READ should be parked")
-
-    t0 = time.time()
-    r.execute_command("FLUSHALL")
-
-    t.join(timeout=WAKE_TIMEOUT_SECS)
-    elapsed = time.time() - t0
-    env.assertFalse(t.is_alive(),
-                    message="FLUSHALL must wake the parked READ client (took %.3fs)" % elapsed)
-    env.assertEqual(slot["error"], None)
-    env.assertEqual(slot["result"], [])
-    env.assertTrue(elapsed < WAKE_TIMEOUT_SECS,
-                   message="FLUSHALL wake must be immediate, took %.3fs" % elapsed)
+            _wait_for_parked_readers(source, 1)
+            source.execute_command("TS.ADD", stationary, 1000, 42)
+            env.assertEqual(unaffected.read_response(), [[1000, "42"]])
+            target.execute_command("TS.ADD", key, 1000, 99)
+            env.assertEqual(target.execute_command("TS.READ", key, 1000), [[1000, "99"]])
+        finally:
+            reader.disconnect()
+            unaffected.disconnect()
+            # Restore ownership and data so the shared cluster is reusable.
+            target.execute_command("ASKING")
+            target.execute_command("DEL", key)
+            for conn in (source, target):
+                conn.execute_command("CLUSTER", "SETSLOT", slot, "NODE", source_id)
+            source.execute_command("DEL", stationary)
+        _wait_for_parked_readers(source, 0)
+        env.assertEqual(source.info("clients")["blocked_clients"], 0)
+        env.assertEqual(target.info("clients")["blocked_clients"], 0)
 
 
-def test_read_flushdb_wakes_parked_client():
-    env = Env()
-    if env.is_cluster():
-        env.skip()
+def test_read_key_removal_waits_for_recreation():
+    env = Env(decodeResponses=True)
+    source = env.getConnection(1)
+    key = "ts:{%s}" % slot_table[0]
+    for block_ms in (0, WAKE_TIMEOUT_SECS * 2 * 1000):
+        for removal in (("DEL", key), ("UNLINK", key), ("FLUSHDB",),
+                        ("FLUSHALL",), ("PEXPIREAT", key, 1)):
+            source.execute_command("DEL", key)
+            source.execute_command("TS.ADD", key, 100, 1)
+            reader = _raw_read_connection(source)
+            try:
+                reader.send_command("TS.READ", key, "$", "BLOCK", block_ms, 2)
+                _wait_for_parked_readers(source, 1)
+                source.execute_command(*removal)
+                env.assertEqual(source.exists(key), 0)
+                _wait_for_parked_readers(source, 1)
 
-    r = env.getConnection()
-    _seed(r, "ts", [(100, "1.0")])
-
-    t, slot = _start_read(env, "ts", 0, WAKE_TIMEOUT_SECS * 2 * 1000, min_count=5)
-    _wait_for_parked_readers(r, 1)
-
-    t0 = time.time()
-    r.execute_command("FLUSHDB")
-
-    t.join(timeout=WAKE_TIMEOUT_SECS)
-    elapsed = time.time() - t0
-    env.assertFalse(t.is_alive(),
-                    message="FLUSHDB must wake the parked READ client (took %.3fs)" % elapsed)
-    env.assertEqual(slot["error"], None)
-    env.assertEqual(slot["result"], [])
-    env.assertTrue(elapsed < WAKE_TIMEOUT_SECS,
-                   message="FLUSHDB wake must be immediate, took %.3fs" % elapsed)
+                # Recreation must preserve both the resolved '$' cursor and min_count.
+                source.execute_command("TS.ADD", key, 1, 1)
+                source.execute_command("TS.ADD", key, 100, 1)
+                _wait_for_parked_readers(source, 1)
+                source.execute_command("TS.ADD", key, 101, 2)
+                _wait_for_parked_readers(source, 1)
+                source.execute_command("TS.ADD", key, 102, 3)
+                env.assertEqual(reader.read_response(), [[101, "2"], [102, "3"]])
+                reader.send_command("PING")
+                env.assertEqual(reader.read_response(), "PONG")
+            finally:
+                reader.disconnect()
+            _wait_for_parked_readers(source, 0)
 
 
-def test_read_multiple_parked_clients_all_wake_on_del():
-    """Every client parked on the same key must wake on a single DEL,
-    not just one — TS.READ is broadcast, not BLPOP-style dequeue."""
-    env = Env()
-    if env.is_cluster():
-        env.skip()
+def test_read_deleted_key_timeout_and_disconnect_cleanup():
+    env = Env(decodeResponses=True)
+    source = env.getConnection(1)
+    key = "ts:{%s}" % slot_table[0]
+    for finish in ("timeout", "disconnect", "unblock"):
+        source.execute_command("TS.ADD", key, 1, 1)
+        reader = _raw_read_connection(source)
+        try:
+            reader.send_command("CLIENT", "ID")
+            client_id = reader.read_response()
+            block_ms = WAKE_TIMEOUT_SECS * 200 if finish == "timeout" else 0
+            reader.send_command("TS.READ", key, 1000, "BLOCK", block_ms, 1)
+            started = time.monotonic()
+            _wait_for_parked_readers(source, 1)
+            source.execute_command("DEL", key)
+            _wait_for_parked_readers(source, 1)
+            if finish == "timeout":
+                env.assertEqual(reader.read_response(), [])
+                env.assertTrue(time.monotonic() - started >= block_ms / 1000 * 0.9)
+            elif finish == "disconnect":
+                reader.disconnect()
+            else:
+                env.assertEqual(source.execute_command("CLIENT", "UNBLOCK", client_id, "ERROR"), 1)
+                try:
+                    reply = reader.read_response()
+                    env.assertTrue(False, message="Expected UNBLOCKED, got %r" % (reply,))
+                except redis.exceptions.ResponseError as error:
+                    env.assertTrue(str(error).startswith("UNBLOCKED "))
+            if finish != "disconnect":
+                reader.send_command("PING")
+                env.assertEqual(reader.read_response(), "PONG")
+        finally:
+            reader.disconnect()
+        _wait_for_parked_readers(source, 0)
+        env.assertEqual(source.info("clients")["blocked_clients"], 0)
 
-    r = env.getConnection()
-    _seed(r, "ts", [(100, "1.0")])
 
-    workers = [_start_read(env, "ts", 0, WAKE_TIMEOUT_SECS * 2 * 1000, min_count=5) for _ in range(4)]
-    _wait_for_parked_readers(r, len(workers))
-
-    assert r.execute_command("DEL", "ts") == 1
-
-    for t, slot in workers:
-        t.join(timeout=WAKE_TIMEOUT_SECS)
-        env.assertFalse(t.is_alive(),
-                        message="every parked READ must wake on DEL")
-        env.assertEqual(slot["error"], None)
-        env.assertEqual(slot["result"], [])
+def test_read_multiple_parked_clients_wake_after_recreation():
+    env = Env(decodeResponses=True)
+    source = env.getConnection(1)
+    key = "ts:{%s}" % slot_table[0]
+    source.execute_command("TS.ADD", key, 1, 1)
+    readers = [_raw_read_connection(source) for _ in range(4)]
+    try:
+        for reader in readers:
+            reader.send_command("TS.READ", key, 1000, "BLOCK", 0, 1)
+        _wait_for_parked_readers(source, len(readers))
+        source.execute_command("DEL", key)
+        _wait_for_parked_readers(source, len(readers))
+        source.execute_command("TS.ADD", key, 1000, 42)
+        for reader in readers:
+            env.assertEqual(reader.read_response(), [[1000, "42"]])
+    finally:
+        for reader in readers:
+            reader.disconnect()
+    _wait_for_parked_readers(source, 0)
