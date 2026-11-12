@@ -579,6 +579,24 @@ RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx) {
     return res;
 }
 
+// Ask core about logical expiry without deleting keys or mutating the label index.
+bool IsSeriesVisible(RedisModuleCtx *ctx, const char *name, size_t len) {
+    int mode = REDISMODULE_READ | REDISMODULE_OPEN_KEY_NOEFFECTS;
+    // Enterprise's metadata-only mode avoids loading a value from flash. OSS does not expose it.
+    const int noLookup = 1 << 25; // REDISMODULE_OPEN_KEY_NO_LOOKUP in the Enterprise API
+    if (RedisModule_GetOpenKeyModesAll) {
+        mode |= RedisModule_GetOpenKeyModesAll() & noLookup;
+    }
+    RedisModuleString *keyName = RedisModule_CreateString(NULL, name, len);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, mode);
+    bool visible = key != NULL;
+    if (key) {
+        RedisModule_CloseKey(key);
+    }
+    RedisModule_FreeString(NULL, keyName);
+    return visible;
+}
+
 RedisModuleString *QueryLabelsBuildPrefix(QueryLabelsSubtype subtype,
                                           RedisModuleString *labelFilter) {
     return subtype == QueryLabelsSubtype_Labels

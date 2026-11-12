@@ -875,6 +875,9 @@ Record *ShardQueryindexMapper(ExecutionCtx *rctx, void *arg) {
     Record *series_list = ListRecord_Create(0);
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        if (!IsSeriesVisible(rts_staticCtx, currentKey, currentKeyLen)) {
+            continue;
+        }
         ListRecord_Add(series_list,
                        StringRecord_Create(strndup(currentKey, currentKeyLen), currentKeyLen));
     }
@@ -1299,6 +1302,9 @@ static void TS_INTERNAL_QUERYINDEX(RedisModuleCtx *ctx, void *args) {
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     while ((keyName = RedisModule_DictNextC(iter, &keyNameLen, NULL)) != NULL) {
+        if (!IsSeriesVisible(ctx, keyName, keyNameLen)) {
+            continue;
+        }
         RedisModule_ReplyWithStringBuffer(ctx, keyName, keyNameLen);
         replylen++;
     }

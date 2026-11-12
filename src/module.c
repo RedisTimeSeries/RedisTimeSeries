@@ -289,6 +289,9 @@ void _TSDB_queryindex_impl(RedisModuleCtx *ctx, QueryPredicateList *queries) {
     size_t currentKeyLen;
     long long replylen = 0;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
+        if (!IsSeriesVisible(ctx, currentKey, currentKeyLen)) {
+            continue;
+        }
         RedisModule_ReplyWithStringBuffer(ctx, currentKey, currentKeyLen);
         replylen++;
     }
@@ -378,6 +381,9 @@ void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
     size_t currentKeyLen;
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         if (!CheckKeyIsAllowedToReadC(ctx, userCtx.user, currentKey, currentKeyLen)) {
+            continue;
+        }
+        if (!IsSeriesVisible(ctx, currentKey, currentKeyLen)) {
             continue;
         }
         QueryLabelsFromIndex(
