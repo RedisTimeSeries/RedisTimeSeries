@@ -3,6 +3,14 @@ import sys
 from logging import exception
 from RLTest import Env as _rltestEnv
 from packaging import version
+from redis import RedisCluster
+
+# These legacy commands fan out inside the module and have no routing key.
+# Send each query to one coordinator; redis-py's generic key parser rejects them.
+RedisCluster.COMMAND_FLAGS.update({
+    command: RedisCluster.DEFAULT_NODE
+    for command in ('TS.MGET', 'TS.MRANGE', 'TS.MREVRANGE', 'TS.QUERYINDEX')
+})
 
 try:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../deps/readies"))
