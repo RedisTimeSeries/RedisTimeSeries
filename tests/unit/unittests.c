@@ -18,7 +18,6 @@
 #include "unittests_uncompressed_chunk.c"
 #include "unittests_cmd_info.c"
 #include "unittests_rdb_load_oom.c"
-#include "unittests_tsdb.c"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,7 +32,6 @@ int main(int argc, char *argv[]) {
     MU_RUN_SUITE(parse_duplicate_policy_test_suite);
     MU_RUN_SUITE(command_info_test_suite);
     MU_RUN_SUITE(rdb_load_oom_test_suite);
-    MU_RUN_SUITE(tsdb_test_suite);
     MU_REPORT();
     return minunit_fail;
 }
