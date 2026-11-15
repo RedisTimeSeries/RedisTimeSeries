@@ -44,20 +44,16 @@ RedisModuleBlockedClient *RTS_BlockClientOnKey(RedisModuleCtx *ctx,
     assert(ctx != NULL);
     assert(key != NULL);
 
-    // Use the WithFlags variant with REDISMODULE_BLOCK_UNBLOCK_DELETED so the
-    // reply callback fires when the key is deleted (DEL/UNLINK/FLUSHALL/
-    // expire/eviction). Without the flag, Redis filters out deletion signals
-    // and a parked client only wakes on its user-supplied timeout.
+    // Like XREAD, keep waiting across deletion; Redis handles slot redirection.
     RedisModuleBlockedClient *bc =
-        RedisModule_BlockClientOnKeysWithFlags(ctx,
+        RedisModule_BlockClientOnKeys(ctx,
                                                reply_callback,
                                                timeout_callback,
                                                free_privdata,
                                                timeout_ms,
                                                &key,
                                                1,
-                                               privdata,
-                                               REDISMODULE_BLOCK_UNBLOCK_DELETED);
+                                               privdata);
     if (bc && CheckVersionForBlockedClientMeasureTime()) {
         RedisModule_BlockedClientMeasureTimeStart(bc);
     }
