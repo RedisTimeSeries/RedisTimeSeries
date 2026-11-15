@@ -830,8 +830,20 @@ def test_read_cluster_migration_redirects_blocked_client():
             # Restore ownership and data so the shared cluster is reusable.
             target.execute_command("ASKING")
             target.execute_command("DEL", key)
-            for conn in (source, target):
+            # Drop the target's higher-epoch claim before the source reclaims the slot.
+            for conn in (target, source):
                 conn.execute_command("CLUSTER", "SETSLOT", slot, "NODE", source_id)
+            deadline = time.monotonic() + WAKE_TIMEOUT_SECS
+            while True:
+                owners = [
+                    next((entry[2][2] for entry in conn.execute_command("CLUSTER", "SLOTS")
+                          if entry[0] <= slot <= entry[1]), None)
+                    for conn in (source, target)
+                ]
+                if owners == [source_id, source_id] or time.monotonic() >= deadline:
+                    break
+                time.sleep(0.01)
+            env.assertEqual(owners, [source_id, source_id])
             source.execute_command("DEL", stationary)
         _wait_for_parked_readers(source, 0)
         env.assertEqual(source.info("clients")["blocked_clients"], 0)
@@ -839,6 +851,7 @@ def test_read_cluster_migration_redirects_blocked_client():
 
 
 def test_read_key_removal_waits_for_recreation():
+    skip_on_rlec()
     env = Env(decodeResponses=True)
     source = env.getConnection(1)
     key = "ts:{%s}" % slot_table[0]
@@ -871,6 +884,7 @@ def test_read_key_removal_waits_for_recreation():
 
 
 def test_read_deleted_key_timeout_and_disconnect_cleanup():
+    skip_on_rlec()
     env = Env(decodeResponses=True)
     source = env.getConnection(1)
     key = "ts:{%s}" % slot_table[0]
@@ -908,6 +922,7 @@ def test_read_deleted_key_timeout_and_disconnect_cleanup():
 
 
 def test_read_multiple_parked_clients_wake_after_recreation():
+    skip_on_rlec()
     env = Env(decodeResponses=True)
     source = env.getConnection(1)
     key = "ts:{%s}" % slot_table[0]
