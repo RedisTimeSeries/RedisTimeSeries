@@ -129,8 +129,8 @@ typedef enum LibmrProtocol
 #define LIBMR_PROTOCOL_GEARS_STR "GEARS"
 #define LIBMR_PROTOCOL_INTERNAL_STR "INTERNAL"
 
-static inline __attribute__((always_inline)) const char *LibmrProtocolToString(
-    const LibmrProtocol protocol) {
+static inline __attribute__((always_inline))
+const char *LibmrProtocolToString(const LibmrProtocol protocol) {
     switch (protocol) {
         case LIBMR_PROTOCOL_UNKNOWN:
             return LIBMR_PROTOCOL_UNKNOWN_STR;
