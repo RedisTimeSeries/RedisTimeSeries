@@ -86,6 +86,37 @@ def test_ooo_split(self):
             r.execute_command('DEL', 'split')
 
 
+def test_ooo_split_after_delete_tracks_total_samples(self):
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'split_after_delete'
+        samples = [
+            (1978, 0.011848837952325164),
+            (3866, 0.057698316631206836),
+            (4973, 0.4736283651797485),
+            (997, 0.8497118940972751),
+            (4718, 0.6473209756322149),
+            (2396, 0.7736732429407744),
+            (836, 0.4298092626856276),
+            (3360, 0.3925336842535311),
+        ]
+
+        r.execute_command('TS.CREATE', key, 'COMPRESSED', 'CHUNK_SIZE', 48,
+                          'DUPLICATE_POLICY', 'LAST')
+        for timestamp, value in samples:
+            r.execute_command('TS.ADD', key, timestamp, value)
+        assert r.execute_command('TS.DEL', key, 973, 3666) == 4
+        r.execute_command('TS.ADD', key, 2988, 0.24194011099574075)
+
+        assert _get_ts_info(r, key).total_samples == 5
+        assert len(r.execute_command('TS.RANGE', key, '-', '+')) == 5
+
+        dump = r.execute_command('DUMP', key)
+        r.execute_command('DEL', key)
+        r.execute_command('RESTORE', key, 0, dump)
+        assert _get_ts_info(r, key).total_samples == 5
+        assert len(r.execute_command('TS.RANGE', key, '-', '+')) == 5
+
+
 def test_rand_oom(self):
     random.seed(20)
     start_ts = 1592917924000
