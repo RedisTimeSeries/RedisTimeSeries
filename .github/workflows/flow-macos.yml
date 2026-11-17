@@ -110,7 +110,7 @@ jobs:
           OS_INPUT: ${{ inputs.os }}
         run: |
           if [ -z "$OS_INPUT" ]; then
-            OS='["macos-14", "macos-15", "macos-26", "macos-14-large", "macos-15-intel", "macos-26-intel"]'
+            OS='["macos-15", "macos-26", "macos-15-intel", "macos-26-intel"]'
           else
             # Convert space-separated list to JSON array (supports one or many).
             OS="["
