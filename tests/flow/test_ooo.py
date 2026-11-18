@@ -1,4 +1,6 @@
+import json
 import random
+import time
 
 import pytest
 import redis
@@ -84,6 +86,91 @@ def test_ooo_split(self):
                 assert round(float(res[i][1]) + 1.01, 2) == round(float(res[i + 1][1]), 2)
 
             r.execute_command('DEL', 'split')
+
+
+def test_ooo_split_after_delete_tracks_total_samples(self):
+    with Env().getClusterConnectionIfNeeded() as r:
+        key = 'split_after_delete'
+        samples = [
+            (1978, 0.011848837952325164),
+            (3866, 0.057698316631206836),
+            (4973, 0.4736283651797485),
+            (997, 0.8497118940972751),
+            (4718, 0.6473209756322149),
+            (2396, 0.7736732429407744),
+            (836, 0.4298092626856276),
+            (3360, 0.3925336842535311),
+        ]
+
+        r.execute_command('TS.CREATE', key, 'COMPRESSED', 'CHUNK_SIZE', 48,
+                          'DUPLICATE_POLICY', 'LAST')
+        for timestamp, value in samples:
+            r.execute_command('TS.ADD', key, timestamp, value)
+        assert r.execute_command('TS.DEL', key, 973, 3666) == 4
+        r.execute_command('TS.ADD', key, 2988, 0.24194011099574075)
+
+        assert _get_ts_info(r, key).total_samples == 5
+        assert len(r.execute_command('TS.RANGE', key, '-', '+')) == 5
+
+        dump = r.execute_command('DUMP', key)
+        r.execute_command('DEL', key)
+        r.execute_command('RESTORE', key, 0, dump)
+        assert _get_ts_info(r, key).total_samples == 5
+        assert len(r.execute_command('TS.RANGE', key, '-', '+')) == 5
+
+
+def test_random_upserts_and_deletes(self):
+    iterations = 10
+    min_samples_per_iteration, max_samples_per_iteration = 10, 50
+    min_timestamp, max_timestamp = 1000, 2000
+    min_value, max_value = 1000.0, 2000.0
+    key = 'random_upserts_and_deletes'
+    seed = time.time_ns()
+    print(f'test_random_upserts_and_deletes seed: {seed}', flush=True)
+    rng = random.Random(seed)
+
+    def jsonify(info_debug):
+        info_debug = decode_if_needed(info_debug)
+        info_debug_json = dict(zip(info_debug[::2], info_debug[1::2]))
+        info_debug_json['Chunks'] = [
+            dict(zip(chunk[::2], chunk[1::2]))
+            for chunk in info_debug_json['Chunks']
+        ]
+        return info_debug_json
+
+    def json_dump(j):
+        return json.dumps(j, indent=2)
+
+    def assert_invariants(r):
+        info_debug = r.execute_command('TS.INFO', key, 'DEBUG')
+        info_debug_json = jsonify(info_debug)
+        chunks = info_debug_json['Chunks']
+        total_samples = info_debug_json['totalSamples']
+
+        assert info_debug_json['chunkCount'] == len(chunks), json_dump(info_debug_json)
+        assert sum(chunk['samples'] for chunk in chunks) == total_samples, json_dump(info_debug_json)
+        first_timestamp = chunks[0]['startTimestamp'] if total_samples else 0
+        last_timestamp = chunks[-1]['endTimestamp'] if total_samples else 0
+        assert info_debug_json['firstTimestamp'] == first_timestamp, json_dump(info_debug_json)
+        assert info_debug_json['lastTimestamp'] == last_timestamp, json_dump(info_debug_json)
+
+    with Env().getClusterConnectionIfNeeded() as r:
+        r.execute_command('TS.CREATE', key, 'COMPRESSED', 'CHUNK_SIZE', 48,
+                          'DUPLICATE_POLICY', 'LAST')
+        for _ in range(iterations):
+            sample_count = rng.randint(min_samples_per_iteration, max_samples_per_iteration)
+            for _ in range(sample_count):
+                timestamp = rng.randint(min_timestamp, max_timestamp)
+                value = rng.uniform(min_value, max_value)
+                r.execute_command('TS.ADD', key, timestamp, value)
+                assert_invariants(r)
+
+            start_timestamp = rng.randint(min_timestamp, max_timestamp)
+            end_timestamp = rng.randint(min_timestamp, max_timestamp)
+            if start_timestamp > end_timestamp:
+                start_timestamp, end_timestamp = end_timestamp, start_timestamp
+            r.execute_command('TS.DEL', key, start_timestamp, end_timestamp)
+            assert_invariants(r)
 
 
 def test_rand_oom(self):
