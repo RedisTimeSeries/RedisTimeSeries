@@ -25,6 +25,7 @@ CC_C_STD=gnu11
 MK_CUSTOM_CLEAN=1
 
 include $(MK)/defs
+include $(ROOT)/build/compiler-warnings.mk
 
 _SOURCES=unittests.c
 
@@ -86,3 +87,4 @@ lint:
 
 format:
 	$(SHOW)clang-format -i $(SOURCES) $(patsubst %.cpp,%.h,$(SOURCES))
+
