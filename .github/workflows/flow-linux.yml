@@ -25,6 +25,10 @@ on:
         description: 'Run sanitizer on the tests'
         type: boolean
         default: false
+      run_gcc_analyzer:
+        description: 'Enable GCC static analysis during module compilation'
+        type: boolean
+        default: false
       quick:
         description: 'Run quick tests'
         type: boolean
@@ -67,6 +71,10 @@ on:
         default: false
       run_sanitizer:
         description: 'Run sanitizer on the tests'
+        type: boolean
+        default: false
+      run_gcc_analyzer:
+        description: 'Enable GCC static analysis during module compilation'
         type: boolean
         default: false
       quick:
@@ -257,7 +265,7 @@ jobs:
             -w /workspace \
             -e SAN=${{ inputs.run_sanitizer && 'address' || '' }} \
             "${DOCKER_IMAGE}" \
-            make build
+            make build GCC_ANALYZER=${{ inputs.run_gcc_analyzer && '1' || '0' }}
 
       - name: Run tests
         if: ${{ !inputs.build_only }}
@@ -334,3 +342,4 @@ jobs:
           github-ref: ${{ github.ref }}
           osnick: ${{ matrix.platform.os }}
           beta-version: ${{ inputs.beta-version }}
+

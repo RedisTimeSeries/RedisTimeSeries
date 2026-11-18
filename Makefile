@@ -89,6 +89,7 @@ make build
                    # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
   DEPS=1           # also build dependant modules
   COV=1            # perform coverage analysis (implies debug build)
+  GCC_ANALYZER=1   # run GCC static analysis; fail on uninitialized-value findings
 
 make clean         # remove binary files
   ALL=1            # remove binary directories
@@ -231,6 +232,7 @@ OBJECTS=$(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.o,$(SOURCES))
 CC_DEPS = $(patsubst $(SRCDIR)/%.c,$(BINDIR)/%.d,$(SOURCES))
 
 include $(MK)/defs
+include $(ROOT)/build/compiler-warnings.mk
 
 #----------------------------------------------------------------------------------------------
 
@@ -598,3 +600,4 @@ endif
 # short-circuits the readies/Python-requiring include path.
 
 endif
+
