@@ -69,14 +69,37 @@ jobs:
           fi
 
   run-random-traffic:
-    name: random-traffic (${{ needs.pick-os.outputs.os }})
+    name: random-traffic (${{ matrix.mode }}, ${{ matrix.os }})
     needs: pick-os
-    runs-on: ubuntu-latest
+    # Match flow-linux: ASan containers require the Ubuntu 24.04 host image.
+    runs-on: ${{ matrix.mode == 'asan' && 'ubuntu-24.04' || 'ubuntu-latest' }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: plain
+            os: ${{ needs.pick-os.outputs.os }}
+            suffix: ''
+            san: ''
+            vg: ''
+          - mode: asan
+            os: jammy
+            suffix: '-sanitizer'
+            san: address
+            vg: ''
+          - mode: valgrind
+            os: jammy
+            suffix: '-valgrind'
+            san: ''
+            vg: '1'
     permissions:
       contents: read
       packages: read
     env:
       REDIS_REF: ${{ inputs.redis-ref || 'unstable' }}
+      SAN: ${{ matrix.san }}
+      VG: ${{ matrix.vg }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -95,11 +118,11 @@ jobs:
           ssh-key-name: tracebit_ci_canary
       - name: Set Docker Image
         env:
-          SELECTED_OS: ${{ needs.pick-os.outputs.os }}
+          IMAGE_OS: ${{ matrix.os }}${{ matrix.suffix }}
         run: |
           repo="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
           image_tag="${REDIS_REF:-$(.install/get-redis-ref.sh)}"
-          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-x86-${SELECTED_OS}:${image_tag}" >> "$GITHUB_ENV"
+          echo "DOCKER_IMAGE=ghcr.io/${repo}/redistimeseries-x86-${IMAGE_OS}:${image_tag}" >> "$GITHUB_ENV"
 
       - name: Pull Docker Image
         id: pull-image
@@ -120,7 +143,7 @@ jobs:
       - name: Build Docker Image
         if: ${{ !inputs.use_prebuilt_images || steps.pull-image.outcome == 'failure' }}
         env:
-          SELECTED_OS: ${{ needs.pick-os.outputs.os }}
+          SELECTED_OS: ${{ matrix.os }}
         run: |
           if [ "${{ inputs.use_prebuilt_images }}" = "true" ]; then
             echo "::notice title=Docker image::Prebuilt image pull failed; building locally: ${DOCKER_IMAGE}"
@@ -130,6 +153,8 @@ jobs:
           bash .github/scripts/tracebit-docker.sh build \
             -f "Dockerfile.${SELECTED_OS}" \
             --build-arg REDIS_REF="${REDIS_REF}" \
+            --build-arg SANITIZER="${SAN}" \
+            --build-arg VALGRIND="${VG}" \
             -t "${DOCKER_IMAGE}" \
             .
 
@@ -139,28 +164,27 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/workspace" \
             -w /workspace \
             "${DOCKER_IMAGE}" \
-            make build
+            make build SAN="${SAN}" VG="${VG}"
 
       - name: Run Random Traffic
+        env:
+          TRAFFIC_MODE: ${{ matrix.mode }}
         run: |
           bash .github/scripts/tracebit-docker.sh run --rm \
             -v "${GITHUB_WORKSPACE}:/workspace" \
             -w /workspace \
+            --cap-add=SYS_PTRACE \
+            --security-opt seccomp=unconfined \
+            -e TRAFFIC_MODE="${TRAFFIC_MODE}" \
             "${DOCKER_IMAGE}" \
             bash -ec '
-              pip install redis-command-generator
-              MODULE=$(find bin -name "redistimeseries.so" | head -1)
-              echo "Loading module: $MODULE"
-              redis-server --loadmodule ./$MODULE --port 6379 &
-              sleep 2
-              python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 250000 > random_traffic.txt
-              tail -n 100 random_traffic.txt
-              pkill -f redis-server || true
+              python3 -m pip install redis-command-generator
+              exec python3 tests/random-traffic/run.py --mode "$TRAFFIC_MODE"
             '
 
       - name: Upload random traffic
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: random-traffic-${{ needs.pick-os.outputs.os }}-log
-          path: random_traffic.txt
+          name: random-traffic-${{ matrix.mode }}-${{ matrix.os }}-logs
+          path: random-traffic-logs/
