@@ -179,11 +179,11 @@ int replyUngroupedMultiRange(RedisModuleCtx *ctx, RedisModuleDict *result, const
 
 // ACL: skips candidates the caller can't read. Shared by the local and cluster-fanout
 // TS.QUERYLABELS paths (see libmr_integration.c).
-void QueryLabelsAggregateFromCandidates(RedisModuleCtx *ctx,
-                                        QueryLabelsSubtype subtype,
-                                        RedisModuleString *labelFilter,
-                                        RedisModuleDict *candidates,
-                                        RedisModuleDict *agg);
+void QueryLabelsAggregate(RedisModuleCtx *ctx,
+                          QueryLabelsSubtype subtype,
+                          RedisModuleString *labelFilter,
+                          QueryPredicateList *queries,
+                          RedisModuleDict *agg);
 
 extern int persistence_in_progress;
 
