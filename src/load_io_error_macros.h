@@ -1,6 +1,8 @@
 #ifndef REDIS_TIMESERIES_LOAD_IO_ERROR_MACROS_H
 #define REDIS_TIMESERIES_LOAD_IO_ERROR_MACROS_H
 
+#include "rdb_load_logging.h"
+
 ///
 /// `defer` and `errdefer` are macros that are used to execute a block of code at the end of the current
 /// scope. They behave similarly to the `defer` and `errdefer` keywords in languages like Go, Swift, and Zig.
@@ -60,6 +62,7 @@ static inline __attribute__((__always_inline__)) void defer_cleanup_(void (^*blo
     __extension__({                                                                                \
         double res = RedisModule_LoadDouble((rdb));                                                \
         if (RedisModule_IsIOError(rdb)) {                                                          \
+            RdbLoad_LogError(rdb, "I/O error: operation=LoadDouble source=%s:%d", __FILE__, __LINE__); \
             is_err = true;                                                                         \
             return ret;                                                                            \
         }                                                                                          \
@@ -70,6 +73,7 @@ static inline __attribute__((__always_inline__)) void defer_cleanup_(void (^*blo
     __extension__({                                                                                \
         uint64_t res = RedisModule_LoadUnsigned((rdb));                                            \
         if (RedisModule_IsIOError(rdb)) {                                                          \
+            RdbLoad_LogError(rdb, "I/O error: operation=LoadUnsigned source=%s:%d", __FILE__, __LINE__); \
             is_err = true;                                                                         \
             return ret;                                                                            \
         }                                                                                          \
@@ -80,6 +84,7 @@ static inline __attribute__((__always_inline__)) void defer_cleanup_(void (^*blo
     __extension__({                                                                                \
         RedisModuleString *res = RedisModule_LoadString((rdb));                                    \
         if (RedisModule_IsIOError(rdb)) {                                                          \
+            RdbLoad_LogError(rdb, "I/O error: operation=LoadString source=%s:%d", __FILE__, __LINE__); \
             is_err = true;                                                                         \
             return ret;                                                                            \
         }                                                                                          \
@@ -90,6 +95,7 @@ static inline __attribute__((__always_inline__)) void defer_cleanup_(void (^*blo
     __extension__({                                                                                \
         char *res = RedisModule_LoadStringBuffer((rdb), (len));                                    \
         if (RedisModule_IsIOError(rdb)) {                                                          \
+            RdbLoad_LogError(rdb, "I/O error: operation=LoadStringBuffer source=%s:%d", __FILE__, __LINE__); \
             is_err = true;                                                                         \
             return ret;                                                                            \
         }                                                                                          \

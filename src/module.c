@@ -2698,7 +2698,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                     "notice",
                     "RedisTimeSeries version %d, git_sha=%s",
                     REDISTIMESERIES_MODULE_VERSION,
-                    REDISTIMESERIES_GIT_SHA);
+                    REDISTIMESERIES_GIT_SHA[0] ? REDISTIMESERIES_GIT_SHA : "unknown");
 
     RTS_GetRedisVersion();
     RedisModule_Log(ctx,

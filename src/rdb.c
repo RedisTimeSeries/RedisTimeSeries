@@ -23,11 +23,28 @@ int last_rdb_load_version;
 void *series_rdb_load(RedisModuleIO *io, int encver) {
     last_rdb_load_version = encver;
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
-        RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
+        RdbLoad_LogError(
+            io,
+            "data is not in the correct encoding: encver=%d supported_min=%d supported_max=%d",
+            encver,
+            TS_ENC_VER,
+            TS_LATEST_ENCVER);
         return NULL;
     }
 
     bool err = false;
+    __blocked const char *loadStage = "series metadata";
+    __blocked uint64_t itemIndex = 0;
+    __blocked uint64_t itemCount = 0;
+    // Register before resource cleanup so this runs last, using the IO-owned key.
+    errdefer(err,
+             RdbLoad_LogError(io,
+                              "series rejected: encver=%d stage=%s item_index=%" PRIu64
+                              " item_count=%" PRIu64 " (indices are zero-based)",
+                              encver,
+                              loadStage,
+                              itemIndex,
+                              itemCount));
     __blocked Series *series = NULL;
 
     RedisModuleString *keyName = LoadString_IOError(io, err, NULL);
@@ -40,7 +57,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
     if (cCtx.chunkSizeBytes == 0 || cCtx.chunkSizeBytes % 8 != 0) {
-        RedisModule_LogIOError(io, "error", "chunkSizeBytes must be a non-zero multiple of 8");
+        RdbLoad_LogError(io,
+                         "chunkSizeBytes must be a non-zero multiple of 8: chunkSizeBytes=%" PRIu64,
+                         (uint64_t)cCtx.chunkSizeBytes);
         err = true;
         return NULL;
     }
@@ -65,15 +84,18 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     const double ignoreMaxValDiff =
         Load_IOError_OrDefault(io, err, NULL, encver >= TS_CREATE_IGNORE_VER, 0.0);
 
+    loadStage = "labels";
     cCtx.labelsCount = LoadUnsigned_IOError(io, err, NULL);
     cCtx.labels = rts_try_calloc(cCtx.labelsCount, sizeof *cCtx.labels);
     errdefer(err, if (!series && cCtx.labels) FreeLabels(cCtx.labels, cCtx.labelsCount));
     if (unlikely(cCtx.labelsCount > 0 && cCtx.labels == NULL)) {
-        RedisModule_LogIOError(io, "error", "OOM allocating labels");
+        RdbLoad_LogError(io, "OOM allocating labels: labelsCount=%zu", (size_t)cCtx.labelsCount);
         err = true;
         return NULL;
     }
+    itemCount = cCtx.labelsCount;
     for (int i = 0; i < cCtx.labelsCount; i++) {
+        itemIndex = i;
         cCtx.labels[i].key = LoadString_IOError(io, err, NULL);
         cCtx.labels[i].value = LoadString_IOError(io, err, NULL);
     }
@@ -83,8 +105,13 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     // the series only being indexed on loaded notification
     errdefer(err, FreeSeries(series));
 
+    loadStage = "compaction rules";
+    itemIndex = 0;
+    itemCount = 0;
     const uint64_t rulesCount = LoadUnsigned_IOError(io, err, NULL);
+    itemCount = rulesCount;
     for (int i = 0; i < rulesCount; i++) {
+        itemIndex = i;
         RedisModuleString *destKey = LoadString_IOError(io, err, NULL);
         // clean if there is a key name which been alloced but not added to series yet
         errdefer(err, if (destKey) RedisModule_FreeString(NULL, destKey));
@@ -97,7 +124,12 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
         CompactionRule *rule = NewRule(destKey, aggType, bucketDuration, timestampAlignment);
         if (rule == NULL) {
-            RedisModule_LogIOError(io, "error", "Failed to create rule while loading from RDB");
+            RdbLoad_LogError(io,
+                             "Failed to create rule while loading from RDB: aggType=%" PRIu64
+                             " bucketDuration=%" PRIu64 " alignment=%" PRIu64,
+                             aggType,
+                             bucketDuration,
+                             timestampAlignment);
             err = true;
             return NULL;
         }
@@ -112,19 +144,26 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         series->rules = rule;
 
         if (rule->aggClass->readContext(rule->aggContext, io, encver)) {
+            RdbLoad_LogError(io, "Failed to load compaction context: aggType=%" PRIu64, aggType);
             err = true;
             return NULL;
         }
     }
 
     if (encver < TS_SIZE_RDB_VER) {
+        loadStage = "legacy samples";
         const uint64_t samplesCount = LoadUnsigned_IOError(io, err, NULL);
+        itemCount = samplesCount;
         for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
+            itemIndex = sampleIndex;
             const timestamp_t ts = LoadUnsigned_IOError(io, err, NULL);
             const double val = LoadDouble_IOError(io, err, NULL);
             SeriesAddSample(series, ts, val);
         }
     } else {
+        loadStage = "chunks";
+        itemIndex = 0;
+        itemCount = 0;
         // Free the default allocated chunk given LoadFromRDB will allocate a proper sized chunk
         timestamp_t rax_key = 0;
         Chunk_t *chunk = RedisModule_DictGetC(series->chunks, &rax_key, sizeof(rax_key), NULL);
@@ -133,21 +172,33 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         }
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         const uint64_t numChunks = LoadUnsigned_IOError(io, err, NULL);
+        itemCount = numChunks;
         if (numChunks == 0) {
-            RedisModule_LogIOError(io, "error", "time series must contain a chunk");
+            RdbLoad_LogError(io, "time series must contain a chunk: numChunks=0");
             err = true;
             return NULL;
         }
         uint64_t loadedSamples = 0;
         for (uint64_t i = 0; i < numChunks; ++i) {
+            itemIndex = i;
             if (series->funcs->LoadFromRDB(&chunk, io)) {
+                RdbLoad_LogError(
+                    io,
+                    "chunk rejected: chunk_index=%" PRIu64 " numChunks=%" PRIu64 " encoding=%s",
+                    i,
+                    numChunks,
+                    cCtx.options & SERIES_OPT_UNCOMPRESSED ? "uncompressed" : "compressed");
                 err = true;
                 return NULL;
             }
             const uint64_t chunkSamples = series->funcs->GetNumOfSample(chunk);
             // Reject a count that would wrap the running total.
             if (chunkSamples > UINT64_MAX - loadedSamples) {
-                RedisModule_LogIOError(io, "error", "totalSamples overflow");
+                RdbLoad_LogError(io,
+                                 "totalSamples overflow: loadedSamples=%" PRIu64
+                                 " chunkSamples=%" PRIu64,
+                                 loadedSamples,
+                                 chunkSamples);
                 // The dictionary does not own this chunk until insertion succeeds.
                 series->funcs->FreeChunk(chunk);
                 err = true;
@@ -156,7 +207,11 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             if (dictOperator(
                     series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET) ==
                 REDISMODULE_ERR) {
-                RedisModule_LogIOError(io, "error", "duplicate chunk start timestamp");
+                RdbLoad_LogError(io,
+                                 "duplicate chunk start timestamp: chunk_index=%" PRIu64
+                                 " firstTimestamp=%" PRIu64,
+                                 i,
+                                 (uint64_t)series->funcs->GetFirstTimestamp(chunk));
                 // Insertion failed, so FreeSeries will not release this chunk.
                 series->funcs->FreeChunk(chunk);
                 err = true;
@@ -165,9 +220,15 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             // Count each successfully loaded chunk once.
             loadedSamples += chunkSamples;
         }
+        loadStage = "sample count";
         // The serialized total must match the counts stored in the loaded chunks.
         if (loadedSamples != totalSamples) {
-            RedisModule_LogIOError(io, "error", "totalSamples does not match loaded chunks");
+            RdbLoad_LogError(io,
+                             "totalSamples does not match loaded chunks: persisted=%" PRIu64
+                             " loaded=%" PRIu64 " numChunks=%" PRIu64,
+                             totalSamples,
+                             loadedSamples,
+                             numChunks);
             err = true;
             return NULL;
         }
