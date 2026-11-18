@@ -18,24 +18,44 @@
 static inline __attribute__((format(printf, 2, 3))) void RdbLoad_LogError(RedisModuleIO *io,
                                                                           const char *fmt,
                                                                           ...) {
-    char reason[512];
+    // Unit tests and some module callbacks can reach failure paths without an IO context.
+    // The Redis APIs are also optional on older supported Redis versions.
+    if (io == NULL || RedisModule_LogIOError == NULL) {
+        return;
+    }
+
+    char reason[512] = { 0 };
     va_list args;
     va_start(args, fmt);
     vsnprintf(reason, sizeof(reason), fmt, args);
     va_end(args);
+    reason[sizeof(reason) - 1] = '\0';
 
-    const RedisModuleString *key = RedisModule_GetKeyNameFromIO(io);
+    const RedisModuleString *key = NULL;
     size_t keyLen = 0;
-    const char *bytes = key ? RedisModule_StringPtrLen(key, &keyLen) : NULL;
+    const char *bytes = NULL;
+    if (RedisModule_GetKeyNameFromIO != NULL) {
+        key = RedisModule_GetKeyNameFromIO(io);
+    }
+    if (key != NULL && RedisModule_StringPtrLen != NULL) {
+        bytes = RedisModule_StringPtrLen(key, &keyLen);
+    }
+
     const size_t shown = keyLen < 128 ? keyLen : 128;
     char hex[257];
     static const char digits[] = "0123456789abcdef";
-    for (size_t i = 0; i < shown; ++i) {
-        const unsigned char byte = (unsigned char)bytes[i];
-        hex[2 * i] = digits[byte >> 4];
-        hex[2 * i + 1] = digits[byte & 15];
+    if (bytes == NULL) {
+        key = NULL;
+        keyLen = 0;
+    } else {
+        for (size_t i = 0; i < shown; ++i) {
+            const unsigned char byte = (unsigned char)bytes[i];
+            hex[2 * i] = digits[byte >> 4];
+            hex[2 * i + 1] = digits[byte & 15];
+        }
+        hex[2 * shown] = '\0';
     }
-    hex[2 * shown] = '\0';
+
     // Redis has no "error" log level: it silently falls back to verbose.
     RedisModule_LogIOError(io,
                            "warning",
