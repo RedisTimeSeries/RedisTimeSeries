@@ -1,4 +1,6 @@
+import json
 import random
+import time
 
 import pytest
 import redis
@@ -84,6 +86,88 @@ def test_ooo_split(self):
                 assert round(float(res[i][1]) + 1.01, 2) == round(float(res[i + 1][1]), 2)
 
             r.execute_command('DEL', 'split')
+
+
+def test_random_upserts_and_deletes(self):
+    seed = time.time_ns()
+    print(f'test_random_upserts_and_deletes seed: {seed}', flush=True)
+    rng = random.Random(seed)
+
+    def jsonify(info_debug):
+        info_debug = decode_if_needed(info_debug)
+        info_debug_json = dict(zip(info_debug[::2], info_debug[1::2]))
+        info_debug_json['Chunks'] = [
+            dict(zip(chunk[::2], chunk[1::2]))
+            for chunk in info_debug_json['Chunks']
+        ]
+        return info_debug_json
+
+    def json_dump(j):
+        return json.dumps(j, indent=2)
+
+    def assert_invariants(r, key, expected_samples):
+        info_debug = r.execute_command('TS.INFO', key, 'DEBUG')
+        info_debug_json = jsonify(info_debug)
+        chunks = info_debug_json['Chunks']
+        total_samples = info_debug_json['totalSamples']
+
+        assert info_debug_json['chunkCount'] == len(chunks), json_dump(info_debug_json)
+        assert sum(chunk['samples'] for chunk in chunks) == total_samples, json_dump(info_debug_json)
+        assert total_samples == len(expected_samples), json_dump(info_debug_json)
+        first_timestamp = chunks[0]['startTimestamp'] if total_samples else 0
+        last_timestamp = chunks[-1]['endTimestamp'] if total_samples else 0
+        assert info_debug_json['firstTimestamp'] == first_timestamp, json_dump(info_debug_json)
+        assert info_debug_json['lastTimestamp'] == last_timestamp, json_dump(info_debug_json)
+
+        actual_samples = r.execute_command('TS.RANGE', key, '-', '+')
+        assert [timestamp for timestamp, _ in actual_samples] == sorted(expected_samples), json_dump(info_debug_json)
+        epsilon = 1e-9
+        assert all(
+            abs(float(value) - expected_samples[timestamp]) <= epsilon
+            for timestamp, value in actual_samples
+        ), json_dump(info_debug_json)
+
+        copy_key = f'{key}:copy'
+        r.execute_command('RESTORE', copy_key, 0, r.execute_command('DUMP', key))
+        copy_info_debug_json = jsonify(r.execute_command('TS.INFO', copy_key, 'DEBUG'))
+        key_specific_fields = {'keySelfName', 'memoryUsage'}
+        original_info = {k: v for k, v in info_debug_json.items() if k not in key_specific_fields}
+        copy_info = {k: v for k, v in copy_info_debug_json.items() if k not in key_specific_fields}
+        assert copy_info == original_info, json_dump({'original': info_debug_json, 'copy': copy_info_debug_json})
+        copy_samples = r.execute_command('TS.RANGE', copy_key, '-', '+')
+        assert copy_samples == actual_samples, json_dump({'original': decode_if_needed(actual_samples), 'copy': decode_if_needed(copy_samples)})
+        r.execute_command('DEL', copy_key)
+
+    def run_iterations(r, key):
+        expected_samples = {}
+        iterations = 10
+        min_samples_per_iteration, max_samples_per_iteration = 10, 50
+        min_timestamp, max_timestamp = 1000, 2000
+        min_value, max_value = 1000.0, 2000.0
+        for _ in range(iterations):
+            sample_count = rng.randint(min_samples_per_iteration, max_samples_per_iteration)
+            for _ in range(sample_count):
+                timestamp = rng.randint(min_timestamp, max_timestamp)
+                value = rng.uniform(min_value, max_value)
+                r.execute_command('TS.ADD', key, timestamp, value)
+                expected_samples[timestamp] = value  # since the DUPLICATE_POLICY is LAST
+                assert_invariants(r, key, expected_samples)
+
+            start_timestamp = rng.randint(min_timestamp, max_timestamp)
+            end_timestamp = rng.randint(min_timestamp, max_timestamp)
+            if start_timestamp > end_timestamp:
+                start_timestamp, end_timestamp = end_timestamp, start_timestamp
+            r.execute_command('TS.DEL', key, start_timestamp, end_timestamp)
+            for timestamp in list(expected_samples):
+                if start_timestamp <= timestamp <= end_timestamp:
+                    del expected_samples[timestamp]
+            assert_invariants(r, key, expected_samples)
+
+    with Env().getClusterConnectionIfNeeded() as r:
+        for encoding in ('COMPRESSED', 'UNCOMPRESSED'):
+            key = f'random_upserts_and_deletes_{encoding.lower()}'
+            r.execute_command('TS.CREATE', key, encoding, 'CHUNK_SIZE', 48, 'DUPLICATE_POLICY', 'LAST')
+            run_iterations(r, key)
 
 
 def test_rand_oom(self):
