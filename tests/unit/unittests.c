@@ -12,6 +12,32 @@
 #include "minunit.h"
 
 #include "parse_policies.h"
+
+#include <setjmp.h>
+
+static jmp_buf unittests_assert_jmp;
+static int unittests_assert_failed;
+
+static void unittests_assert_handler(const char *estr, const char *file, int line) {
+    (void)estr;
+    (void)file;
+    (void)line;
+    unittests_assert_failed = 1;
+    longjmp(unittests_assert_jmp, 1);
+}
+
+#define mu_assert_redis_assert_fails(expr, message)                                                \
+    do {                                                                                           \
+        void (*saved_assert)(const char *, const char *, int) = RedisModule__Assert;               \
+        RedisModule__Assert = unittests_assert_handler;                                            \
+        unittests_assert_failed = 0;                                                               \
+        if (setjmp(unittests_assert_jmp) == 0) {                                                   \
+            (void)(expr);                                                                          \
+        }                                                                                          \
+        RedisModule__Assert = saved_assert;                                                        \
+        mu_assert(unittests_assert_failed, message);                                               \
+    } while (0)
+
 #include "unittests_compressed_chunk.c"
 #include "unittests_parse_duplicate_policy.c"
 #include "unittests_parse_policies.c"
