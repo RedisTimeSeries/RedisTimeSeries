@@ -707,8 +707,9 @@ int SeriesUpsertSample(Series *series,
         chunkFirstTS = funcs->GetFirstTimestamp(chunk);
     }
 
-    // Split chunks
-    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * SPLIT_FACTOR) {
+    if (funcs->GetNumOfSample(chunk) > 1 &&
+        funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * SPLIT_FACTOR) {
+        // Split chunks
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;
