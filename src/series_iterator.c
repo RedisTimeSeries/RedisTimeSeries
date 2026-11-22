@@ -87,7 +87,7 @@ EnrichedChunk *SeriesIteratorGetNextChunk(AbstractIterator *abstractIterator) {
     if (!curChunk || iter->series->funcs->GetNumOfSample(curChunk) == 0) {
         if (unlikely(curChunk && iter->series->funcs->GetNumOfSample(curChunk) > 0 &&
                      iter->series->totalSamples == 0)) { // empty chunks are being removed
-            RedisModule_Log(rts_staticCtx, "error", "Empty chunk in a non empty series is invalid");
+            RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "Empty chunk in a non empty series is invalid");
         }
         if (should_finalize_last_bucket(iter)) {
             iter->enrichedChunk->samples.num_samples = 0;
