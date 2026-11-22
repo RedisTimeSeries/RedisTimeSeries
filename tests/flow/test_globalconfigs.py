@@ -406,7 +406,10 @@ def test_ts_num_threads_module_arg():
     Thread names are read from /proc on Linux or via ``sample`` on macOS.
     '''
     skip_on_rlec()
-    env = Env(env='oss-cluster', shardsCount=2, moduleArgs="ts-num-threads 5", noLog=False)
+    # Non-cluster lanes don't pass tests.sh's cluster-bus flag, so set it here.
+    env = Env(env='oss-cluster', shardsCount=2, useSlaves=False, useAof=False,
+              clusterBusPortProtectedMode=os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None,
+              moduleArgs="ts-num-threads 5", noLog=False)
     if is_redis_version_lower_than(env, '7.0'):
         env.skip()
 
