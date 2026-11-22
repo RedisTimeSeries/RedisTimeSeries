@@ -93,8 +93,9 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
     }
 
     if (!RegisterConfigurationOptions(ctx)) {
-        RedisModule_Log(
-            ctx, REDISMODULE_LOGLEVEL_WARNING, "Failed to register the RedisTimeSeries configurations, aborting...");
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Failed to register the RedisTimeSeries configurations, aborting...");
 
         FreeConfig();
 
@@ -102,8 +103,9 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
     }
 
     if (RedisModule_LoadConfigs(ctx) != REDISMODULE_OK) {
-        RedisModule_Log(
-            ctx, REDISMODULE_LOGLEVEL_WARNING, "Failed to load the RedisTimeSeries configurations, aborting...");
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Failed to load the RedisTimeSeries configurations, aborting...");
 
         FreeConfig();
 
@@ -545,8 +547,9 @@ GetSeriesResult CheckDictSeriesPermissions(RedisModuleCtx *ctx,
 
     while ((currentKey = RedisModule_DictNext(ctx, iter, NULL)) != NULL) {
         if (checkAcls && !CheckKeyIsAllowedToRead(userCtx.user, currentKey)) {
-            RedisModule_Log(
-                ctx, REDISMODULE_LOGLEVEL_WARNING, "The user lacks the required permissions for the key, stopping.");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "The user lacks the required permissions for the key, stopping.");
             RedisModule_FreeString(ctx, currentKey);
             ret = GetSeriesResult_PermissionError;
             break;
@@ -2225,7 +2228,9 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                 RedisModule_CloseKey(key);
                 break;
             case GetSeriesResult_GenericError:
-                RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "couldn't open key or key is not a Timeseries.");
+                RedisModule_Log(ctx,
+                                REDISMODULE_LOGLEVEL_WARNING,
+                                "couldn't open key or key is not a Timeseries.");
                 break;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,
@@ -2382,7 +2387,8 @@ void FlushEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
 }
 
 void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, void *data) {
-    RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "swapdb isn't supported by redis timeseries");
+    RedisModule_Log(
+        ctx, REDISMODULE_LOGLEVEL_WARNING, "swapdb isn't supported by redis timeseries");
     if ((!memcmp(&e, &RedisModuleEvent_FlushDB, sizeof(e)))) {
         RedisModuleSwapDbInfo *ei = data;
         REDISMODULE_NOT_USED(ei);
@@ -2452,28 +2458,38 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
 
     switch (subevent) {
         case REDISMODULE_SUBEVENT_SHARDING_SLOT_RANGE_CHANGED:
-            RedisModule_Log(
-                ctx, REDISMODULE_LOGLEVEL_NOTICE, "%s", "Got slot range change event, enter trimming phase.");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_NOTICE,
+                            "%s",
+                            "Got slot range change event, enter trimming phase.");
             isReshardTrimming = true;
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_STARTED:
-            RedisModule_Log(
-                ctx, REDISMODULE_LOGLEVEL_NOTICE, "%s", "Got trimming started event, enter trimming phase.");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_NOTICE,
+                            "%s",
+                            "Got trimming started event, enter trimming phase.");
             isReshardTrimming = true;
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_ENDED:
-            RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_NOTICE, "%s", "Got trimming ended event, exit trimming phase.");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_NOTICE,
+                            "%s",
+                            "Got trimming ended event, exit trimming phase.");
             isReshardTrimming = false;
             break;
         default:
-            RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "Bad subevent given, ignored.");
+            RedisModule_Log(
+                rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "Bad subevent given, ignored.");
     }
 }
 
 void ClusterAsmCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
     if (eid.id != REDISMODULE_EVENT_CLUSTER_SLOT_MIGRATION) {
-        RedisModule_Log(
-            rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "Bad event given (id=%" PRIu64 "), ignored.", eid.id);
+        RedisModule_Log(rts_staticCtx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Bad event given (id=%" PRIu64 "), ignored.",
+                        eid.id);
         return;
     }
 
@@ -2536,8 +2552,10 @@ void ClusterAsmTrimCallback(RedisModuleCtx *ctx,
                             uint64_t subevent,
                             void *data) {
     if (eid.id != REDISMODULE_EVENT_CLUSTER_SLOT_MIGRATION_TRIM) {
-        RedisModule_Log(
-            rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "Bad event given (id=%" PRIu64 "), ignored.", eid.id);
+        RedisModule_Log(rts_staticCtx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Bad event given (id=%" PRIu64 "), ignored.",
+                        eid.id);
         return;
     }
 
@@ -2573,8 +2591,10 @@ static void ClusterTopologyChangeCallback(RedisModuleCtx *ctx,
                                           void *data) {
     REDISMODULE_NOT_USED(subevent);
     if (eid.id != REDISMODULE_EVENT_CLUSTER_TOPOLOGY_CHANGE) {
-        RedisModule_Log(
-            ctx, REDISMODULE_LOGLEVEL_WARNING, "Bad topology event given (id=%" PRIu64 "), ignored.", eid.id);
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Bad topology event given (id=%" PRIu64 "), ignored.",
+                        eid.id);
         return;
     }
 
@@ -2888,7 +2908,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SetCommandAcls(ctx, "ts.mget", "read");
 
     if (RegisterTSCommandInfos(ctx) != REDISMODULE_OK) {
-        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "Failed to register timeseries command infos");
+        RedisModule_Log(
+            ctx, REDISMODULE_LOGLEVEL_WARNING, "Failed to register timeseries command infos");
         FreeConfigAndStaticCtx();
 
         return REDISMODULE_ERR;
@@ -2909,7 +2930,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         }
 
         if (TSGlobalConfig.topologyEvents) {
-            RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_NOTICE, "%s", "Subscribe to topology changes events");
+            RedisModule_Log(
+                ctx, REDISMODULE_LOGLEVEL_NOTICE, "%s", "Subscribe to topology changes events");
             RedisModule_SubscribeToServerEvent(
                 ctx, RedisModuleEvent_ClusterTopologyChange, ClusterTopologyChangeCallback);
         }

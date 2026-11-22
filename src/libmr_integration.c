@@ -730,8 +730,9 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
         RedisModule_FreeString(rts_staticCtx, keyName);
 
         if (status != GetSeriesResult_Success) {
-            RedisModule_Log(
-                rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "couldn't open key or key is not a Timeseries.");
+            RedisModule_Log(rts_staticCtx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "couldn't open key or key is not a Timeseries.");
             continue;
         }
 
@@ -794,8 +795,9 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         RedisModule_FreeString(rts_staticCtx, keyName);
 
         if (status != GetSeriesResult_Success) {
-            RedisModule_Log(
-                rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "couldn't open key or key is not a Timeseries.");
+            RedisModule_Log(rts_staticCtx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "couldn't open key or key is not a Timeseries.");
             continue;
         }
 
@@ -1731,8 +1733,9 @@ Record *SeriesRecord_New(Series *series,
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
         if (series->funcs->GetNumOfSample(chunk) == 0) {
             if (unlikely(series->totalSamples != 0)) { // empty chunks are being removed
-                RedisModule_Log(
-                    mr_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "Empty chunk in a non empty series is invalid");
+                RedisModule_Log(mr_staticCtx,
+                                REDISMODULE_LOGLEVEL_WARNING,
+                                "Empty chunk in a non empty series is invalid");
             }
             break;
         }

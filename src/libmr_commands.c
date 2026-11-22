@@ -141,7 +141,10 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
             continue;
         }
 
-        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "Unexpected record type: %s", r->recordType->type.type);
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Unexpected record type: %s",
+                        r->recordType->type.type);
         RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
         goto __error;
     }
