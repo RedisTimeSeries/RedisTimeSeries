@@ -10,7 +10,9 @@ from test_borken_rdb import (
 )
 
 
-def test_rdb_load_diagnostics(env):
+def test_rdb_load_diagnostics():
+    # These tests assert log contents; RLTest otherwise redirects the server log to /dev/null.
+    env = Env(noLog=False)
     env.skipOnCluster()
     env.cmd('CONFIG', 'SET', 'loglevel', 'warning')
     cases = [
@@ -43,7 +45,9 @@ def test_rdb_load_diagnostics(env):
             assert is_line_in_server_log(env, key_context + ' chunk rejected: chunk_index=0 numChunks=1')
 
 
-def test_rdb_load_diagnostics_bound_key_length(env):
+def test_rdb_load_diagnostics_bound_key_length():
+    # These tests assert log contents; RLTest otherwise redirects the server log to /dev/null.
+    env = Env(noLog=False)
     env.skipOnCluster()
     source = 'source-long-key'
     env.cmd('TS.CREATE', source, 'UNCOMPRESSED')
@@ -54,7 +58,9 @@ def test_rdb_load_diagnostics_bound_key_length(env):
     assert is_line_in_server_log(env, f'key_hex={(b"x" * 128).hex()} key_len=512 key_truncated=1')
 
 
-def test_rdb_load_diagnostics_read_error(env):
+def test_rdb_load_diagnostics_read_error():
+    # These tests assert log contents; RLTest otherwise redirects the server log to /dev/null.
+    env = Env(noLog=False)
     env.skipOnCluster()
     env.cmd('CONFIG', 'SET', 'loglevel', 'warning')
     source = 'source-read-error'
