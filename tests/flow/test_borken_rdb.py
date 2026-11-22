@@ -222,6 +222,27 @@ def _patch_uncompressed_sample_counts(dump: bytes, new_num_samples: int,
     return bytes(b)
 
 
+def test_restore_rejects_invalid_rule_aggregation():
+    env = Env(moduleArgs='DEUBG_FORCE_RULE_DUMP enable')
+    env.skipOnCluster()
+
+    env.cmd('TS.CREATE', 'source')
+    env.cmd('TS.CREATE', 'dest')
+    env.cmd('TS.CREATERULE', 'source', 'dest', 'AGGREGATION', 'SUM', 1)
+    dump = bytearray(env.cmd('DUMP', 'source'))
+
+    # Match the rule's destination, bucket duration, alignment and SUM type (3).
+    rule = b'\x05\x04dest\x02\x01\x02\x00\x02\x03'
+    assert dump.count(rule) == 1
+    offset = dump.index(rule) + len(rule) - 1
+    dump[offset:offset + 1] = _rdb_encode_len(99)
+    _patch_dump_crc(dump)
+
+    env.expect('RESTORE', 'restored', 0, bytes(dump)).error().contains('Bad data format')
+    env.assertEqual(env.cmd('EXISTS', 'restored'), 0)
+    assert env.cmd('PING')
+
+
 def test_total_samples_mismatch_does_not_crash_on_delete_then_add(env):
     env.skipOnCluster()
 
