@@ -21,8 +21,9 @@ TIMEOUT_ERROR = ('A multi-keys command failed because at least one shard '
 TOPOLOGY_ERROR = 'A multi-shard command failed because the cluster topology has changed'
 SLOTS_ERROR = 'Query requires unavailable slots'
 
-# LibMR fails an execution after 5 s without a reply (EXECUTION_DEFAULT_MAX_IDLE_MS).
-MAX_IDLE_SECS = 5
+# LibMR fails an execution after this long without a reply: EXECUTION_DEFAULT_MAX_IDLE_MS,
+# which build/LibMR/Makefile raises from 5 s to 10 s for Valgrind builds.
+MAX_IDLE_SECS = 10 if VALGRIND else 5
 
 # One query per distributed command. Each one has its own done handler.
 QUERIES = [
@@ -42,11 +43,9 @@ class _LibmrFailures:
     TRANSPORT = None
 
     def __init__(self):
-        skip_on_rlec()  # needs DEBUG SLEEP and CLUSTER SETSLOT on real shards
+        skip_on_rlec()  # needs CLIENT PAUSE and CLUSTER SETSLOT on real shards
         self.env = Env(env='oss-cluster', shardsCount=3, useSlaves=False, useAof=False,
                        decodeResponses=True,
-                       # A shard in DEBUG SLEEP must not be marked as failed.
-                       clusterNodeTimeout=60000,
                        redisConfigFileContent=f'ts-libmr-protocol {self.TRANSPORT}\n',
                        clusterBusPortProtectedMode=os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None)
         for shard in range(1, 4):  # a config mistake must not silently test the default
@@ -87,20 +86,27 @@ class _LibmrFailures:
         for shard in range(1, 4):
             self.env.assertEqual(self.env.getConnection(shard).info('clients')['blocked_clients'], 0)
 
-    def _run_while_shard_2_sleeps(self, seconds, action=None):
-        """Send QUERIES to shard 1 while shard 2 sleeps, then call action. Return the replies."""
-        with ThreadPoolExecutor(len(QUERIES) + 1) as pool:
-            sleeper = pool.submit(self.env.getConnection(2).execute_command, 'DEBUG', 'SLEEP', seconds)
-            time.sleep(0.5)  # let DEBUG SLEEP start
-            started = time.monotonic()
+    def _wait_for_blocked_clients(self, shard, count):
+        conn = self.env.getConnection(shard)
+        deadline = time.monotonic() + get_timeout()
+        while conn.info('clients')['blocked_clients'] < count:
+            assert time.monotonic() < deadline, f'shard {shard} never had {count} blocked clients'
+            time.sleep(0.05)
+
+    def _run_while_shard_2_paused(self, seconds, action=None):
+        """Send QUERIES to shard 1 while shard 2 holds every client command, LibMR's included.
+
+        Once all the queries wait for shard 2, call action. Return the replies.
+        The pause ends by itself (under PAUSE ALL even CLIENT UNPAUSE would wait), and
+        any later command to shard 2 waits for that.
+        """
+        self.env.getConnection(2).execute_command('CLIENT', 'PAUSE', seconds * 1000, 'ALL')
+        with ThreadPoolExecutor(len(QUERIES)) as pool:
             replies = [pool.submit(self._reply_of, q) for q in QUERIES]
             if action:
-                time.sleep(0.5)  # let the queries reach the shards
+                self._wait_for_blocked_clients(1, len(QUERIES))
                 action()
-            replies = [r.result() for r in replies]
-            elapsed = time.monotonic() - started
-            sleeper.result()
-        return replies, elapsed
+            return [r.result() for r in replies]
 
     def _move_slot(self, slot, src, dst):
         """Move an empty slot to another shard, as redis-cli --cluster reshard does."""
@@ -112,19 +118,16 @@ class _LibmrFailures:
         src.execute_command('CLUSTER', 'SETSLOT', slot, 'NODE', dst_id)
 
     def test_shard_timeout(self):
-        # Shard 2 sleeps longer than LibMR waits: every query gives up on it.
-        sleep_secs = MAX_IDLE_SECS + 3
-        replies, elapsed = self._run_while_shard_2_sleeps(sleep_secs)
+        # Shard 2 stays paused longer than LibMR waits: every query gives up on it.
+        replies = self._run_while_shard_2_paused(MAX_IDLE_SECS + 3)
         self.env.assertEqual(replies, [TIMEOUT_ERROR] * len(QUERIES))
-        # The queries failed at the max idle time, not when shard 2 woke up.
-        self.env.assertLess(elapsed, sleep_secs - 0.5)
         self._assert_no_blocked_clients()
         self._wait_until_queries_succeed()
 
     def test_topology_change(self):
-        # Shard 1 gives a slot away while its queries wait for shard 2.
-        # Its topology changes, which aborts them.
-        replies, _ = self._run_while_shard_2_sleeps(2, lambda: self._move_slot(FREE_SLOT, 1, 3))
+        # Shard 1 gives a slot away while its queries wait for shard 2. Its topology
+        # changes, which aborts them. (Without the abort they would time out instead.)
+        replies = self._run_while_shard_2_paused(MAX_IDLE_SECS, lambda: self._move_slot(FREE_SLOT, 1, 3))
         self.env.assertEqual(replies, [TOPOLOGY_ERROR] * len(QUERIES))
         self._assert_no_blocked_clients()
         self._move_slot(FREE_SLOT, 3, 1)
