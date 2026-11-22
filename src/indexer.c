@@ -582,7 +582,8 @@ static RedisModuleDict *SelectQueryIndexSource(RedisModuleCtx *ctx,
         if (count == 1) {
             source = dicts[0];
         } else {
-            source = *result = QueryIndex(ctx, queries->list, queries->count, NULL);
+            *result = QueryIndex(ctx, queries->list, queries->count, NULL);
+            source = *result;
         }
         free(dicts);
     }
@@ -599,16 +600,18 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
     size_t visible = 0;
     RedisModuleDictIter *iter =
         source ? RedisModule_DictIteratorStartC(source, "^", NULL, 0) : NULL;
-    char *name;
     size_t len;
-    while (iter && (name = RedisModule_DictNextC(iter, &len, NULL))) {
+    while (iter) {
+        const char *name = RedisModule_DictNextC(iter, &len, NULL);
+        if (!name)
+            break;
         if (!result && queries &&
             !_isKeySatisfyAllPredicates(ctx, name, len, queries->list, queries->count))
             continue;
         // The callback only reads the index or emits results; it must not modify it.
         RedisModuleString *key = RedisModule_CreateString(NULL, name, len);
         bool owned = !(isReshardTrimming || isAsmTrimming || isAsmImporting) ||
-                     (isReshardTrimming ? OwnKeyDuringSharding : OwnKeyDuringASM)(key);
+                     (isReshardTrimming ? &OwnKeyDuringSharding : &OwnKeyDuringASM)(key);
         int mode = REDISMODULE_READ | REDISMODULE_OPEN_KEY_NOEFFECTS;
         // Enterprise metadata-only lookup avoids loading series values from flash.
         if (RedisModule_GetOpenKeyModesAll)
@@ -618,7 +621,7 @@ size_t VisitQueryIndex(RedisModuleCtx *ctx,
         if (handle)
             RedisModule_CloseKey(handle);
         if (owned && exists) {
-            name = (char *)RedisModule_StringPtrLen(key, &len);
+            name = RedisModule_StringPtrLen(key, &len);
             visit(ctx, name, len, data);
             ++visible;
         }

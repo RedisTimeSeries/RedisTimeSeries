@@ -855,6 +855,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 }
 
 static void QueryIndexRecord(RedisModuleCtx *ctx, const char *name, size_t len, void *data) {
+    (void)ctx;
     char *copy = malloc(len + 1);
     memcpy(copy, name, len);
     copy[len] = 0;
@@ -1271,6 +1272,7 @@ static InternalCommandCallbacks MgetCallbacks = { .command = TS_INTERNAL_MGET,
                                                   .replyParser = SeriesListReplyParser };
 
 static void QueryIndexInternalReply(RedisModuleCtx *ctx, const char *name, size_t len, void *data) {
+    (void)data;
     RedisModule_ReplyWithStringBuffer(ctx, name, len);
 }
 

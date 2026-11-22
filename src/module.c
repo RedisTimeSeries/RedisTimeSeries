@@ -280,6 +280,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 static void QueryIndexReply(RedisModuleCtx *ctx, const char *name, size_t len, void *data) {
+    (void)data;
     RedisModule_ReplyWithStringBuffer(ctx, name, len);
 }
 
