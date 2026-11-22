@@ -708,9 +708,22 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
     ApplyCtxUser(rts_staticCtx, predicates->userName);
 
-    // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
         rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
+
+    // Match the internal protocol: reject the complete query if any matching
+    // series is unreadable, before producing a shard result.
+    if (CheckDictSeriesPermissions(
+            rts_staticCtx, result, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        const char *error = "NOPERM TSDB: current user doesn't have read permission to one or more "
+                            "keys that match the specified filter";
+        MR_ExecutionCtxSetError(rctx, error, strlen(error));
+        RedisModule_FreeDict(rts_staticCtx, result);
+        ReleaseCtxUser(rts_staticCtx);
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+        return NULL;
+    }
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -718,7 +731,8 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
     Series *series;
     Record *series_list = ListRecord_Create(0);
-    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    // Permissions were checked above while holding the same context lock.
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation;
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
@@ -767,9 +781,23 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
     RedisModule_ThreadSafeContextLock(rts_staticCtx);
     ApplyCtxUser(rts_staticCtx, predicates->userName);
 
-    // The permission error is ignored.
     RedisModuleDict *result = QueryIndex(
         rts_staticCtx, predicates->predicates->list, predicates->predicates->count, NULL);
+
+    // Match the internal protocol: reject the complete query if any matching
+    // series is unreadable, before producing a shard result.
+    if (CheckDictSeriesPermissions(
+            rts_staticCtx, result, GetSeriesFlags_CheckForAcls | GetSeriesFlags_SilentOperation) ==
+        GetSeriesResult_PermissionError) {
+        const char *error = "NOPERM TSDB: current user doesn't have read permission to one or more "
+                            "keys that match the specified filter";
+        MR_ExecutionCtxSetError(rctx, error, strlen(error));
+        RedisModule_FreeDict(rts_staticCtx, result);
+        free(limitLabelsStr);
+        ReleaseCtxUser(rts_staticCtx);
+        RedisModule_ThreadSafeContextUnlock(rts_staticCtx);
+        return NULL;
+    }
 
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(result, "^", NULL, 0);
     char *currentKey;
@@ -783,7 +811,8 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
         series_listOrMap = ListRecord_Create(0);
     }
 
-    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation | GetSeriesFlags_CheckForAcls;
+    // Permissions were checked above while holding the same context lock.
+    const GetSeriesFlags flags = GetSeriesFlags_SilentOperation;
 
     while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
         RedisModuleKey *key;
