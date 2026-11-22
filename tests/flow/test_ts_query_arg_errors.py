@@ -33,7 +33,7 @@ class testQueryArgErrors:
              'EMPTY flag should be the 3rd or 5th flag after AGGREGATION flag'),
             (('TS.RANGE', '{q}:src', '-', '+', 'AGGREGATION', TOO_MANY_AGGS, 10),
              'Too many aggregation types'),
-            (('TS.RANGE', '{q}:src', '-', '+', 'FILTER_BY_TS'),
+            (('TS.RANGE', '{q}:src', '-', '+', 'FILTER_BY_TS', 'abc'),
              'FILTER_BY_TS one or more arguments are missing'),
         ])
         # The rejected requests left nothing behind: a valid one still works.
