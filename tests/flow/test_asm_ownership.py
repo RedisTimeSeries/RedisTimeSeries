@@ -1,3 +1,4 @@
+import os
 import time
 import redis
 
@@ -49,7 +50,9 @@ class testAsmOwnership:
     """
 
     def __init__(self):
-        self.env = Env(env="oss-cluster", shardsCount=2, decodeResponses=True)
+        # tests.sh passes the bus-port waiver only to cluster lanes; this env is a cluster in every lane.
+        self.env = Env(env="oss-cluster", shardsCount=2, decodeResponses=True,
+                       clusterBusPortProtectedMode=os.getenv("CLUSTER_BUS_PROTECTED_MODE", "no") or None)
         if is_rlec():
             self.env.skip()
         self.target, self.source = self.env.getConnection(0), self.env.getConnection(1)
