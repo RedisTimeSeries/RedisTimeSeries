@@ -102,12 +102,13 @@ class testAsmOwnership:
             self.assert_each_series_once()
             self.env.assertEqual(task_status(self.target, task)["state"], "wait-stream-eof")  # queried mid-import
         finally:
-            self.target.execute_command("DEBUG", "ASM-FAILPOINT", "", "")
             if task is not None:
                 # Fails the import on the target (which then trims the imported keys) and the
-                # migration on the source (which resumes writes).
+                # migration on the source (which resumes writes). Cancel while the failpoint
+                # still holds the import, so it can't complete in between.
                 self.target.execute_command("CLUSTER", "MIGRATION", "CANCEL", "ID", task)
                 self.source.execute_command("CLUSTER", "MIGRATION", "CANCEL", "ID", task)
+            self.target.execute_command("DEBUG", "ASM-FAILPOINT", "", "")
         self.env.assertEqual(task_status(self.target, task)["state"], "canceled")
         self.env.assertEqual(task_status(self.source, task)["state"], "canceled")
         wait_for(lambda: active_trim(self.target)["running"] == 0, "the target to trim the cancelled import")
