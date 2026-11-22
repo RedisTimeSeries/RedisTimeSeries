@@ -367,3 +367,62 @@ def test_groupby_reduce_count_with_nan():
         assert sample_map[1010] == '2', f"countall at ts=1010 expected 2, got {sample_map[1010]}"
         assert sample_map[1020] == '2', f"countall at ts=1020 expected 2, got {sample_map[1020]}"
         assert sample_map[1030] == '2', f"countall at ts=1030 expected 2, got {sample_map[1030]}"
+
+
+class testGroupByMergeOrder():
+    """GROUPBY merges each group's series by timestamp before reducing. The groups below have
+    interleaved timestamps and timestamps that several series share. The reduced reply must be
+    in exact timestamp order: ascending for TS.MRANGE, descending for TS.MREVRANGE."""
+
+    GROUPS = {
+        # 20 is in s1 and s3, 30 in all three, the rest in one series each
+        'a': {'mo:s1': [(10, 1), (20, 2), (30, 3), (60, 4)],
+              'mo:s2': [(15, 10), (30, 20), (45, 30)],
+              'mo:s3': [(5, 100), (20, 200), (30, 300), (70, 400)]},
+        # one timestamp, in both series
+        'b': {'mo:t1': [(30, 7)], 'mo:t2': [(30, 8)]},
+    }
+    # (reducer, extra args) -> {group: [(timestamp, value), ...] in ascending order}
+    EXPECTED = {
+        ('sum', ()): {'a': [(5, 100), (10, 1), (15, 10), (20, 202), (30, 323), (45, 30), (60, 4), (70, 400)],
+                      'b': [(30, 15)]},
+        ('count', ()): {'a': [(5, 1), (10, 1), (15, 1), (20, 2), (30, 3), (45, 1), (60, 1), (70, 1)],
+                        'b': [(30, 2)]},
+        ('max', ()): {'a': [(5, 100), (10, 1), (15, 10), (20, 200), (30, 300), (45, 30), (60, 4), (70, 400)],
+                      'b': [(30, 8)]},
+        ('min', ()): {'a': [(5, 100), (10, 1), (15, 10), (20, 2), (30, 3), (45, 30), (60, 4), (70, 400)],
+                      'b': [(30, 7)]},
+        # 20 ms buckets: every bucket but 40 is in several series
+        ('sum', ('AGGREGATION', 'sum', 20)): {'a': [(0, 111), (20, 525), (40, 30), (60, 404)],
+                                               'b': [(20, 15)]},
+    }
+
+    def __init__(self):
+        self.env = Env()
+        with self.env.getClusterConnectionIfNeeded() as r:
+            for group, series in self.GROUPS.items():
+                for key, samples in series.items():
+                    r.execute_command('TS.CREATE', key, 'LABELS', 'merge', 'order', 'g', group)
+                    for ts, val in samples:
+                        r.execute_command('TS.ADD', key, ts, val)
+
+    def _query(self, cmd, reducer, *extra):
+        with self.env.getConnection(1) as r1:
+            reply = r1.execute_command(cmd, '-', '+', *extra, 'FILTER', 'merge=order',
+                                       'GROUPBY', 'g', 'REDUCE', reducer)
+        return {name.decode(): [(ts, int(float(val))) for ts, val in samples] for name, _labels, samples in reply}
+
+    def _check(self, cmd, reverse):
+        for (reducer, extra), groups in self.EXPECTED.items():
+            want = {'g=' + g: samples[::-1] if reverse else samples for g, samples in groups.items()}
+            self.env.assertEqual(self._query(cmd, reducer, *extra), want, message=f'{cmd} {extra} REDUCE {reducer}')
+
+    def test_mrange_groupby_ascending(self):
+        self._check('TS.MRANGE', reverse=False)
+
+    def test_mrevrange_groupby_descending(self):
+        self._check('TS.MREVRANGE', reverse=True)
+
+    def test_count_keeps_the_first_samples_in_query_order(self):
+        self.env.assertEqual(self._query('TS.MRANGE', 'sum', 'COUNT', 3)['g=a'], [(5, 100), (10, 1), (15, 10)])
+        self.env.assertEqual(self._query('TS.MREVRANGE', 'sum', 'COUNT', 3)['g=a'], [(70, 400), (60, 4), (45, 30)])
