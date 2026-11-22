@@ -400,18 +400,23 @@ def test_ts_num_threads_module_arg():
 
     Needs cluster mode (worker threads are created lazily on the
     first libmr execution, which only happens in cluster mode), so it
-    forces an oss-cluster env in every lane. Also needs Redis >= 7.0
-    (module config API).
+    forces an oss-cluster env in every lane. Also needs Redis >= 7.9
+    (module config API, see RTS_RedisSupportsModuleConfigApi).
 
     Thread names are read from /proc on Linux or via ``sample`` on macOS.
     '''
     skip_on_rlec()
+    # Check the server on the lane's own env before starting the cluster: a Redis without
+    # cluster-bus-port-protected-mode rejects the directive and doesn't start.
+    env = Env()
+    if is_redis_version_lower_than(env, '7.9'):
+        env.skip()
+    bus_mode = os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None
+    if not env.cmd('CONFIG', 'GET', 'cluster-bus-port-protected-mode'):
+        bus_mode = None
     # Non-cluster lanes don't pass tests.sh's cluster-bus flag, so set it here.
     env = Env(env='oss-cluster', shardsCount=2, useSlaves=False, useAof=False,
-              clusterBusPortProtectedMode=os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None,
-              moduleArgs="ts-num-threads 5", noLog=False)
-    if is_redis_version_lower_than(env, '7.0'):
-        env.skip()
+              clusterBusPortProtectedMode=bus_mode, moduleArgs="ts-num-threads 5", noLog=False)
 
     conn = env.getConnection(1)
     env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
@@ -452,6 +457,9 @@ class testRuntimeConfigErrors:
     def __init__(self):
         skip_on_rlec()
         self.env = Env(enableModuleCommand=True)
+        # The ts-* configs need the module config API (RTS_RedisSupportsModuleConfigApi).
+        if is_redis_version_lower_than(self.env, '7.9'):
+            self.env.skip()
         self.conn = self.env.getConnection()
 
     def _get(self, name):
@@ -511,7 +519,7 @@ def test_module_load_errors_and_forced_unload():
     """
     skip_on_rlec()
     env = Env(module=[], enableModuleCommand=True, noLog=False)
-    if env.isCluster():
+    if env.isCluster() or is_redis_version_lower_than(env, '7.9'):
         env.skip()
     so = Defaults.module[0] if isinstance(Defaults.module, list) else Defaults.module
     conn = env.getConnection()
@@ -574,7 +582,7 @@ def test_legacy_module_args_values():
     env = Env(moduleArgs='ts-num-threads 3; NUM_THREADS 2; ts-topology-events yes; LIBMR_PROTOCOL GEARS; '
                          'DEUBG_FORCE_RULE_DUMP disable; DONT_ASSERT_ON_FAILIURE disable',
               noLog=False)
-    if env.isCluster():
+    if env.isCluster() or is_redis_version_lower_than(env, '7.9'):
         env.skip()
     conn = env.getConnection()
     env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads'), [b'ts-num-threads', b'3'])
