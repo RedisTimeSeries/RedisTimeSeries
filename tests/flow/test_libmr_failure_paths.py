@@ -32,6 +32,7 @@ QUERIES = [
     ('TS.QUERYINDEX', 'name=x'),
     ('TS.QUERYLABELS', 'LABELS', 'FILTER', 'name=x'),
 ]
+QUERY_COMMANDS = {q[0].lower() for q in QUERIES}
 
 # One series on each shard (RLTest gives the 3 shards 0-5460, 5461-10922 and 10923-16383).
 KEYS = [f'x:{{{slot_table[slot]}}}' for slot in (0, 8192, 16383)]
@@ -82,15 +83,24 @@ class _LibmrFailures:
                     assert time.monotonic() < deadline, f'queries on shard {shard} kept failing'
                     time.sleep(0.2)
 
-    def _assert_no_blocked_clients(self):
-        for shard in range(1, 4):
-            self.env.assertEqual(self.env.getConnection(shard).info('clients')['blocked_clients'], 0)
+    def _blocked_queries(self, shard):
+        """Clients of shard that are blocked in one of QUERIES.
 
-    def _wait_for_blocked_clients(self, shard, count):
-        conn = self.env.getConnection(shard)
+        Not INFO's blocked_clients: under GEARS, LibMR blocks its own connection while it
+        handles a message from another shard, so that count can include LibMR's clients.
+        """
+        return [c for c in self.env.getConnection(shard).client_list()
+                if 'b' in c['flags'] and c['cmd'] in QUERY_COMMANDS]
+
+    def _assert_no_blocked_clients(self):
+        # A client gets its reply only once it is unblocked, so there is nothing to wait for.
+        for shard in range(1, 4):
+            self.env.assertEqual(self._blocked_queries(shard), [], message=f'shard {shard}')
+
+    def _wait_for_blocked_queries(self, shard, count):
         deadline = time.monotonic() + get_timeout()
-        while conn.info('clients')['blocked_clients'] < count:
-            assert time.monotonic() < deadline, f'shard {shard} never had {count} blocked clients'
+        while len(self._blocked_queries(shard)) != count:
+            assert time.monotonic() < deadline, f'shard {shard} never had {count} blocked queries'
             time.sleep(0.05)
 
     def _run_while_shard_2_paused(self, seconds, action=None):
@@ -104,7 +114,7 @@ class _LibmrFailures:
         with ThreadPoolExecutor(len(QUERIES)) as pool:
             replies = [pool.submit(self._reply_of, q) for q in QUERIES]
             if action:
-                self._wait_for_blocked_clients(1, len(QUERIES))
+                self._wait_for_blocked_queries(1, len(QUERIES))
                 action()
             return [r.result() for r in replies]
 
