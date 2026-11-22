@@ -8,6 +8,7 @@
  */
 #include "chunk.h"
 #include "common.h"
+#include <inttypes.h>
 #include "enriched_chunk.h"
 
 #include "libmr_integration.h"
@@ -336,7 +337,7 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
 
     Chunk *uncompchunk = (Chunk *)rts_try_calloc(1, sizeof(*uncompchunk));
     if (uncompchunk == NULL) {
-        RedisModule_LogIOError(io, "error", "Failed to allocate chunk while loading from RDB");
+        RdbLoad_LogError(io, "Failed to allocate uncompressed chunk while loading from RDB");
         err = true;
         return TSDB_ERROR;
     }
@@ -349,10 +350,26 @@ int Uncompressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io) {
     uncompchunk->samples =
         (Sample *)LoadStringBuffer_IOError(io, &string_buffer_size, err, TSDB_ERROR);
     if (uncompchunk->num_samples * SAMPLE_SIZE > uncompchunk->size) {
+        RdbLoad_LogError(io,
+                         "uncompressed chunk: sample count exceeds capacity count=%" PRIu64
+                         " size=%zu buffer_len=%zu sample_size=%zu firstTimestamp=%" PRIu64,
+                         (uint64_t)uncompchunk->num_samples,
+                         uncompchunk->size,
+                         string_buffer_size,
+                         (size_t)SAMPLE_SIZE,
+                         (uint64_t)uncompchunk->base_timestamp);
         err = true;
         return TSDB_ERROR; /* num_samples can't exceed capacity */
     }
     if (uncompchunk->size != string_buffer_size) {
+        RdbLoad_LogError(
+            io,
+            "uncompressed chunk: size metadata does not match buffer length count=%" PRIu64
+            " size=%zu buffer_len=%zu firstTimestamp=%" PRIu64,
+            (uint64_t)uncompchunk->num_samples,
+            uncompchunk->size,
+            string_buffer_size,
+            (uint64_t)uncompchunk->base_timestamp);
         err = true;
         return TSDB_ERROR; /* Size must match buffer */
     }
