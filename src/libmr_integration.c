@@ -349,7 +349,7 @@ Record *ShardSeriesMapper(ExecutionCtx *rctx, void *arg) {
 
         if (!status) {
             RedisModule_Log(rts_staticCtx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "couldn't open key or key is not a Timeseries. key=%.*s",
                             (int)currentKeyLen,
                             currentKey);
@@ -406,7 +406,7 @@ Record *ShardMgetMapper(ExecutionCtx *rctx, void *arg) {
 
         if (!status) {
             RedisModule_Log(rts_staticCtx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "couldn't open key or key is not a Timeseries. key=%.*s",
                             (int)currentKeyLen,
                             currentKey);
@@ -519,7 +519,7 @@ static Record *MR_RecordCreate(MRRecordType *type, size_t size) {
 
 int register_rg(RedisModuleCtx *ctx, long long numThreads) {
     if (MR_Init(ctx, numThreads, TSGlobalConfig.password) != REDISMODULE_OK) {
-        RedisModule_Log(ctx, "warning", "Failed to init LibMR. aborting...");
+        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "Failed to init LibMR. aborting...");
         return REDISMODULE_ERR;
     }
 
@@ -749,8 +749,9 @@ Record *SeriesRecord_New(Series *series,
     while (RedisModule_DictNextC(iter, NULL, &chunk)) {
         if (series->funcs->GetNumOfSample(chunk) == 0) {
             if (unlikely(series->totalSamples != 0)) { // empty chunks are being removed
-                RedisModule_Log(
-                    mr_staticCtx, "error", "Empty chunk in a non empty series is invalid");
+                RedisModule_Log(mr_staticCtx,
+                                REDISMODULE_LOGLEVEL_WARNING,
+                                "Empty chunk in a non empty series is invalid");
             }
             break;
         }
