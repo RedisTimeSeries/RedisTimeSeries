@@ -22,31 +22,34 @@
 #include <string.h>
 
 MU_TEST(test_memrev) {
-    unsigned char b16[] = { 0x01, 0x02 };
+    const unsigned char o16[] = { 0x01, 0x02 };
     const unsigned char r16[] = { 0x02, 0x01 };
+    unsigned char b16[sizeof(o16)];
+    memcpy(b16, o16, sizeof(o16));
     memrev16(b16);
     mu_check(memcmp(b16, r16, sizeof(b16)) == 0);
 
-    unsigned char b32[] = { 0x01, 0x02, 0x03, 0x04 };
+    const unsigned char o32[] = { 0x01, 0x02, 0x03, 0x04 };
     const unsigned char r32[] = { 0x04, 0x03, 0x02, 0x01 };
+    unsigned char b32[sizeof(o32)];
+    memcpy(b32, o32, sizeof(o32));
     memrev32(b32);
     mu_check(memcmp(b32, r32, sizeof(b32)) == 0);
 
-    unsigned char b64[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+    const unsigned char o64[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
     const unsigned char r64[] = { 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01 };
+    unsigned char b64[sizeof(o64)];
+    memcpy(b64, o64, sizeof(o64));
     memrev64(b64);
     mu_check(memcmp(b64, r64, sizeof(b64)) == 0);
 
-    // Reversing twice restores the original bytes.
-    memrev16(b16);
+    // Reversing a second time restores the original bytes.
     memrev16(b16);
     memrev32(b32);
-    memrev32(b32);
     memrev64(b64);
-    memrev64(b64);
-    mu_check(memcmp(b16, r16, sizeof(b16)) == 0);
-    mu_check(memcmp(b32, r32, sizeof(b32)) == 0);
-    mu_check(memcmp(b64, r64, sizeof(b64)) == 0);
+    mu_check(memcmp(b16, o16, sizeof(b16)) == 0);
+    mu_check(memcmp(b32, o32, sizeof(b32)) == 0);
+    mu_check(memcmp(b64, o64, sizeof(b64)) == 0);
 }
 
 MU_TEST(test_intrev) {
