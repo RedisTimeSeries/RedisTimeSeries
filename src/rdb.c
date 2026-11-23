@@ -165,13 +165,16 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             // Count each successfully loaded chunk once.
             loadedSamples += chunkSamples;
         }
-        // The serialized total must match the counts stored in the loaded chunks.
+        // Derive totalSamples from the chunks we just validated instead of trusting the
+        // serialized metadata. Older RedisTimeSeries versions could persist a stale
+        // totalSamples value, and mixed-version rolling upgrades must remain load-compatible.
+        // Using the validated chunk counts also prevents malformed metadata from creating an
+        // inconsistent in-memory Series.
         if (loadedSamples != totalSamples) {
-            RedisModule_LogIOError(io, "error", "totalSamples does not match loaded chunks");
-            err = true;
-            return NULL;
+            RedisModule_LogIOError(
+                io, "warning", "totalSamples does not match loaded chunks; using loaded count");
         }
-        series->totalSamples = totalSamples;
+        series->totalSamples = loadedSamples;
         series->duplicatePolicy = duplicatePolicy;
         series->srcKey = srcKey;
         series->lastTimestamp = lastTimestamp;
