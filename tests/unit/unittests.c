@@ -13,6 +13,7 @@
 
 #include "parse_policies.h"
 #include "unittests_compressed_chunk.c"
+#include "unittests_platform_helpers.c"
 #include "unittests_parse_duplicate_policy.c"
 #include "unittests_parse_policies.c"
 #include "unittests_uncompressed_chunk.c"
@@ -29,6 +30,7 @@ int main(int argc, char *argv[]) {
     MU_RUN_SUITE(parse_policies_test_suite);
     MU_RUN_SUITE(uncompressed_chunk_test_suite);
     MU_RUN_SUITE(compressed_chunk_test_suite);
+    MU_RUN_SUITE(platform_helpers_test_suite);
     MU_RUN_SUITE(parse_duplicate_policy_test_suite);
     MU_RUN_SUITE(command_info_test_suite);
     MU_RUN_SUITE(rdb_load_oom_test_suite);

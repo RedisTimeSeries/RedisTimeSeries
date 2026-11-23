@@ -505,3 +505,46 @@ def test_compaction_rules_nan_only_bucket():
             
             r.execute_command('DEL', key)
             r.execute_command('DEL', agg_key)
+
+
+ALL_AGGREGATIONS = ['min', 'max', 'sum', 'avg', 'twa', 'std.p', 'std.s', 'var.p', 'var.s',
+                    'count', 'first', 'last', 'range', 'countnan', 'countall']
+
+
+def test_rule_aggregation_names_in_info():
+    '''TS.INFO reports every rule's aggregation in upper case.'''
+    env = Env()
+    with env.getClusterConnectionIfNeeded() as r:
+        src = 'src{names}'
+        r.execute_command('TS.CREATE', src)
+        expected = []
+        for agg in ALL_AGGREGATIONS:
+            dst = f'{src}_{agg}'
+            r.execute_command('TS.CREATE', dst)
+            r.execute_command('TS.CREATERULE', src, dst, 'AGGREGATION', agg, 10)
+            expected.append([dst.encode(), 10, agg.upper().encode(), 0])
+        env.assertEqual(sorted(_get_ts_info(r, src).rules), sorted(expected))
+
+
+def test_compaction_policy_aggregation_names():
+    '''
+    CONFIG GET ts-compaction-policy prints every aggregation in lower case, and the keys that
+    TS.ADD auto-creates from the policy are named after the upper-case aggregation.
+    '''
+    env = Env()
+    if env.isCluster() or is_redis_version_lower_than(env, '7.9'):
+        env.skip()
+    skip_on_rlec()
+    policy = ';'.join(f'{agg}:1M:1h' for agg in ALL_AGGREGATIONS)  # 1M = one minute
+    with env.getConnection() as r:
+        try:
+            r.execute_command('CONFIG', 'SET', 'ts-compaction-policy', policy)
+            env.assertEqual(r.execute_command('CONFIG', 'GET', 'ts-compaction-policy'),
+                            [b'ts-compaction-policy', policy.encode()])
+
+            r.execute_command('TS.ADD', 'auto', 1, 1)
+            expected = [[f'auto_{agg.upper()}_60000'.encode(), 60000, agg.upper().encode(), 0]
+                        for agg in ALL_AGGREGATIONS]
+            env.assertEqual(sorted(_get_ts_info(r, 'auto').rules), sorted(expected))
+        finally:
+            r.execute_command('CONFIG', 'SET', 'ts-compaction-policy', '')
