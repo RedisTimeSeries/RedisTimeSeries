@@ -22,7 +22,8 @@ int last_rdb_load_version;
 void *series_rdb_load(RedisModuleIO *io, int encver) {
     last_rdb_load_version = encver;
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
-        RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
+        RedisModule_LogIOError(
+            io, REDISMODULE_LOGLEVEL_WARNING, "data is not in the correct encoding");
         return NULL;
     }
 
@@ -39,7 +40,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
     if (cCtx.chunkSizeBytes == 0 || cCtx.chunkSizeBytes % 8 != 0) {
-        RedisModule_LogIOError(io, "error", "chunkSizeBytes must be a non-zero multiple of 8");
+        RedisModule_LogIOError(
+            io, REDISMODULE_LOGLEVEL_WARNING, "chunkSizeBytes must be a non-zero multiple of 8");
         err = true;
         return NULL;
     }
@@ -133,7 +135,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
                 series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
         }
         if (loadedSamples != totalSamples) {
-            RedisModule_LogIOError(io, "warning", "totalSamples does not match loaded chunks");
+            RedisModule_LogIOError(
+                io, REDISMODULE_LOGLEVEL_WARNING, "totalSamples does not match loaded chunks");
         }
         series->totalSamples = loadedSamples;
         series->duplicatePolicy = duplicatePolicy;
