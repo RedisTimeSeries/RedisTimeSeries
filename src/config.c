@@ -28,7 +28,7 @@
     if (show) {                                                                                    \
         if (modernName) {                                                                          \
             RedisModule_Log(rts_staticCtx,                                                         \
-                            REDISMODULE_LOGLEVEL_WARNING,                                           \
+                            REDISMODULE_LOGLEVEL_WARNING,                                          \
                             "%s is deprecated, please use the '%s' instead",                       \
                             deprecatedName,                                                        \
                             modernName);                                                           \
