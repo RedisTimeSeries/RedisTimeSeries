@@ -122,15 +122,20 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         }
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         const uint64_t numChunks = LoadUnsigned_IOError(io, err, NULL);
+        uint64_t loadedSamples = 0;
         for (int i = 0; i < numChunks; ++i) {
             if (series->funcs->LoadFromRDB(&chunk, io)) {
                 err = true;
                 return NULL;
             }
+            loadedSamples += series->funcs->GetNumOfSample(chunk);
             dictOperator(
                 series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
         }
-        series->totalSamples = totalSamples;
+        if (loadedSamples != totalSamples) {
+            RedisModule_LogIOError(io, "warning", "totalSamples does not match loaded chunks");
+        }
+        series->totalSamples = loadedSamples;
         series->duplicatePolicy = duplicatePolicy;
         series->srcKey = srcKey;
         series->lastTimestamp = lastTimestamp;
