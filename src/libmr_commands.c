@@ -96,10 +96,11 @@ static bool validate_slot_coverage_or_reply(RedisModuleCtx *rctx, SlotRangeAccum
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (unlikely(len > 0)) {
-        RedisModule_Log(rctx, "warning", "got libmr error:");
+        RedisModule_Log(rctx, REDISMODULE_LOGLEVEL_WARNING, "got libmr error:");
         bool max_idle_reached = false;
         for (size_t i = 0; i < len; ++i) {
-            RedisModule_Log(rctx, "warning", "%s", MR_ExecutionCtxGetError(eCtx, i));
+            RedisModule_Log(
+                rctx, REDISMODULE_LOGLEVEL_WARNING, "%s", MR_ExecutionCtxGetError(eCtx, i));
             if (!strcmp("execution max idle reached", MR_ExecutionCtxGetError(eCtx, i))) {
                 max_idle_reached = true;
             }
@@ -147,8 +148,10 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            RedisModule_Log(rctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unexpected record type: %s",
+                            raw_env->recordType->type.type);
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
@@ -159,7 +162,7 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
         Record *payload = ShardEnvelopeRecord_GetPayload(env);
         if (payload->recordType != GetMapRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected payload record type: %s",
                             payload->recordType->type.type);
             continue;
@@ -209,8 +212,10 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            RedisModule_Log(rctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unexpected record type: %s",
+                            raw_env->recordType->type.type);
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
@@ -221,7 +226,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         Record *payload = ShardEnvelopeRecord_GetPayload(env);
         if (payload->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected payload record type: %s",
                             payload->recordType->type.type);
             continue;
@@ -237,8 +242,10 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            RedisModule_Log(rctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unexpected record type: %s",
+                            raw_env->recordType->type.type);
             continue;
         }
 
@@ -272,8 +279,10 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            RedisModule_Log(rctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unexpected record type: %s",
+                            raw_env->recordType->type.type);
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
@@ -296,8 +305,10 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            RedisModule_Log(rctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unexpected record type: %s",
+                            raw_env->recordType->type.type);
             continue;
         }
 
@@ -337,8 +348,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            RedisModule_Log(rctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unexpected record type: %s",
+                            raw_env->recordType->type.type);
             continue;
         }
         ShardEnvelopeRecord *env = (ShardEnvelopeRecord *)raw_env;
@@ -349,7 +362,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         Record *payload = ShardEnvelopeRecord_GetPayload(env);
         if (payload->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected payload record type: %s",
                             payload->recordType->type.type);
             continue;
@@ -374,8 +387,10 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
     for (int i = 0; i < len; i++) {
         Record *raw_env = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_env->recordType != GetShardEnvelopeRecordType()) {
-            RedisModule_Log(
-                rctx, "warning", "Unexpected record type: %s", raw_env->recordType->type.type);
+            RedisModule_Log(rctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unexpected record type: %s",
+                            raw_env->recordType->type.type);
             continue;
         }
         Record *raw_listRecord = ShardEnvelopeRecord_GetPayload((ShardEnvelopeRecord *)raw_env);
