@@ -23,7 +23,8 @@ int last_rdb_load_version;
 void *series_rdb_load(RedisModuleIO *io, int encver) {
     last_rdb_load_version = encver;
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
-        RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
+        RedisModule_LogIOError(
+            io, REDISMODULE_LOGLEVEL_WARNING, "data is not in the correct encoding");
         return NULL;
     }
 
@@ -40,7 +41,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
     if (cCtx.chunkSizeBytes == 0 || cCtx.chunkSizeBytes % 8 != 0) {
-        RedisModule_LogIOError(io, "error", "chunkSizeBytes must be a non-zero multiple of 8");
+        RedisModule_LogIOError(
+            io, REDISMODULE_LOGLEVEL_WARNING, "chunkSizeBytes must be a non-zero multiple of 8");
         err = true;
         return NULL;
     }
@@ -69,7 +71,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     cCtx.labels = rts_try_calloc(cCtx.labelsCount, sizeof *cCtx.labels);
     errdefer(err, if (!series && cCtx.labels) FreeLabels(cCtx.labels, cCtx.labelsCount));
     if (unlikely(cCtx.labelsCount > 0 && cCtx.labels == NULL)) {
-        RedisModule_LogIOError(io, "error", "OOM allocating labels");
+        RedisModule_LogIOError(io, REDISMODULE_LOGLEVEL_WARNING, "OOM allocating labels");
         err = true;
         return NULL;
     }
@@ -97,7 +99,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
         CompactionRule *rule = NewRule(destKey, aggType, bucketDuration, timestampAlignment);
         if (rule == NULL) {
-            RedisModule_LogIOError(io, "error", "Failed to create rule while loading from RDB");
+            RedisModule_LogIOError(
+                io, REDISMODULE_LOGLEVEL_WARNING, "Failed to create rule while loading from RDB");
             err = true;
             return NULL;
         }
@@ -134,7 +137,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         const uint64_t numChunks = LoadUnsigned_IOError(io, err, NULL);
         if (numChunks == 0) {
-            RedisModule_LogIOError(io, "error", "time series must contain a chunk");
+            RedisModule_LogIOError(
+                io, REDISMODULE_LOGLEVEL_WARNING, "time series must contain a chunk");
             err = true;
             return NULL;
         }
@@ -147,7 +151,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             const uint64_t chunkSamples = series->funcs->GetNumOfSample(chunk);
             // Reject a count that would wrap the running total.
             if (chunkSamples > UINT64_MAX - loadedSamples) {
-                RedisModule_LogIOError(io, "error", "totalSamples overflow");
+                RedisModule_LogIOError(io, REDISMODULE_LOGLEVEL_WARNING, "totalSamples overflow");
                 // The dictionary does not own this chunk until insertion succeeds.
                 series->funcs->FreeChunk(chunk);
                 err = true;
@@ -156,7 +160,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
             if (dictOperator(
                     series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET) ==
                 REDISMODULE_ERR) {
-                RedisModule_LogIOError(io, "error", "duplicate chunk start timestamp");
+                RedisModule_LogIOError(
+                    io, REDISMODULE_LOGLEVEL_WARNING, "duplicate chunk start timestamp");
                 // Insertion failed, so FreeSeries will not release this chunk.
                 series->funcs->FreeChunk(chunk);
                 err = true;
@@ -171,8 +176,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         // Using the validated chunk counts also prevents malformed metadata from creating an
         // inconsistent in-memory Series.
         if (loadedSamples != totalSamples) {
-            RedisModule_LogIOError(
-                io, "warning", "totalSamples does not match loaded chunks; using loaded count");
+            RedisModule_LogIOError(io,
+                                   REDISMODULE_LOGLEVEL_WARNING,
+                                   "totalSamples does not match loaded chunks; using loaded count");
         }
         series->totalSamples = loadedSamples;
         series->duplicatePolicy = duplicatePolicy;
