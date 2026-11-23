@@ -157,6 +157,13 @@ jobs:
         uses: actions/checkout@v5
         with:
           submodules: recursive
+      - name: Install diagnostic artifact client
+        if: inputs.diagnostics_only && matrix.os == 'macos-26-intel'
+        working-directory: .github/actions/checkpoint-runner
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Start off-runner resource checkpoints
+        if: inputs.diagnostics_only && matrix.os == 'macos-26-intel'
+        uses: ./.github/actions/checkpoint-runner
       - name: Checkout Redis
         uses: actions/checkout@v5
         with:
