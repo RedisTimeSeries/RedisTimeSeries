@@ -22,7 +22,8 @@ int last_rdb_load_version;
 void *series_rdb_load(RedisModuleIO *io, int encver) {
     last_rdb_load_version = encver;
     if (encver < TS_ENC_VER || encver > TS_LATEST_ENCVER) {
-        RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
+        RedisModule_LogIOError(
+            io, REDISMODULE_LOGLEVEL_WARNING, "data is not in the correct encoding");
         return NULL;
     }
 
@@ -39,7 +40,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         cCtx.chunkSizeBytes *= SAMPLE_SIZE;
     }
     if (cCtx.chunkSizeBytes == 0 || cCtx.chunkSizeBytes % 8 != 0) {
-        RedisModule_LogIOError(io, "error", "chunkSizeBytes must be a non-zero multiple of 8");
+        RedisModule_LogIOError(
+            io, REDISMODULE_LOGLEVEL_WARNING, "chunkSizeBytes must be a non-zero multiple of 8");
         err = true;
         return NULL;
     }
@@ -122,15 +124,21 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         }
         dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
         const uint64_t numChunks = LoadUnsigned_IOError(io, err, NULL);
+        uint64_t loadedSamples = 0;
         for (int i = 0; i < numChunks; ++i) {
             if (series->funcs->LoadFromRDB(&chunk, io)) {
                 err = true;
                 return NULL;
             }
+            loadedSamples += series->funcs->GetNumOfSample(chunk);
             dictOperator(
                 series->chunks, chunk, series->funcs->GetFirstTimestamp(chunk), DICT_OP_SET);
         }
-        series->totalSamples = totalSamples;
+        if (loadedSamples != totalSamples) {
+            RedisModule_LogIOError(
+                io, REDISMODULE_LOGLEVEL_WARNING, "totalSamples does not match loaded chunks");
+        }
+        series->totalSamples = loadedSamples;
         series->duplicatePolicy = duplicatePolicy;
         series->srcKey = srcKey;
         series->lastTimestamp = lastTimestamp;
