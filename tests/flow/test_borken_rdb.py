@@ -136,6 +136,10 @@ def _patch_uncompressed_sample_counts(dump: bytes, new_num_samples: int,
         idx = idx2
         return op
 
+    def peek_opcode():
+        op, _, _ = _rdb_load_len(dump, idx)
+        return op
+
     def read_uint_capture_offset():
         nonlocal idx
         op = read_opcode()
@@ -171,9 +175,15 @@ def _patch_uncompressed_sample_counts(dump: bytes, new_num_samples: int,
     assert has_src == 0
     if has_src:
         read_string_skip()
-    read_uint_capture_offset()         # ignoreMaxTimeDiff
-    read_double_skip()                 # ignoreMaxValDiff
-    labels_count, _ = read_uint_capture_offset()
+    field_after_src, _ = read_uint_capture_offset()
+    # Releases 1.8 and 1.10 do not serialize ignoreMaxTimeDiff/ignoreMaxValDiff.
+    # In newer RDB layouts the value following ignoreMaxTimeDiff is a DOUBLE opcode;
+    # in older layouts field_after_src is already labels_count.
+    if peek_opcode() == 4:  # RDB_MODULE_OPCODE_DOUBLE (ignoreMaxValDiff)
+        read_double_skip()
+        labels_count, _ = read_uint_capture_offset()
+    else:
+        labels_count = field_after_src
     assert labels_count == 0
     for _ in range(labels_count):
         read_string_skip()
