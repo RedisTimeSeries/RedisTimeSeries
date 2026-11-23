@@ -129,8 +129,8 @@ typedef enum LibmrProtocol
 #define LIBMR_PROTOCOL_GEARS_STR "GEARS"
 #define LIBMR_PROTOCOL_INTERNAL_STR "INTERNAL"
 
-static inline __attribute__((always_inline)) const char *LibmrProtocolToString(
-    const LibmrProtocol protocol) {
+static inline __attribute__((always_inline))
+const char *LibmrProtocolToString(const LibmrProtocol protocol) {
     switch (protocol) {
         case LIBMR_PROTOCOL_UNKNOWN:
             return LIBMR_PROTOCOL_UNKNOWN_STR;
@@ -196,7 +196,7 @@ extern bool _dontAssertOnFailiure;
         } else {                                                                                   \
             extern RedisModuleCtx *rts_staticCtx;                                                  \
             if (unlikely(cond)) {                                                                  \
-                RedisModule_Log(rts_staticCtx, "warning", ##__VA_ARGS__);                          \
+                RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, ##__VA_ARGS__);       \
             }                                                                                      \
         }                                                                                          \
     } while (0)
@@ -205,7 +205,7 @@ extern bool _dontAssertOnFailiure;
     do {                                                                                           \
         extern RedisModuleCtx *rts_staticCtx;                                                      \
         if (unlikely(cond)) {                                                                      \
-            RedisModule_Log(rts_staticCtx, "warning", ##__VA_ARGS__);                              \
+            RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, ##__VA_ARGS__);           \
         }                                                                                          \
     } while (0)
 #endif
