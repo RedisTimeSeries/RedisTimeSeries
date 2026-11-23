@@ -117,7 +117,8 @@ def _rdb_encode_len(v: int) -> bytes:
         return bytes([0x80]) + int(v).to_bytes(4, "big", signed=False)
     return bytes([0x81]) + int(v).to_bytes(8, "big", signed=False)
 
-def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: int) -> bytes:
+def _patch_uncompressed_sample_counts(dump: bytes, new_num_samples: int,
+                                      new_total_samples: int = None) -> bytes:
     # We keep the same encoding width by ensuring new_num_samples fits in 6-bit len (0..63).
     assert 0 <= new_num_samples <= 63
     b = bytearray(dump)
@@ -164,7 +165,7 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
     options, _ = read_uint_capture_offset()           # options
     read_uint_capture_offset()         # lastTimestamp
     read_double_skip()                 # lastValue
-    read_uint_capture_offset()         # totalSamples
+    old_total_samples, total_samples_off = read_uint_capture_offset()
     read_uint_capture_offset()         # duplicatePolicy
     has_src, _ = read_uint_capture_offset()
     assert has_src == 0
@@ -196,7 +197,6 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
     base_ts, _ = read_uint_capture_offset()
     assert base_ts == 1
     old_num_samples, num_samples_off = read_uint_capture_offset()
-    assert old_num_samples == 1
     assert old_num_samples <= 63, "test assumes 1-byte rdb len encoding"
     size_bytes, _ = read_uint_capture_offset()
     assert size_bytes == chunk_size_bytes
@@ -208,12 +208,61 @@ def _patch_first_uncompressed_chunk_num_samples(dump: bytes, new_num_samples: in
     # samples buffer is binary and large enough that it should never be integer-encoded.
     assert decoded_len == size_bytes
 
-    # Patch the single byte directly.
+    if new_total_samples is not None:
+        assert old_total_samples <= 63 and 0 <= new_total_samples <= 63
+        b[total_samples_off] = new_total_samples & 0x3F
+
     b[num_samples_off] = new_num_samples & 0x3F
 
     _patch_dump_crc(b)
     assert _verify_dump_payload(bytes(b)), "patched DUMP payload should have valid checksum"
     return bytes(b)
+
+
+def test_total_samples_mismatch_uses_loaded_chunk_count(env):
+    env.skipOnCluster()
+
+    key = 'test_key'
+    env.cmd('TS.CREATE', key, 'UNCOMPRESSED')
+    env.cmd('TS.ADD', key, 1, 42)
+    dump = _patch_uncompressed_sample_counts(
+        env.cmd('DUMP', key), new_num_samples=1, new_total_samples=0)
+
+    env.cmd('DEL', key)
+    env.cmd('RESTORE', key, 0, dump)
+
+    info = env.cmd('TS.INFO', key)
+    info = dict(zip(info[::2], info[1::2]))
+    env.assertEqual(info[b'totalSamples'], 1)
+    env.assertEqual(env.cmd('TS.RANGE', key, '-', '+'), [[1, b'42']])
+
+    env.assertEqual(env.cmd('TS.DEL', key, 0, 1000), 1)
+    env.assertEqual(env.cmd('TS.ADD', key, 2000, 43), 2000)
+    assert env.cmd('PING')
+
+
+def test_underreported_total_samples_by_one_uses_loaded_chunk_count(env):
+    env.skipOnCluster()
+
+    key = 'test_key'
+    env.cmd('TS.CREATE', key, 'UNCOMPRESSED')
+    for timestamp in range(1, 6):
+        env.cmd('TS.ADD', key, timestamp, timestamp + 41)
+    dump = _patch_uncompressed_sample_counts(
+        env.cmd('DUMP', key), new_num_samples=5, new_total_samples=4)
+
+    env.cmd('DEL', key)
+    env.cmd('RESTORE', key, 0, dump)
+
+    info = env.cmd('TS.INFO', key)
+    info = dict(zip(info[::2], info[1::2]))
+    env.assertEqual(info[b'totalSamples'], 5)
+    env.assertEqual(env.cmd('TS.RANGE', key, '-', '+'),
+                    [[timestamp, str(timestamp + 41).encode()] for timestamp in range(1, 6)])
+
+    env.assertEqual(env.cmd('TS.DEL', key, 0, 1000), 5)
+    env.assertEqual(env.cmd('TS.ADD', key, 2000, 47), 2000)
+    assert env.cmd('PING')
 
 
 def test_broken_rdb_truncated(env):
