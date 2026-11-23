@@ -29,11 +29,11 @@ static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *
     if (likely(len == 0))
         return false;
 
-    RedisModule_Log(rctx, "warning", "got libmr error:");
+    RedisModule_Log(rctx, REDISMODULE_LOGLEVEL_WARNING, "got libmr error:");
     bool max_idle_reached = false, cluster_topology_changed = false;
     for (size_t i = 0; i < len; ++i) {
         const char *execution_error = MR_ExecutionCtxGetError(eCtx, i);
-        RedisModule_Log(rctx, "warning", "%s", execution_error);
+        RedisModule_Log(rctx, REDISMODULE_LOGLEVEL_WARNING, "%s", execution_error);
         if (strcmp("execution max idle reached", execution_error) == 0)
             max_idle_reached = true;
         if (strcmp("cluster topology changed", execution_error) == 0)
@@ -99,7 +99,7 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
     if (len == 0 || len % MR_ClusterGetSize() != 0) {
         // Each node should return the same number of results because they were all ran the same
         // internal commands
-        RedisModule_Log(ctx, "warning", "Unexpected results from nodes");
+        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "Unexpected results from nodes");
         RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
         return NULL;
     }
@@ -125,7 +125,7 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
         }
 
         if (nodesResultsType && nodesResultsType != r->recordType) {
-            RedisModule_Log(ctx, "warning", "Mixed node result types");
+            RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "Mixed node result types");
             RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
             goto __error;
         }
@@ -141,7 +141,10 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
             continue;
         }
 
-        RedisModule_Log(ctx, "warning", "Unexpected record type: %s", r->recordType->type.type);
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Unexpected record type: %s",
+                        r->recordType->type.type);
         RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
         goto __error;
     }
@@ -149,7 +152,7 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
     bool redisClusterEnabled =
         (RedisModule_GetContextFlags(ctx) & REDISMODULE_CTX_FLAGS_CLUSTER) != 0;
     if (redisClusterEnabled && !valid_slot_ranges(slotRanges)) {
-        RedisModule_Log(ctx, "warning", "Invalid slot ranges");
+        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "Invalid slot ranges");
         RedisModule_ReplyWithError(ctx, SLOT_RANGES_ERROR);
         goto __error;
     }
@@ -288,7 +291,7 @@ static void mrange_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, MRangeDat
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(ctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -426,7 +429,7 @@ static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModule
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(ctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -439,7 +442,7 @@ static void mget_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx, RedisModule
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(ctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -505,7 +508,7 @@ static void queryindex_done_gears(ExecutionCtx *eCtx,
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(ctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -518,7 +521,7 @@ static void queryindex_done_gears(ExecutionCtx *eCtx,
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(ctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -767,7 +770,7 @@ static void querylabels_done_gears(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(ctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
