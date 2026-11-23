@@ -15,10 +15,11 @@
 static inline bool check_and_reply_on_error(ExecutionCtx *eCtx, RedisModuleCtx *rctx) {
     size_t len = MR_ExecutionCtxGetErrorsLen(eCtx);
     if (unlikely(len > 0)) {
-        RedisModule_Log(rctx, "warning", "got libmr error:");
+        RedisModule_Log(rctx, REDISMODULE_LOGLEVEL_WARNING, "got libmr error:");
         bool max_idle_reached = false;
         for (size_t i = 0; i < len; ++i) {
-            RedisModule_Log(rctx, "warning", "%s", MR_ExecutionCtxGetError(eCtx, i));
+            RedisModule_Log(
+                rctx, REDISMODULE_LOGLEVEL_WARNING, "%s", MR_ExecutionCtxGetError(eCtx, i));
             if (!strcmp("execution max idle reached", MR_ExecutionCtxGetError(eCtx, i))) {
                 max_idle_reached = true;
             }
@@ -66,7 +67,7 @@ static void queryindex_done_resp3(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -79,7 +80,7 @@ static void queryindex_done_resp3(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -110,7 +111,7 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_mapRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_mapRecord->recordType != GetMapRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_mapRecord->recordType->type.type);
             continue;
@@ -124,7 +125,7 @@ static void mget_done_resp3(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_mapRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_mapRecord->recordType != GetMapRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_mapRecord->recordType->type.type);
             continue;
@@ -155,7 +156,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -168,7 +169,7 @@ static void mget_done(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -199,7 +200,7 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -212,7 +213,7 @@ static void queryindex_resp3_done(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;
@@ -251,7 +252,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
             Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
             if (raw_listRecord->recordType != GetListRecordType()) {
                 RedisModule_Log(rctx,
-                                "warning",
+                                REDISMODULE_LOGLEVEL_WARNING,
                                 "Unexpected record type: %s",
                                 raw_listRecord->recordType->type.type);
                 continue;
@@ -266,7 +267,7 @@ static void mrange_done(ExecutionCtx *eCtx, void *privateData) {
         Record *raw_listRecord = MR_ExecutionCtxGetResult(eCtx, i);
         if (raw_listRecord->recordType != GetListRecordType()) {
             RedisModule_Log(rctx,
-                            "warning",
+                            REDISMODULE_LOGLEVEL_WARNING,
                             "Unexpected record type: %s",
                             raw_listRecord->recordType->type.type);
             continue;

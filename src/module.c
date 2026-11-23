@@ -76,7 +76,7 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
     if (ReadDeprecatedLoadTimeConfig(ctx, argv, argc, isConfigApiSupported) == TSDB_ERROR) {
         RedisModule_Log(
             ctx,
-            "warning",
+            REDISMODULE_LOGLEVEL_WARNING,
             "Failed to parse the deprecated RedisTimeSeries configurations, aborting...");
 
         FreeConfig();
@@ -90,8 +90,9 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
     }
 
     if (!RegisterConfigurationOptions(ctx)) {
-        RedisModule_Log(
-            ctx, "warning", "Failed to register the RedisTimeSeries configurations, aborting...");
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Failed to register the RedisTimeSeries configurations, aborting...");
 
         FreeConfig();
 
@@ -99,8 +100,9 @@ static bool LoadConfiguration(RedisModuleCtx *ctx, RedisModuleString **argv, int
     }
 
     if (RedisModule_LoadConfigs(ctx) != REDISMODULE_OK) {
-        RedisModule_Log(
-            ctx, "warning", "Failed to load the RedisTimeSeries configurations, aborting...");
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Failed to load the RedisTimeSeries configurations, aborting...");
 
         FreeConfig();
 
@@ -327,14 +329,14 @@ static int replyGroupedMultiRange(RedisModuleCtx *ctx,
                 break;
             case GetSeriesResult_GenericError:
                 RedisModule_Log(ctx,
-                                "warning",
+                                REDISMODULE_LOGLEVEL_WARNING,
                                 "couldn't open key or key is not a Timeseries. key=%s",
                                 currentKey);
 
                 continue;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,
-                                "warning",
+                                REDISMODULE_LOGLEVEL_WARNING,
                                 "The user lacks the required permissions for the key=%s, stopping.",
                                 currentKey);
                 exitStatus = REDISMODULE_ERR;
@@ -419,7 +421,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                 break;
             case GetSeriesResult_GenericError:
                 RedisModule_Log(ctx,
-                                "warning",
+                                REDISMODULE_LOGLEVEL_WARNING,
                                 "couldn't open key or key is not a Timeseries. key=%s",
                                 RedisModule_StringPtrLen(currentKey, NULL));
                 RedisModule_FreeString(ctx, currentKey);
@@ -427,7 +429,7 @@ static int replyUngroupedMultiRange(RedisModuleCtx *ctx,
                 break;
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(ctx,
-                                "warning",
+                                REDISMODULE_LOGLEVEL_WARNING,
                                 "The user lacks the required permissions for the key=%s, stopping.",
                                 RedisModule_StringPtrLen(currentKey, NULL));
                 RedisModule_FreeString(ctx, currentKey);
@@ -911,7 +913,7 @@ int TSDB_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     CreateTsKey(ctx, keyName, &cCtx, &series, &key);
     RedisModule_CloseKey(key);
 
-    RedisModule_Log(ctx, "verbose", "created new series");
+    RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_VERBOSE, "created new series");
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     RedisModule_ReplicateVerbatim(ctx);
 
@@ -1373,7 +1375,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
                 break;
             case GetSeriesResult_GenericError:
                 RedisModule_Log(ctx,
-                                "warning",
+                                REDISMODULE_LOGLEVEL_WARNING,
                                 "couldn't open key or key is not a Timeseries. key=%.*s",
                                 (int)currentKeyLen,
                                 currentKey);
@@ -1381,7 +1383,7 @@ int TSDB_mget(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             case GetSeriesResult_PermissionError:
                 RedisModule_Log(
                     ctx,
-                    "warning",
+                    REDISMODULE_LOGLEVEL_WARNING,
                     "The user lacks the required permissions for the key=%.*s, stopping.",
                     (int)currentKeyLen,
                     currentKey);
@@ -1536,7 +1538,8 @@ void FlushEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t sube
 }
 
 void swapDbEventCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub, void *data) {
-    RedisModule_Log(ctx, "warning", "swapdb isn't supported by redis timeseries");
+    RedisModule_Log(
+        ctx, REDISMODULE_LOGLEVEL_WARNING, "swapdb isn't supported by redis timeseries");
     if ((!memcmp(&e, &RedisModuleEvent_FlushDB, sizeof(e)))) {
         RedisModuleSwapDbInfo *ei = data;
         REDISMODULE_NOT_USED(ei);
@@ -1600,27 +1603,35 @@ void ShardingEvent(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent,
      *    have data that are not belong to us and its safe to stop checking this on searches.
      */
     if (eid.id != REDISMODULE_EVENT_SHARDING) {
-        RedisModule_Log(rts_staticCtx, "warning", "Bad event given, ignored.");
+        RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "Bad event given, ignored.");
         return;
     }
 
     switch (subevent) {
         case REDISMODULE_SUBEVENT_SHARDING_SLOT_RANGE_CHANGED:
-            RedisModule_Log(
-                ctx, "notice", "%s", "Got slot range change event, enter trimming phase.");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_NOTICE,
+                            "%s",
+                            "Got slot range change event, enter trimming phase.");
             isTrimming = true;
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_STARTED:
-            RedisModule_Log(
-                ctx, "notice", "%s", "Got trimming started event, enter trimming phase.");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_NOTICE,
+                            "%s",
+                            "Got trimming started event, enter trimming phase.");
             isTrimming = true;
             break;
         case REDISMODULE_SUBEVENT_SHARDING_TRIMMING_ENDED:
-            RedisModule_Log(ctx, "notice", "%s", "Got trimming ended event, exit trimming phase.");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_NOTICE,
+                            "%s",
+                            "Got trimming ended event, exit trimming phase.");
             isTrimming = false;
             break;
         default:
-            RedisModule_Log(rts_staticCtx, "warning", "Bad subevent given, ignored.");
+            RedisModule_Log(
+                rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "Bad subevent given, ignored.");
     }
 }
 
@@ -1671,7 +1682,7 @@ void Initialize_RdbNotifications(RedisModuleCtx *ctx) {
         RedisModule_Assert(success !=
                            REDISMODULE_ERR); // should be supported in this redis version/release
         RedisModule_SetModuleOptions(ctx, REDISMODULE_OPTIONS_HANDLE_IO_ERRORS);
-        RedisModule_Log(ctx, "notice", "Enabled diskless replication");
+        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_NOTICE, "Enabled diskless replication");
     }
 }
 
@@ -1730,14 +1741,14 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     rts_staticCtx = RedisModule_GetDetachedThreadSafeContext(ctx);
 
     RedisModule_Log(ctx,
-                    "notice",
+                    REDISMODULE_LOGLEVEL_NOTICE,
                     "RedisTimeSeries version %d, git_sha=%s",
                     REDISTIMESERIES_MODULE_VERSION,
                     REDISTIMESERIES_GIT_SHA);
 
     RTS_GetRedisVersion();
     RedisModule_Log(ctx,
-                    "notice",
+                    REDISMODULE_LOGLEVEL_NOTICE,
                     "Redis version found by RedisTimeSeries : %d.%d.%d - %s",
                     RTS_currVersion.redisMajorVersion,
                     RTS_currVersion.redisMinorVersion,
@@ -1745,7 +1756,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                     RTS_IsEnterprise() ? "enterprise" : "oss");
     if (RTS_IsEnterprise()) {
         RedisModule_Log(ctx,
-                        "notice",
+                        REDISMODULE_LOGLEVEL_NOTICE,
                         "Redis Enterprise version found by RedisTimeSeries : %d.%d.%d-%d",
                         RTS_RlecMajorVersion,
                         RTS_RlecMinorVersion,
@@ -1755,7 +1766,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RTS_CheckSupportedVestion() != REDISMODULE_OK) {
         RedisModule_Log(ctx,
-                        "warning",
+                        REDISMODULE_LOGLEVEL_WARNING,
                         "Redis version is too old, please upgrade to redis "
                         "%d.%d.%d and above.",
                         RTS_minSupportedVersion.redisMajorVersion,
@@ -1822,7 +1833,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_AddACLCategory &&
         RedisModule_AddACLCategory(ctx, TIMESERIES_MODULE_ACL_CATEGORY_NAME) != REDISMODULE_OK) {
-        RedisModule_Log(ctx, "warning", "Failed to add ACL category");
+        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "Failed to add ACL category");
 
         FreeConfig();
         RedisModule_FreeThreadSafeContext(rts_staticCtx);
@@ -1833,7 +1844,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     IndexInit();
     if (RedisModule_RegisterDefragFunc2(ctx, DefragIndex) != REDISMODULE_OK) {
-        RedisModule_Log(ctx, "warning", "Failed to register defrag function");
+        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "Failed to register defrag function");
         FreeConfig();
         RedisModule_FreeThreadSafeContext(rts_staticCtx);
         rts_staticCtx = NULL;
@@ -1912,7 +1923,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_SubscribeToServerEvent && RedisModule_ShardingGetKeySlot) {
         // we have server events support, lets subscribe to relevan events.
-        RedisModule_Log(ctx, "notice", "%s", "Subscribe to sharding events");
+        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_NOTICE, "%s", "Subscribe to sharding events");
         RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Sharding, ShardingEvent);
     }
 
