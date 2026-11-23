@@ -299,8 +299,10 @@ void IndexMetricFromName(RedisModuleCtx *ctx, RedisModuleString *keyname) {
         // when loading from rdb file the key shouldn't exist.
         size_t len;
         const char *str = RedisModule_StringPtrLen(_keyname, &len);
-        RedisModule_Log(
-            ctx, "warning", "Trying to load rdb a key=%s, which is already in index", str);
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Trying to load rdb a key=%s, which is already in index",
+                        str);
         RemoveIndexedMetric(_keyname); // for safety
     }
 
@@ -598,7 +600,8 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
                   &destSeries,
                   REDISMODULE_READ | REDISMODULE_WRITE,
                   GetSeriesFlags_CheckForAcls) != GetSeriesResult_Success) {
-        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+        RedisModule_Log(
+            ctx, REDISMODULE_LOGLEVEL_VERBOSE, "%s", "Failed to retrieve downsample series");
         return false;
     }
 
@@ -635,8 +638,10 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
                                            NULL,
                                            NULL);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(
-                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(rts_staticCtx,
+                                REDISMODULE_LOGLEVEL_VERBOSE,
+                                "%s",
+                                "Failed to calculate range for downsample");
                 continue;
             }
         } else {
@@ -648,8 +653,10 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
             const int rv = SeriesCalcRange(
                 series, startNormalized, start + ruleTimebucket - 1, rule, &val, NULL);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(
-                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(rts_staticCtx,
+                                REDISMODULE_LOGLEVEL_VERBOSE,
+                                "%s",
+                                "Failed to calculate range for downsample");
                 continue;
             }
 
@@ -777,7 +784,8 @@ static int ContinuousDeletion(RedisModuleCtx *ctx,
                   &destSeries,
                   REDISMODULE_READ | REDISMODULE_WRITE,
                   GetSeriesFlags_CheckForAcls) != GetSeriesResult_Success) {
-        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+        RedisModule_Log(
+            ctx, REDISMODULE_LOGLEVEL_VERBOSE, "%s", "Failed to retrieve downsample series");
         return TSDB_ERROR;
     }
 
@@ -800,7 +808,8 @@ static bool delete_sample_before(RedisModuleCtx *ctx,
                   &series,
                   REDISMODULE_READ | REDISMODULE_WRITE,
                   GetSeriesFlags_CheckForAcls) != GetSeriesResult_Success) {
-        RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+        RedisModule_Log(
+            ctx, REDISMODULE_LOGLEVEL_VERBOSE, "%s", "Failed to retrieve downsample series");
         return false;
     }
 
@@ -852,8 +861,10 @@ static void CompactionDelRange(Series *series,
                                            NULL,
                                            &is_empty);
             if (rv == TSDB_ERROR) {
-                RedisModule_Log(
-                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(rts_staticCtx,
+                                REDISMODULE_LOGLEVEL_VERBOSE,
+                                "%s",
+                                "Failed to calculate range for downsample");
                 continue;
             }
 
@@ -882,8 +893,10 @@ static void CompactionDelRange(Series *series,
                                  &val,
                                  &is_empty);
             if (unlikely(rv == TSDB_ERROR)) {
-                RedisModule_Log(
-                    rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
+                RedisModule_Log(rts_staticCtx,
+                                REDISMODULE_LOGLEVEL_VERBOSE,
+                                "%s",
+                                "Failed to calculate range for downsample");
                 continue;
             }
 
@@ -906,8 +919,10 @@ static void CompactionDelRange(Series *series,
                 const int rv = SeriesCalcRange(
                     series, curAggWindowStartNormalized, UINT64_MAX, rule, NULL, &is_empty);
                 if (rv == TSDB_ERROR) {
-                    RedisModule_Log(
-                        rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
+                    RedisModule_Log(rts_staticCtx,
+                                    REDISMODULE_LOGLEVEL_VERBOSE,
+                                    "%s",
+                                    "Failed to calculate range for downsample");
                     continue;
                 }
 
@@ -926,8 +941,10 @@ static void CompactionDelRange(Series *series,
                                      &val,
                                      &is_empty);
                 if (unlikely(rv == TSDB_ERROR)) {
-                    RedisModule_Log(
-                        rts_staticCtx, "verbose", "%s", "Failed to calculate range for downsample");
+                    RedisModule_Log(rts_staticCtx,
+                                    REDISMODULE_LOGLEVEL_VERBOSE,
+                                    "%s",
+                                    "Failed to calculate range for downsample");
                     continue;
                 }
 
