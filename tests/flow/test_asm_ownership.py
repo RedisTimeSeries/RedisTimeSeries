@@ -25,11 +25,19 @@ def task_status(conn, task_id):
     return dict(zip(fields[0::2], fields[1::2]))
 
 
-def active_trim(conn):
+def cluster_info(conn):
     info = conn.execute_command("CLUSTER", "INFO")
-    info = info if isinstance(info, dict) else dict(line.split(":", 1) for line in info.splitlines() if ":" in line)
+    return info if isinstance(info, dict) else dict(line.split(":", 1) for line in info.splitlines() if ":" in line)
+
+
+def active_trim(conn):
+    info = cluster_info(conn)
     return {field: int(info[f"cluster_slot_migration_active_trim_{field}"])
             for field in ("running", "current_job_keys", "current_job_trimmed")}
+
+
+def trims_completed(conn):
+    return int(cluster_info(conn)["cluster_slot_migration_stats_active_trim_completed"])
 
 
 def wait_for(predicate, what):
@@ -106,12 +114,14 @@ class testAsmOwnership:
                 # Fails the import on the target (which then trims the imported keys) and the
                 # migration on the source (which resumes writes). Cancel while the failpoint
                 # still holds the import, so it can't complete in between.
+                trims = trims_completed(self.target)
                 self.target.execute_command("CLUSTER", "MIGRATION", "CANCEL", "ID", task)
                 self.source.execute_command("CLUSTER", "MIGRATION", "CANCEL", "ID", task)
             self.target.execute_command("DEBUG", "ASM-FAILPOINT", "", "")
         self.env.assertEqual(task_status(self.target, task)["state"], "canceled")
         self.env.assertEqual(task_status(self.source, task)["state"], "canceled")
-        wait_for(lambda: active_trim(self.target)["running"] == 0, "the target to trim the cancelled import")
+        # Not "running == 0", which also holds before the trim job starts.
+        wait_for(lambda: trims_completed(self.target) > trims, "the target to trim the cancelled import")
         self.env.assertEqual((own_slots(self.target), own_slots(self.source)), self.ownership)
         self.assert_each_series_once()
 
