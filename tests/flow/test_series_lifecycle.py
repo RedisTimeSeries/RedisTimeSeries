@@ -26,6 +26,7 @@ class testSeriesLifecycle:
         # Keyless: any shard answers for the whole cluster.
         return sorted(self.env.getConnection(1).execute_command('TS.QUERYINDEX', *filters))
 
+    @skip(onVersionLowerThan='7.4.0')
     def test_createrule_with_partial_key_permissions(self):
         # TS.CREATERULE's key specs have no ACCESS/UPDATE flags, so Redis admits a user with
         # any permission on both keys. The module then checks read and write itself.
