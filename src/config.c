@@ -46,18 +46,23 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         if (RMUtil_ParseArgsAfter("COMPACTION_POLICY", argv, argc, "s", &policy) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after COMPACTION_POLICY");
             return TSDB_ERROR;
         }
         policy_cstr = RedisModule_StringPtrLen(policy, &len);
         if (ParseCompactionPolicy(policy_cstr,
                                   &TSGlobalConfig.compactionRules,
                                   &TSGlobalConfig.compactionRulesCount) != TRUE) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after COMPACTION_POLICY");
             return TSDB_ERROR;
         }
 
-        RedisModule_Log(ctx, "notice", "loaded default compaction policy: %s", policy_cstr);
+        RedisModule_Log(
+            ctx, REDISMODULE_LOGLEVEL_NOTICE, "loaded default compaction policy: %s", policy_cstr);
         TSGlobalConfig.hasGlobalConfig = TRUE;
     }
 
@@ -66,12 +71,14 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         size_t len;
         if (RMUtil_ParseArgsAfter("OSS_GLOBAL_PASSWORD", argv, argc, "s", &password) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after OSS_GLOBAL_PASSWORD");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after OSS_GLOBAL_PASSWORD");
             return TSDB_ERROR;
         }
 
         TSGlobalConfig.password = (char *)RedisModule_StringPtrLen(password, &len);
-        RedisModule_Log(ctx, "notice", "loaded tls password");
+        RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_NOTICE, "loaded tls password");
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
         TSGlobalConfig.password = NULL;
@@ -81,12 +88,16 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (RMUtil_ParseArgsAfter(
                 "RETENTION_POLICY", argv, argc, "l", &TSGlobalConfig.retentionPolicy) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after RETENTION_POLICY");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after RETENTION_POLICY");
             return TSDB_ERROR;
         }
 
-        RedisModule_Log(
-            ctx, "notice", "loaded default retention policy: %lld", TSGlobalConfig.retentionPolicy);
+        RedisModule_Log(ctx,
+                        REDISMODULE_LOGLEVEL_NOTICE,
+                        "loaded default retention policy: %lld",
+                        TSGlobalConfig.retentionPolicy);
         TSGlobalConfig.hasGlobalConfig = TRUE;
     } else {
         TSGlobalConfig.retentionPolicy = RETENTION_TIME_DEFAULT;
@@ -98,22 +109,24 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     TSGlobalConfig.chunkSizeBytes = Chunk_SIZE_BYTES_SECS;
     if (ParseChunkSize(ctx, argv, argc, "CHUNK_SIZE_BYTES", &TSGlobalConfig.chunkSizeBytes) !=
         REDISMODULE_OK) {
-        RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_SIZE_BYTES");
+        RedisModule_Log(
+            ctx, REDISMODULE_LOGLEVEL_WARNING, "Unable to parse argument after CHUNK_SIZE_BYTES");
         return TSDB_ERROR;
     }
     RedisModule_Log(ctx,
-                    "notice",
+                    REDISMODULE_LOGLEVEL_NOTICE,
                     "loaded default CHUNK_SIZE_BYTES policy: %lld",
                     TSGlobalConfig.chunkSizeBytes);
 
     TSGlobalConfig.duplicatePolicy = DEFAULT_DUPLICATE_POLICY;
     if (ParseDuplicatePolicy(
             ctx, argv, argc, DUPLICATE_POLICY_ARG, &TSGlobalConfig.duplicatePolicy) != TSDB_OK) {
-        RedisModule_Log(ctx, "warning", "Unable to parse argument after DUPLICATE_POLICY");
+        RedisModule_Log(
+            ctx, REDISMODULE_LOGLEVEL_WARNING, "Unable to parse argument after DUPLICATE_POLICY");
         return TSDB_ERROR;
     }
     RedisModule_Log(ctx,
-                    "notice",
+                    REDISMODULE_LOGLEVEL_NOTICE,
                     "loaded server DUPLICATE_POLICY: %s",
                     DuplicatePolicyToString(TSGlobalConfig.duplicatePolicy));
 
@@ -122,7 +135,7 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (RMUtil_ArgIndex("CHUNK_TYPE", argv, argc) >= 0) {
             RedisModule_Log(
                 ctx,
-                "warning",
+                REDISMODULE_LOGLEVEL_WARNING,
                 "CHUNK_TYPE configuration was deprecated and will be removed in future "
                 "versions of RedisTimeSeries. Please use ENCODING configuration instead.");
         }
@@ -131,12 +144,14 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         const char *chunk_type_cstr;
         if (RMUtil_ArgIndex("CHUNK_TYPE", argv, argc) >= 0 &&
             RMUtil_ParseArgsAfter("CHUNK_TYPE", argv, argc, "s", &chunk_type) != REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after CHUNK_TYPE");
+            RedisModule_Log(
+                ctx, REDISMODULE_LOGLEVEL_WARNING, "Unable to parse argument after CHUNK_TYPE");
             return TSDB_ERROR;
         }
         if (RMUtil_ArgIndex("ENCODING", argv, argc) >= 0 &&
             RMUtil_ParseArgsAfter("ENCODING", argv, argc, "s", &chunk_type) != REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after ENCODING");
+            RedisModule_Log(
+                ctx, REDISMODULE_LOGLEVEL_WARNING, "Unable to parse argument after ENCODING");
             return TSDB_ERROR;
         }
         RMUtil_StringToLower(chunk_type);
@@ -149,14 +164,19 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             TSGlobalConfig.options &= ~SERIES_OPT_DEFAULT_COMPRESSION;
             TSGlobalConfig.options |= SERIES_OPT_UNCOMPRESSED;
         } else {
-            RedisModule_Log(ctx, "warning", "unknown series ENCODING type: %s\n", chunk_type_cstr);
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "unknown series ENCODING type: %s\n",
+                            chunk_type_cstr);
             return TSDB_ERROR;
         }
     }
     if (argc > 1 && RMUtil_ArgIndex("NUM_THREADS", argv, argc) >= 0) {
         if (RMUtil_ParseArgsAfter("NUM_THREADS", argv, argc, "l", &TSGlobalConfig.numThreads) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after COMPACTION_POLICY");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after COMPACTION_POLICY");
             return TSDB_ERROR;
         }
     } else {
@@ -167,7 +187,9 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         RedisModuleString *forceSaveCrossRef;
         if (RMUtil_ParseArgsAfter("DEUBG_FORCE_RULE_DUMP", argv, argc, "s", &forceSaveCrossRef) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after DEUBG_FORCE_RULE_DUMP");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after DEUBG_FORCE_RULE_DUMP");
             return TSDB_ERROR;
         }
         size_t forceSaveCrossRef_len;
@@ -185,8 +207,9 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         if (RMUtil_ParseArgsAfter(
                 "DONT_ASSERT_ON_FAILIURE", argv, argc, "s", &dontAssertOnFailiure) !=
             REDISMODULE_OK) {
-            RedisModule_Log(
-                ctx, "warning", "Unable to parse argument after DONT_ASSERT_ON_FAILIURE");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after DONT_ASSERT_ON_FAILIURE");
             return TSDB_ERROR;
         }
         size_t dontAssertOnFailiure_len;
@@ -207,17 +230,21 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         long long ignoreMaxTimeDiff = 0;
         if (RMUtil_ParseArgsAfter("IGNORE_MAX_TIME_DIFF", argv, argc, "l", &ignoreMaxTimeDiff) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after IGNORE_MAX_TIME_DIFF");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after IGNORE_MAX_TIME_DIFF");
             return TSDB_ERROR;
         }
         if (ignoreMaxTimeDiff < 0) {
-            RedisModule_Log(ctx, "warning", "IGNORE_MAX_TIME_DIFF config cannot be negative!");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "IGNORE_MAX_TIME_DIFF config cannot be negative!");
             return TSDB_ERROR;
         }
         TSGlobalConfig.ignoreMaxTimeDiff = ignoreMaxTimeDiff;
     }
     RedisModule_Log(ctx,
-                    "notice",
+                    REDISMODULE_LOGLEVEL_NOTICE,
                     "loaded default IGNORE_MAX_TIME_DIFF: %lld",
                     TSGlobalConfig.ignoreMaxTimeDiff);
 
@@ -226,20 +253,26 @@ int ReadConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         double ignoreMaxValDiff = 0;
         if (RMUtil_ParseArgsAfter("IGNORE_MAX_VAL_DIFF", argv, argc, "d", &ignoreMaxValDiff) !=
             REDISMODULE_OK) {
-            RedisModule_Log(ctx, "warning", "Unable to parse argument after IGNORE_MAX_VAL_DIFF");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "Unable to parse argument after IGNORE_MAX_VAL_DIFF");
             return TSDB_ERROR;
         }
         if (ignoreMaxValDiff < 0) {
-            RedisModule_Log(ctx, "warning", "IGNORE_MAX_VAL_DIFF config cannot be negative!");
+            RedisModule_Log(ctx,
+                            REDISMODULE_LOGLEVEL_WARNING,
+                            "IGNORE_MAX_VAL_DIFF config cannot be negative!");
             return TSDB_ERROR;
         }
         TSGlobalConfig.ignoreMaxValDiff = ignoreMaxValDiff;
     }
-    RedisModule_Log(
-        ctx, "notice", "loaded default IGNORE_MAX_VAL_DIFF: %f", TSGlobalConfig.ignoreMaxValDiff);
+    RedisModule_Log(ctx,
+                    REDISMODULE_LOGLEVEL_NOTICE,
+                    "loaded default IGNORE_MAX_VAL_DIFF: %f",
+                    TSGlobalConfig.ignoreMaxValDiff);
 
     RedisModule_Log(ctx,
-                    "notice",
+                    REDISMODULE_LOGLEVEL_NOTICE,
                     "Setting default series ENCODING to: %s",
                     ChunkTypeToString(TSGlobalConfig.options));
     return TSDB_OK;
@@ -290,7 +323,7 @@ void RTS_GetRedisVersion() {
                    &RTS_currVersion.redisMinorVersion,
                    &RTS_currVersion.redisPatchVersion);
     if (n != 3) {
-        RedisModule_Log(NULL, "warning", "Could not extract redis version");
+        RedisModule_Log(NULL, REDISMODULE_LOGLEVEL_WARNING, "Could not extract redis version");
     }
 
     RTS_RlecMajorVersion = -1;
@@ -306,7 +339,8 @@ void RTS_GetRedisVersion() {
                    &RTS_RlecPatchVersion,
                    &RTS_RlecBuild);
         if (n != 4) {
-            RedisModule_Log(NULL, "warning", "Could not extract enterprise version");
+            RedisModule_Log(
+                NULL, REDISMODULE_LOGLEVEL_WARNING, "Could not extract enterprise version");
         }
     }
 
