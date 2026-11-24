@@ -910,10 +910,9 @@ static int agg_iter_apply_empty_prefix(AggregationIterator *self,
         return 0;
     }
     self->handled_empty_prefix = true;
-    int64_t first_bucket =
-        CalcBucketStart(is_reversed ? self->endTimestamp : self->startTimestamp,
-                        aggregationTimeDelta,
-                        self->timestampAlignment);
+    int64_t first_bucket = CalcBucketStart(is_reversed ? self->endTimestamp : self->startTimestamp,
+                                           aggregationTimeDelta,
+                                           self->timestampAlignment);
     timestamp_t first_sample_ts = enrichedChunk->samples.timestamps[0];
     int64_t last_bucket =
         CalcBucketStart(first_sample_ts, aggregationTimeDelta, self->timestampAlignment);
