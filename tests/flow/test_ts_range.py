@@ -1537,6 +1537,19 @@ def test_empty_aligned_bucket_before_zero():
                         env.assertEqual(actual, expected, message=str(args))
 
 
+def test_empty_aligned_negative_bucket_suffix():
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.ADD', 'k', 2, 7) == 2
+        # The out-of-range sample makes the empty suffix an interior gap in the series.
+        assert r.execute_command('TS.ADD', 'k', 50, 100) == 50
+        args = ('k', 0, 30, 'ALIGN', 5, 'AGGREGATION', 'avg', 10, 'EMPTY')
+        expected = [[0, '7'], [5, 'NaN'], [15, 'NaN'], [25, 'NaN']]
+        env.assertEqual(decode_if_needed(r.execute_command('TS.RANGE', *args)), expected)
+        env.assertEqual(decode_if_needed(r.execute_command('TS.REVRANGE', *args)),
+                        list(reversed(expected)))
+
+
 def test_bucket_timestamp():
     agg_size = 10
     env = Env(decodeResponses=True)
