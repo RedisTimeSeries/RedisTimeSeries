@@ -173,8 +173,17 @@ def test_policy_skips_destination_in_other_slot():
     # Needs cluster mode in every lane; a 1-shard cluster is enough for the slot check.
     # Non-cluster lanes don't pass tests.sh's cluster-bus flag, so set it here.
     skip_on_rlec()
+    # Check the server on the lane's own env before starting the cluster: ts-compaction-policy
+    # is a module config only from Redis 7.9, and a Redis without cluster-bus-port-protected-mode
+    # rejects the directive and doesn't start.
+    env = Env()
+    if is_redis_version_lower_than(env, '7.9'):
+        env.skip()
+    bus_mode = os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None
+    if not env.cmd('CONFIG', 'GET', 'cluster-bus-port-protected-mode'):
+        bus_mode = None
     env = Env(env='oss-cluster', shardsCount=1, useSlaves=False, useAof=False,
-              clusterBusPortProtectedMode=os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None)
+              clusterBusPortProtectedMode=bus_mode)
     conn = env.getConnection()  # the only shard owns every slot
     plain, tagged = 'lifecycle', '{lifecycle}tagged'
     env.assertNotEqual(conn.execute_command('CLUSTER', 'KEYSLOT', plain),
