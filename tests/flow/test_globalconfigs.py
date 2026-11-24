@@ -361,6 +361,8 @@ def test_module_config_takes_precedence_over_module_arguments():
         'RETENTION_POLICY', '30',
         'CHUNK_SIZE_BYTES', '2048',
         'OSS_GLOBAL_PASSWORD', 'test',
+        'NUM_THREADS', '2',
+        'LIBMR_PROTOCOL', 'INTERNAL',
     ]
 
     configFileContent = """
@@ -370,6 +372,8 @@ def test_module_config_takes_precedence_over_module_arguments():
     ts-duplicate-policy last
     ts-compaction-policy max:1m:1d
     ts-encoding uncompressed
+    ts-num-threads 4
+    ts-libmr-protocol GEARS
     """
 
     env = Env(moduleArgs=args, redisConfigFileContent=configFileContent, noLog=False)
@@ -383,6 +387,9 @@ def test_module_config_takes_precedence_over_module_arguments():
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-duplicate-policy')[1], b'last')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-compaction-policy')[1], b'max:1m:1d')
         env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-encoding')[1], b'uncompressed')
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'4')
+        # Immutable at runtime, but redis.conf still sets it at startup.
+        env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-libmr-protocol')[1], b'GEARS')
 
 def test_ts_num_threads_module_arg():
     '''
@@ -391,17 +398,25 @@ def test_ts_num_threads_module_arg():
     warning is emitted, and the configured number of LibMR worker
     threads is actually spawned.
 
-    Requires cluster mode (worker threads are created lazily on the
-    first libmr execution, which only happens in cluster mode) and
-    Redis >= 7.0 (module config API).
+    Needs cluster mode (worker threads are created lazily on the
+    first libmr execution, which only happens in cluster mode), so it
+    forces an oss-cluster env in every lane. Also needs Redis >= 7.9
+    (module config API, see RTS_RedisSupportsModuleConfigApi).
 
     Thread names are read from /proc on Linux or via ``sample`` on macOS.
     '''
-    env = Env(moduleArgs="ts-num-threads 5", noLog=False)
-    if not env.isCluster():
+    skip_on_rlec()
+    # Check the server on the lane's own env before starting the cluster: a Redis without
+    # cluster-bus-port-protected-mode rejects the directive and doesn't start.
+    env = Env()
+    if is_redis_version_lower_than(env, '7.9'):
         env.skip()
-    if is_redis_version_lower_than(env, '7.0'):
-        env.skip()
+    bus_mode = os.getenv('CLUSTER_BUS_PROTECTED_MODE', 'no') or None
+    if not env.cmd('CONFIG', 'GET', 'cluster-bus-port-protected-mode'):
+        bus_mode = None
+    # Non-cluster lanes don't pass tests.sh's cluster-bus flag, so set it here.
+    env = Env(env='oss-cluster', shardsCount=2, useSlaves=False, useAof=False,
+              clusterBusPortProtectedMode=bus_mode, moduleArgs="ts-num-threads 5", noLog=False)
 
     conn = env.getConnection(1)
     env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'5')
@@ -418,6 +433,161 @@ def test_ts_num_threads_module_arg():
     env.assertEqual(len(names), 6,
                         message="Expected 6 LibMR worker threads")
 
-    # Try set after pool already started.
-    with pytest.raises(Exception):
+    # Once the pool has started, a resize is refused and the old value stays.
+    with env.assertResponseError(contained='Cannot set ts-num-threads after the LibMR worker pool has started'):
         conn.execute_command('CONFIG', 'SET', 'ts-num-threads', '8')
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads')[1], b'6')
+
+
+def _module_names(conn):
+    # RESP3 replies a map per module; RESP2 a flat [name, <name>, ver, ...] list.
+    return [m[b'name'] if isinstance(m, dict) else m[1] for m in conn.execute_command('MODULE', 'LIST')]
+
+
+def _timeseries_loaded(conn):
+    return b'timeseries' in _module_names(conn)
+
+
+class testRuntimeConfigErrors:
+    """CONFIG SET rejections in src/config.c.
+
+    No case changes a value (each one checks that), so all methods share one env.
+    """
+
+    def __init__(self):
+        skip_on_rlec()
+        self.env = Env(enableModuleCommand=True)
+        # The ts-* configs need the module config API (RTS_RedisSupportsModuleConfigApi).
+        if is_redis_version_lower_than(self.env, '7.9'):
+            self.env.skip()
+        self.conn = self.env.getConnection()
+
+    def _get(self, name):
+        return self.conn.execute_command('CONFIG', 'GET', name)[1]
+
+    def _assert_rejected(self, cases):
+        for name, value, msg in cases:
+            before = self._get(name)
+            with self.env.assertResponseError(contained=msg):
+                self.conn.execute_command('CONFIG', 'SET', name, value)
+            self.env.assertEqual(self._get(name), before, message=name)
+
+    def test_invalid_values(self):
+        self._assert_rejected([
+            ('ts-compaction-policy', 'bogus', 'Invalid compaction policy: bogus'),
+            ('ts-duplicate-policy', 'bogus', 'Invalid duplicate policy: bogus'),
+            ('ts-encoding', 'bogus', 'Invalid encoding: bogus'),
+            ('ts-ignore-max-val-diff', 'abc', 'Invalid value for `ts-ignore-max-val-diff`'),
+            ('ts-ignore-max-val-diff', '-1', 'Value must be in the range [0.000000 .. '),
+            # Inside the registered [48 .. 1048576] bounds, but not a multiple of 8.
+            ('ts-chunk-size-bytes', '50', 'CHUNK_SIZE value must be a multiple of 8'),
+            # Redis checks the registered bounds before calling the module, so the module's
+            # own negative-value check for ts-ignore-max-time-diff is unreachable.
+            ('ts-ignore-max-time-diff', '-1', 'argument must be between 0 and'),
+        ])
+        # The rejected requests left nothing behind: a valid one still works.
+        before = self._get('ts-duplicate-policy')
+        try:
+            self.conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', 'max')
+            self.env.assertEqual(self._get('ts-duplicate-policy'), b'max')
+        finally:
+            self.conn.execute_command('CONFIG', 'SET', 'ts-duplicate-policy', before)
+
+    def test_immutable(self):
+        self.env.assertEqual(self._get('ts-topology-events'), b'yes')
+        self.env.assertEqual(self._get('ts-libmr-protocol'), b'INTERNAL')
+        self._assert_rejected([
+            ('ts-topology-events', 'no', "can't set immutable config"),
+            ('ts-libmr-protocol', 'GEARS', "can't set immutable config"),
+        ])
+
+    def test_load_twice(self):
+        if self.env.isCluster():
+            self.env.skip()
+        # A second copy is refused in RedisModule_Init: the module name is taken.
+        with self.env.assertResponseError(contained='Error loading the extension'):
+            self.conn.execute_command('MODULE', 'LOAD', self.env.module[0])
+        self.env.assertEqual(_module_names(self.conn).count(b'timeseries'), 1)
+        self.env.assertEqual(self.conn.execute_command('TS.QUERYINDEX', 'a=b'), [])
+
+
+def test_module_load_errors_and_forced_unload():
+    """Module-argument errors and the unload path, on a server started without the module.
+
+    A failed MODULE LOAD leaves no trace, so one server takes every error case. The forced
+    unload must come last: it leaves the module's ACL category behind (see below).
+    """
+    skip_on_rlec()
+    env = Env(module=[], enableModuleCommand=True, noLog=False)
+    if env.isCluster() or is_redis_version_lower_than(env, '7.9'):
+        env.skip()
+    so = Defaults.module[0] if isinstance(Defaults.module, list) else Defaults.module
+    conn = env.getConnection()
+    # ParseNumThreadsArg logs at level "error", which Redis prints only at verbose.
+    conn.execute_command('CONFIG', 'SET', 'loglevel', 'verbose')
+
+    # Every option check starts with `argc > 1`, so a lone valueless option is ignored and
+    # the module loads. A valid option in front makes the missing value an error.
+    valid = ['RETENTION_POLICY', '0']
+    for args, msg in [
+        (['NUM_THREADS', 'abc'], 'Unable to parse argument after NUM_THREADS'),
+        (['NUM_THREADS', '0'], 'Invalid value for NUM_THREADS. Must be between 1 and 16'),
+        (['ts-num-threads', '17'], 'Invalid value for ts-num-threads. Must be between 1 and 16'),
+        (valid + ['ts-topology-events'], 'Unable to parse argument after ts-topology-events'),
+        (['ts-topology-events', 'maybe'], "Invalid value for ts-topology-events, must be 'yes' or 'no': maybe"),
+        (valid + ['LIBMR_PROTOCOL'], 'Unable to parse argument after LIBMR_PROTOCOL'),
+        (['LIBMR_PROTOCOL', 'bogus'], 'unknown LIBMR_PROTOCOL: bogus'),
+        (valid + ['DEUBG_FORCE_RULE_DUMP'], 'Unable to parse argument after DEUBG_FORCE_RULE_DUMP'),
+        (valid + ['DONT_ASSERT_ON_FAILIURE'], 'Unable to parse argument after DONT_ASSERT_ON_FAILIURE'),
+    ]:
+        with env.assertResponseError(contained='Error loading the extension'):
+            conn.execute_command('MODULE', 'LOAD', so, *args)
+        env.assertTrue(is_line_in_server_log(env, msg), message=msg)
+        env.assertFalse(_timeseries_loaded(conn), message=msg)
+
+    # ts-libmr-protocol is immutable at runtime, but LOADEX sets it during the load.
+    with env.assertResponseError(contained='Error loading the extension'):
+        conn.execute_command('MODULE', 'LOADEX', so, 'CONFIG', 'ts-libmr-protocol', 'bogus')
+    env.assertTrue(is_line_in_server_log(env, 'Failed to load the RedisTimeSeries configurations'))
+    env.assertFalse(_timeseries_loaded(conn))
+
+    if SANITIZER or VALGRIND:
+        # RedisModule_OnUnload frees only the config and the static context, so the
+        # forced unload below leaks the rest of what OnLoad allocated.
+        env.skip()
+
+    # MODULE UNLOAD is refused because the module exports a data type, so the only way to
+    # reach RedisModule_OnUnload is an unknown LOADEX config: Redis then unloads the module
+    # right after a successful OnLoad. The password checks that FreeConfig releases it.
+    with env.assertResponseError(contained='Error loading the extension'):
+        conn.execute_command('MODULE', 'LOADEX', so, 'CONFIG', 'ts-no-such-config', '1',
+                             'ARGS', 'global-password', 'secret')
+    env.assertTrue(is_line_in_server_log(env, 'Loadex configurations were not applied'))
+    env.assertTrue(is_line_in_server_log(env, 'Module timeseries unloaded'))
+    env.assertFalse(_timeseries_loaded(conn))
+
+    # Redis does not remove a module's ACL categories when it unloads it, so a reload
+    # fails in RedisModule_AddACLCategory until the server restarts.
+    env.assertContains(b'timeseries', conn.execute_command('ACL', 'CAT'))
+    with env.assertResponseError(contained='Error loading the extension'):
+        conn.execute_command('MODULE', 'LOAD', so)
+    env.assertTrue(is_line_in_server_log(env, 'Failed to add ACL category'))
+    env.assertFalse(_timeseries_loaded(conn))
+    env.assertTrue(conn.ping())
+
+
+def test_legacy_module_args_values():
+    """Legacy module arguments that config.c parsed but no test passed yet."""
+    skip_on_rlec()
+    env = Env(moduleArgs='ts-num-threads 3; NUM_THREADS 2; ts-topology-events yes; LIBMR_PROTOCOL GEARS; '
+                         'DEUBG_FORCE_RULE_DUMP disable; DONT_ASSERT_ON_FAILIURE disable',
+              noLog=False)
+    if env.isCluster() or is_redis_version_lower_than(env, '7.9'):
+        env.skip()
+    conn = env.getConnection()
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-num-threads'), [b'ts-num-threads', b'3'])
+    env.assertTrue(is_line_in_server_log(
+        env, 'Both ts-num-threads and NUM_THREADS were provided. Using ts-num-threads.'))
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-topology-events'), [b'ts-topology-events', b'yes'])
+    env.assertEqual(conn.execute_command('CONFIG', 'GET', 'ts-libmr-protocol'), [b'ts-libmr-protocol', b'GEARS'])
+    env.assertTrue(is_line_in_server_log(env, 'LIBMR_PROTOCOL is deprecated'))
