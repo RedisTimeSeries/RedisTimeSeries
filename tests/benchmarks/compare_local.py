@@ -200,7 +200,6 @@ def summary(results, baseline="baseline", candidate="pr"):
         "# RedisTimeSeries command benchmarks: throughput", "",
         "Same workloads, sequential runs, fresh Redis per revision and test.",
         "Units: TSBS queries/s for query tests, TSBS metrics/s for ingestion, and operations/s for other clients.",
-        "🟠 Benchmark name: retried because a previous pair differed by more than 5%; showing medians across all attempts.",
         "Change %: 🟢 improvement; 🟡 degradation below 5%; 🔴 degradation of 5% or more. Unchanged values are unmarked.",
         f"Each metric has {before_label}, {after_label}, and Change % columns. Higher throughput is better.",
         "For repeated tests, throughput columns show each revision’s median; Change % is the median of paired changes, not the change between those columns.",
@@ -212,14 +211,17 @@ def summary(results, baseline="baseline", candidate="pr"):
         '<tr>' + f'<th>{escape(before_label)}</th><th>{escape(after_label)}</th><th>Change %</th>' + '</tr></thead>',
         '<tbody>',
     ]
+    if any(value.get("attempt_count", 1) > 1 and "fixed_pairs" not in value
+           for pair in results["benchmarks"].values() for value in pair.values()):
+        lines.insert(4, "🟠 Benchmark name: retried because a previous pair differed by more than 5%; showing medians across all attempts.")
     for name, pair in results["benchmarks"].items():
         label = escape(name)
         attempts = max(value.get("attempt_count", 1) for value in pair.values())
         if attempts > 1:
             aggregation = " (median)" if "change_percent" in pair[candidate] else ""
-            scheduled = any("fixed_pairs" in value for value in pair.values())
-            unit = "pairs" if scheduled else "attempts"
-            label = ("" if scheduled else "🟠 ") + label + f"<br><small>{attempts} {unit}{aggregation}</small>"
+            fixed = any("fixed_pairs" in value for value in pair.values())
+            unit = "pairs" if fixed else "attempts"
+            label = ("" if fixed else "🟠 ") + label + f"<br><small>{attempts} {unit}{aggregation}</small>"
         errors = [f"{revision}: {value['error']}" for revision, value in pair.items()
                   if "error" in value]
         if errors:

@@ -121,8 +121,6 @@ jobs:
   initial:
     needs: build
     uses: ./.github/workflows/flow-benchmark-nightly-round.yml
-    with:
-      phase: initial
     secrets: inherit
 
   promote:
