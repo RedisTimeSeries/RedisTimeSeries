@@ -33,7 +33,7 @@ is deleted or shortened. These comparisons measure throughput, not memory usage.
 | Trigger | Baseline | Candidate | Regression policy |
 | --- | --- | --- | --- |
 | Non-draft, non-docs-only PR | Pinned PR target branch SHA | Pinned PR head SHA | Report only; execution/coverage errors still fail |
-| Scheduled nightly on master | Pinned `benchmark-baseline` SHA | Pinned master SHA | Fail on any final degradation of 5% or more |
+| Scheduled nightly on master | Pinned `benchmark-baseline` SHA | Pinned master SHA | Fail on any final degradation at or above the workload's margin |
 | Manual Event Nightly | `baseline_branch` input, default `benchmark-baseline` when blank | Selected branch's dispatch SHA | Same failure policy as nightly; never promotes |
 | Other events | — | — | Comparison skipped |
 
@@ -50,14 +50,19 @@ SMT siblings are reserved too. TSBS downloads its executable on each run, so its
 is pinned with `taskset` when constructed; memtier and redis-benchmark use wrappers.
 Affinity setup or cleanup failures stop measurements rather than mixing environments.
 
-A first-pair difference greater than 5% in either direction triggers three additional
+Each workload has a margin: 5%, except `scaling-ts_mget_100K-series-tsbs-devops`,
+`scaling-ts_mrevrange_as_mget_100K-series-tsbs-devops` and `tsbs-scale100-high-cpu-all`,
+which use 10% (`NOISY_MARGINS` in `compare_local.py`) because their throughput swings well
+past 5% between runs of the same build.
+
+A first-pair difference greater than the margin in either direction triggers three additional
 paired attempts. The order alternates baseline/candidate and candidate/baseline.
 The report shows each side's median throughput and the median of the paired percentage
 changes. Smaller differences run once. Execution errors are reported, not retried.
 
 - Green percentage: improvement.
-- Yellow percentage: degradation below 5%.
-- Red percentage: degradation of 5% or more, or an execution error.
+- Yellow percentage: degradation below the margin.
+- Red percentage: degradation at or above the margin, or an execution error.
 - Orange benchmark name: retries were needed.
 
 The initial AWS report publishes final throughput medians to the existing Grafana
@@ -70,11 +75,11 @@ workloads operations/sec. Confirmation does not publish duplicate measurements.
 
 Only scheduled master runs may update **`benchmark-baseline`**, and only when:
 
-1. Every standalone workload has valid results, with none degrading by 5% or more.
+1. Every standalone workload has valid results, with none degrading by its margin or more.
 2. The geometric mean of all paired throughput changes is positive (no 5% overall
    improvement requirement). Each workload has equal weight.
 3. A separate confirmation round on fresh AWS hosts, using the exact same builds and
-   no retries, also meets those criteria with identical coverage and Redis version.
+   the same retry rule, also meets those criteria with identical coverage and Redis version.
 
 If baseline and candidate commits are identical, builds and comparisons are skipped.
 Promotion uses a lease on the original baseline SHA: concurrent changes prevent the
@@ -107,6 +112,7 @@ python tests/benchmarks/compare_local.py \
 
 Use `--benchmark NAME.yml` (repeatable) to select workloads and
 `--report-only-regressions` to match Event CI's policy. The default local behavior fails
-on a final degradation of 5% or more. Results include `comparison.json`, an HTML table
-in `summary.md`, attempt histories, and runner logs. The timeout is per revision per
-workload, defaulting to 1800 seconds; large datasets require sufficient memory/disk.
+on a final degradation at or above the workload's margin. Results include
+`comparison.json`, an HTML table in `summary.md`, attempt histories, and runner logs.
+The timeout is per revision per workload, defaulting to 1800 seconds; large datasets
+require sufficient memory/disk.

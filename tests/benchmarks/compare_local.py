@@ -17,6 +17,18 @@ import time
 import redis
 import yaml
 
+# Workloads whose throughput swings well past 5% between runs of the same build (MOD-20996).
+NOISY_MARGINS = {
+    "scaling-ts_mget_100K-series-tsbs-devops": 10,
+    "scaling-ts_mrevrange_as_mget_100K-series-tsbs-devops": 10,
+    "tsbs-scale100-high-cpu-all": 10,
+}
+
+
+def margin(name):
+    """Degradation percentage at which a workload fails."""
+    return NOISY_MARGINS.get(name, 5)
+
 
 def prepare_datasets(source, output):
     datasets = output / "datasets"
@@ -184,13 +196,13 @@ def run_one(spec, module, directory, datasets, redis_binary, runner, timeout):
             module_alias.unlink(missing_ok=True)
 
 
-def comparison_failed(pair, baseline, candidate, report_only_regressions=False):
+def comparison_failed(name, pair, baseline, candidate, report_only_regressions=False):
     if any("error" in value for value in pair.values()):
         return True
     if report_only_regressions:
         return False
     before, after = pair[baseline]["ops_per_sec"], pair[candidate]["ops_per_sec"]
-    return pair[candidate].get("change_percent", 100 * (after - before) / before) <= -5
+    return pair[candidate].get("change_percent", 100 * (after - before) / before) <= -margin(name)
 
 
 def summary(results, baseline="baseline", candidate="pr"):
@@ -200,8 +212,12 @@ def summary(results, baseline="baseline", candidate="pr"):
         "# RedisTimeSeries command benchmarks: throughput", "",
         "Same workloads, sequential runs, fresh Redis per revision and test.",
         "Units: TSBS queries/s for query tests, TSBS metrics/s for ingestion, and operations/s for other clients.",
-        "🟠 Benchmark name: retried because a previous pair differed by more than 5%; showing medians across all attempts.",
-        "Change %: 🟢 improvement; 🟡 degradation below 5%; 🔴 degradation of 5% or more. Unchanged values are unmarked.",
+        "Margin: 5% per workload, except "
+        + ", ".join(f"{name} ({value}%)" for name, value in NOISY_MARGINS.items()) + ".",
+        "🟠 Benchmark name: retried because a previous pair differed by more than the margin; "
+        "showing medians across all attempts.",
+        "Change %: 🟢 improvement; 🟡 degradation below the margin; 🔴 degradation at or above the margin. "
+        "Unchanged values are unmarked.",
         f"Each metric has {before_label}, {after_label}, and Change % columns. Higher throughput is better.",
         "For retried tests, throughput columns show each revision’s median; Change % is the median of paired changes, not the change between those columns.",
         f"{before_label} module SHA256: `{results['modules'][baseline]}`",
@@ -231,7 +247,7 @@ def summary(results, baseline="baseline", candidate="pr"):
         if degradation < 0:
             marker = "🟢 "
         elif degradation > 0:
-            marker = "🔴 " if degradation >= 5 else "🟡 "
+            marker = "🔴 " if degradation >= margin(name) else "🟡 "
         cells = (f"{before:,.2f}", f"{after:,.2f}", f"{marker}{percent:+.2f}%")
         lines.append(f"<tr><td>{label}</td>" +
                      "".join(f'<td align="right">{escape(cell)}</td>' for cell in cells) + "</tr>")
@@ -246,7 +262,7 @@ def record_attempt(pair, directory, attempt, max_retries=3):
     if any("error" in value for value in pair.values()):
         return False
     before, after = (value["ops_per_sec"] for value in pair.values())
-    if attempt == max_retries or (attempt == 0 and abs(after - before) * 100 <= before * 5):
+    if attempt == max_retries or (attempt == 0 and abs(after - before) * 100 <= before * margin(directory.name)):
         return False
     print(f"Retrying both runs for {directory.name}: change={(after / before - 1) * 100:+.2f}%, "
           f"retry {attempt + 1}/{max_retries}", flush=True)
@@ -297,11 +313,12 @@ def run_pairs(specs, modules, output, run_fn, results, max_retries=3, abort_on=(
             pair[candidate]["change_percent"] = percent
             results["benchmarks"][spec.stem] = pair
             (output / "comparison.json").write_text(json.dumps(results, indent=2) + "\n")
-        if comparison_failed(pair, baseline, candidate):
-            failed = failed or comparison_failed(pair, baseline, candidate, report_only_regressions)
+        if comparison_failed(spec.stem, pair, baseline, candidate):
+            failed = failed or comparison_failed(spec.stem, pair, baseline, candidate, report_only_regressions)
             if not any("error" in value for value in pair.values()):
                 marker = "WARNING" if report_only_regressions else "FAIL"
-                print(f"{marker}: {spec.name} degraded by at least 5% after {len(attempts)} attempt(s)", flush=True)
+                print(f"{marker}: {spec.name} degraded by at least {margin(spec.stem)}% "
+                      f"after {len(attempts)} attempt(s)", flush=True)
         revisions = "\n".join(f"- {label}: `{sha}`" for label, sha in results.get("revisions", {}).items())
         report = (revisions + "\n\n" if revisions else "") + summary(results, *modules)
         (output / "summary.md").write_text(report)

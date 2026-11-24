@@ -124,8 +124,8 @@ def merge_results(plan, root, report_only_regressions=False):
             combined['benchmarks'][name] = checked
     combined['benchmarks'] = dict(sorted(combined['benchmarks'].items()))
     combined['merge_errors'] = issues
-    failed = bool(issues) or any(comparison_failed(pair, *labels, report_only_regressions=report_only_regressions)
-                                 for pair in combined['benchmarks'].values())
+    failed = bool(issues) or any(comparison_failed(name, pair, *labels, report_only_regressions=report_only_regressions)
+                                 for name, pair in combined['benchmarks'].items())
     return combined, failed
 
 

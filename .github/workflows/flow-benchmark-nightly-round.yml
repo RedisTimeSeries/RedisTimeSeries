@@ -65,8 +65,6 @@ jobs:
             --benchmarks-dir nightly-bundle/master/tests/benchmarks --shard ${{ matrix.shard }}
 
       - name: Compare assigned full workloads on AWS
-        env:
-          MAX_RETRIES: ${{ inputs.phase == 'confirmation' && '0' || '3' }}
         timeout-minutes: 300
         run: |
           python tests/benchmarks/compare_aws.py run \
@@ -74,7 +72,7 @@ jobs:
             --private-key "$RUNNER_TEMP/benchmark.pem" \
             --baseline-dir nightly-bundle/baseline --master-dir nightly-bundle/master \
             --plan nightly-bundle/plan.json --shard ${{ matrix.shard }} \
-            --output nightly-results/shard-${{ matrix.shard }} --max-retries "${MAX_RETRIES}"
+            --output nightly-results/shard-${{ matrix.shard }}
 
       - name: Tear down AWS resources even after benchmark failures
         if: always()

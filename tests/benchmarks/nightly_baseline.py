@@ -48,6 +48,8 @@ def resolve():
 
 
 def evaluate(results):
+    from compare_local import margin  # Lazy: needs redis/yaml, which the resolve job doesn't install.
+
     if results.get('merge_errors') or not results.get('benchmarks'):
         return False, 'Incomplete comparison; baseline retained.'
     ratios = []
@@ -62,8 +64,8 @@ def evaluate(results):
         percent = values[1].get('change_percent', 100 * (after - before) / before)
         if type(percent) not in (int, float) or not math.isfinite(percent) or percent <= -100:
             return False, f'Invalid paired change: {name}; baseline retained.'
-        if percent <= -5:
-            return False, f'{name} degraded by at least 5%; baseline retained.'
+        if percent <= -margin(name):
+            return False, f'{name} degraded by at least {margin(name)}%; baseline retained.'
         ratios.append(math.log1p(percent / 100))
     gain = math.expm1(sum(ratios) / len(ratios)) * 100
     eligible = gain > 1e-9  # Ignore floating-point noise around zero improvement.
