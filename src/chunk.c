@@ -41,6 +41,7 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
+    RedisModule_Assert(curChunk->num_samples > 1);
     size_t split = curChunk->num_samples / 2;
     size_t curNumSamples = curChunk->num_samples - split;
 

@@ -227,6 +227,23 @@ MU_TEST(test_reverseEnrichedChunk_single_value_per_sample) {
     FreeEnrichedChunk(ec);
 }
 
+MU_TEST(test_Uncompressed_SplitChunk_too_few_samples) {
+    const size_t chunk_size = 4096;
+    Chunk *chunk = Uncompressed_NewChunk(chunk_size);
+    mu_assert(chunk != NULL, "create uncompressed chunk");
+
+    mu_assert_redis_assert_fails(Uncompressed_SplitChunk(chunk), "split empty uncompressed chunk");
+    mu_assert_short_eq(0, chunk->num_samples);
+
+    Sample s1 = { .timestamp = 4, .value = 5.0 };
+    mu_assert(Uncompressed_AddSample(chunk, &s1) == CR_OK, "add sample s1");
+    mu_assert_redis_assert_fails(Uncompressed_SplitChunk(chunk),
+                                 "split single-sample uncompressed chunk");
+    mu_assert_short_eq(1, chunk->num_samples);
+
+    Uncompressed_FreeChunk(chunk);
+}
+
 MU_TEST_SUITE(uncompressed_chunk_test_suite) {
     MU_RUN_TEST(test_Uncompressed_NewChunk);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_AddSample);
@@ -235,4 +252,5 @@ MU_TEST_SUITE(uncompressed_chunk_test_suite) {
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample_DuplicatePolicy);
     MU_RUN_TEST(test_reverseEnrichedChunk_multi_values_per_sample);
     MU_RUN_TEST(test_reverseEnrichedChunk_single_value_per_sample);
+    MU_RUN_TEST(test_Uncompressed_SplitChunk_too_few_samples);
 }

@@ -105,19 +105,21 @@ MU_TEST(test_compressed_fail_appendInteger) {
     Compressed_FreeChunk(chunk2);
 }
 
-MU_TEST(test_Compressed_SplitChunk_empty) {
-    srand((unsigned int)time(NULL));
+MU_TEST(test_Compressed_SplitChunk_too_few_samples) {
     const size_t chunk_size = 4096; // 4096 bytes (data) chunck
     CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
     mu_assert(chunk != NULL, "create compressed chunk");
 
-    CompressedChunk *chunk2 = Compressed_SplitChunk(chunk);
-    mu_assert(chunk2 != NULL, "splitted compressed chunk");
+    mu_assert_redis_assert_fails(Compressed_SplitChunk(chunk), "split empty compressed chunk");
     mu_assert_int_eq(0, Compressed_ChunkNumOfSample(chunk));
-    mu_assert_int_eq(0, Compressed_ChunkNumOfSample(chunk2));
+
+    Sample s1 = { .timestamp = 4, .value = 5.0 };
+    mu_assert(Compressed_AddSample(chunk, &s1) == CR_OK, "add sample s1");
+    mu_assert_redis_assert_fails(Compressed_SplitChunk(chunk),
+                                 "split single-sample compressed chunk");
+    mu_assert_int_eq(1, Compressed_ChunkNumOfSample(chunk));
 
     Compressed_FreeChunk(chunk);
-    Compressed_FreeChunk(chunk2);
 }
 
 MU_TEST(test_Compressed_SplitChunk_odd) {
@@ -314,7 +316,7 @@ MU_TEST(test_compressed_decode_is_bounded_by_size) {
 MU_TEST_SUITE(compressed_chunk_test_suite) {
     MU_RUN_TEST(test_compressed_upsert);
     MU_RUN_TEST(test_compressed_fail_appendInteger);
-    MU_RUN_TEST(test_Compressed_SplitChunk_empty);
+    MU_RUN_TEST(test_Compressed_SplitChunk_too_few_samples);
     MU_RUN_TEST(test_Compressed_SplitChunk_odd);
     MU_RUN_TEST(test_Compressed_SplitChunk_force_realloc);
     MU_RUN_TEST(test_nan_mixed_compression);
