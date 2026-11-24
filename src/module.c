@@ -920,7 +920,7 @@ static void handleCompaction(RedisModuleCtx *ctx,
                              CompactionRule *rule,
                              api_timestamp_t timestamp,
                              double value) {
-    timestamp_t currentTimestamp =
+    int64_t currentTimestamp =
         CalcBucketStart(timestamp, rule->bucketDuration, rule->timestampAlignment);
     timestamp_t currentTimestampNormalized = BucketStartNormalize(currentTimestamp);
 

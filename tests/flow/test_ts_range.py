@@ -1521,6 +1521,22 @@ def test_empty_gap_fill_prefix_suffix_whole_range():
             assert brng(47, 60, agg) == []
 
 
+def test_empty_aligned_bucket_before_zero():
+    # MOD-21470: the sample and query end share a bucket with a negative start.
+    env = Env(decodeResponses=True)
+    with env.getClusterConnectionIfNeeded() as r:
+        assert r.execute_command('TS.ADD', 'k', 2, 7) == 2
+        for bucket_size in (7, 10, 16):
+            for aggregators, expected in (('avg', [[0, '7']]),
+                                          ('avg,max', [[0, '7', '7']])):
+                for command in ('TS.RANGE', 'TS.REVRANGE'):
+                    for empty in ((), ('EMPTY',)):
+                        args = (command, 'k', 0, 3, 'ALIGN', 5,
+                                'AGGREGATION', aggregators, bucket_size, *empty)
+                        actual = decode_if_needed(r.execute_command(*args))
+                        env.assertEqual(actual, expected, message=str(args))
+
+
 def test_bucket_timestamp():
     agg_size = 10
     env = Env(decodeResponses=True)

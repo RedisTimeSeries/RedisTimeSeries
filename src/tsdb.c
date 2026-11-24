@@ -632,7 +632,7 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
     const timestamp_t seriesLastTimestamp = series->lastTimestamp;
     while (rule != NULL) {
         const timestamp_t ruleTimebucket = rule->bucketDuration;
-        const timestamp_t curAggWindowStart =
+        const int64_t curAggWindowStart =
             CalcBucketStart(seriesLastTimestamp, ruleTimebucket, rule->timestampAlignment);
         const timestamp_t curAggWindowStartNormalized = BucketStartNormalize(curAggWindowStart);
         if (upsertTimestamp >= curAggWindowStartNormalized) {
@@ -651,7 +651,7 @@ static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
                 continue;
             }
         } else {
-            const timestamp_t start =
+            const int64_t start =
                 CalcBucketStart(upsertTimestamp, ruleTimebucket, rule->timestampAlignment);
             const timestamp_t startNormalized = BucketStartNormalize(start);
             // ensure last include/exclude
@@ -852,7 +852,7 @@ static void CompactionDelRange(Series *series,
 
     while (rule) {
         const timestamp_t ruleTimebucket = rule->bucketDuration;
-        const timestamp_t curAggWindowStart =
+        const int64_t curAggWindowStart =
             CalcBucketStart(last_ts_before_deletion, ruleTimebucket, rule->timestampAlignment);
         const timestamp_t curAggWindowStartNormalized = BucketStartNormalize(curAggWindowStart);
         bool latest_timebucket_deleted = false;
@@ -877,11 +877,11 @@ static void CompactionDelRange(Series *series,
                 latest_timebucket_deleted = true;
             }
         } else {
-            const timestamp_t startTSWindowStart =
+            const int64_t startTSWindowStart =
                 CalcBucketStart(start_ts, ruleTimebucket, rule->timestampAlignment);
             const timestamp_t startTSWindowStartNormalized =
                 BucketStartNormalize(startTSWindowStart);
-            const timestamp_t endTSWindowStart =
+            const int64_t endTSWindowStart =
                 CalcBucketStart(end_ts, ruleTimebucket, rule->timestampAlignment);
             const timestamp_t endTSWindowStartNormalized = BucketStartNormalize(endTSWindowStart);
             timestamp_t continuous_deletion_start;
@@ -989,7 +989,7 @@ static void CompactionDelRange(Series *series,
                 last_ts = 0;
             }
 
-            const timestamp_t wind_start =
+            const int64_t wind_start =
                 CalcBucketStart(last_ts, ruleTimebucket, rule->timestampAlignment);
             const timestamp_t wind_start_normalized = BucketStartNormalize(wind_start);
 

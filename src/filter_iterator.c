@@ -829,9 +829,9 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
         if (!self->handled_empty_prefix) {
             self->handled_empty_prefix = true;
             self->handled_empty_suffix = true; // The prefix in this case is also the suffix
-            timestamp_t first_bucket = CalcBucketStart(
+            int64_t first_bucket = CalcBucketStart(
                 self->startTimestamp, aggregationTimeDelta, self->timestampAlignment);
-            timestamp_t last_bucket =
+            int64_t last_bucket =
                 CalcBucketStart(self->endTimestamp, aggregationTimeDelta, self->timestampAlignment);
             if (is_reversed) {
                 __SWAP(first_bucket, last_bucket);
@@ -857,19 +857,19 @@ static EnrichedChunk *agg_iter_on_empty_chunk(AggregationIterator *self,
         }
         if (!self->handled_empty_suffix) {
             self->handled_empty_suffix = true;
-            timestamp_t last_bucket =
+            int64_t last_bucket =
                 CalcBucketStart(is_reversed ? self->startTimestamp : self->endTimestamp,
                                 aggregationTimeDelta,
                                 self->timestampAlignment);
-            timestamp_t first_bucket =
+            int64_t first_bucket =
                 CalcBucketStart(self->prev_ts, aggregationTimeDelta, self->timestampAlignment);
             if (!is_reversed) {
-                first_bucket += aggregationTimeDelta;
-                if (first_bucket > last_bucket) {
+                if (first_bucket >= last_bucket) {
                     return NULL;
                 }
+                first_bucket += (int64_t)aggregationTimeDelta;
             } else {
-                if (first_bucket <= last_bucket) {
+                if (last_bucket < 0 || first_bucket <= last_bucket) {
                     return NULL;
                 }
                 first_bucket =
@@ -910,23 +910,25 @@ static int agg_iter_apply_empty_prefix(AggregationIterator *self,
         return 0;
     }
     self->handled_empty_prefix = true;
-    timestamp_t first_bucket =
+    int64_t first_bucket =
         CalcBucketStart(is_reversed ? self->endTimestamp : self->startTimestamp,
                         aggregationTimeDelta,
                         self->timestampAlignment);
     timestamp_t first_sample_ts = enrichedChunk->samples.timestamps[0];
-    timestamp_t last_bucket =
+    int64_t last_bucket =
         CalcBucketStart(first_sample_ts, aggregationTimeDelta, self->timestampAlignment);
     bool has_empty_buckets = true;
     if (!is_reversed) {
-        if (first_bucket >= last_bucket) {
+        // Preserve dropping a leading prefix whose bucket starts before zero.
+        if (first_bucket < 0 || first_bucket == last_bucket) {
             has_empty_buckets = false;
         }
         last_bucket = max(0, (int64_t)((int64_t)last_bucket - (int64_t)aggregationTimeDelta));
     } else {
-        last_bucket += aggregationTimeDelta;
-        if (first_bucket < last_bucket) {
+        if (first_bucket <= last_bucket) {
             has_empty_buckets = false;
+        } else {
+            last_bucket += (int64_t)aggregationTimeDelta;
         }
     }
     if (!has_empty_buckets) {
@@ -1032,7 +1034,7 @@ static void agg_iter_init_if_needed(AggregationIterator *self,
  * the previous contextScope and the new bucket start (aggregationLastTimestamp).
  */
 static bool agg_iter_empty_gap_after_finalize(uint64_t contextScope,
-                                              timestamp_t aggregationLastTimestamp,
+                                              int64_t aggregationLastTimestamp,
                                               uint64_t aggregationTimeDelta,
                                               bool is_reversed,
                                               bool reversed_gap_max_style,
@@ -1054,7 +1056,7 @@ static bool agg_iter_empty_gap_after_finalize(uint64_t contextScope,
         }
     } else {
         *out_first_bucket = contextScope;
-        if (*out_first_bucket >= aggregationLastTimestamp) {
+        if ((int64_t)*out_first_bucket >= aggregationLastTimestamp) {
             has_empty_buckets = false;
         }
         *out_last_bucket =
@@ -1314,7 +1316,7 @@ static int agg_iter_process_chunk_general(AggregationIterator *self,
         sample->timestamp = enrichedChunk->samples.timestamps[*si];
         sample->value = Samples_value_at(&enrichedChunk->samples, *si, 0);
         if ((!is_reversed && sample->timestamp >= *contextScope) ||
-            (is_reversed && sample->timestamp < self->aggregationLastTimestamp)) {
+            (is_reversed && (int64_t)sample->timestamp < self->aggregationLastTimestamp)) {
             if (agg_iter_general_on_bucket_boundary(self,
                                                     enrichedChunk,
                                                     sample,
@@ -1445,26 +1447,27 @@ static EnrichedChunk *agg_iter_finalize(AggregationIterator *self,
     size_t n_samples = 1;
     if (self->empty && !self->handled_empty_suffix) {
         self->handled_empty_suffix = true;
-        timestamp_t last_bucket =
+        int64_t last_bucket =
             CalcBucketStart(is_reversed ? self->startTimestamp : self->endTimestamp,
                             aggregationTimeDelta,
                             self->timestampAlignment);
         // Use the bucket START, not samples.timestamps[0] -- under BUCKETTIMESTAMP end/mid the
         // latter is the labeled (shifted) timestamp, so CalcBucketStart would land on the next
         // bucket and the empty fill would re-emit this real bucket as a duplicate.
-        timestamp_t first_bucket = CalcBucketStart(
+        int64_t first_bucket = CalcBucketStart(
             self->aggregationLastTimestamp, aggregationTimeDelta, self->timestampAlignment);
         bool has_empty_buckets = true;
         if (is_reversed) {
-            if (first_bucket <= last_bucket) {
+            if (last_bucket < 0 || first_bucket <= last_bucket) {
                 has_empty_buckets = false;
             }
             first_bucket = max(0, (int64_t)((int64_t)first_bucket - (int64_t)aggregationTimeDelta));
         } else {
             if (first_bucket >= last_bucket) {
                 has_empty_buckets = false;
+            } else {
+                first_bucket += (int64_t)aggregationTimeDelta;
             }
-            first_bucket += aggregationTimeDelta;
         }
         int64_t read_index = 0;
         if (has_empty_buckets) {
