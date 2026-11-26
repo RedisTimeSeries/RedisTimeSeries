@@ -79,6 +79,16 @@ def test_errors():
             assert r1.execute_command('TS.MRANGE', '-', '+', 'ALIGN', 'end2', 'FILTER', 'metric=cpu')
         assert r1.execute_command('TS.CREATE', 'tester')
         with pytest.raises(redis.ResponseError) as excinfo:
+            too_many_labels = []
+            for i in range(1025):
+                too_many_labels.extend([f"k{i}", "v"])
+            assert r1.execute_command('TS.CREATE', 'too_many_labels', 'LABELS', *too_many_labels)
+        with pytest.raises(redis.ResponseError) as excinfo:
+            too_many_labels = []
+            for i in range(1025):
+                too_many_labels.extend([f"k{i}", "v"])
+            assert r1.execute_command('TS.ALTER', 'tester', 'LABELS', *too_many_labels)
+        with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN')
         with pytest.raises(redis.ResponseError) as excinfo:
             assert r.execute_command('TS.RANGE', 'tester', '-', '+', 'ALIGN', 'start')
