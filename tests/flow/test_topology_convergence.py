@@ -2,6 +2,8 @@
 # runner reports "Environment destroyed" after a successful return.
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
 from test_topology_events import post_failover
 from utils import ClusterNode, SlotRange
 
@@ -56,3 +58,47 @@ def test_post_failover_refreshes_transient_topology_and_polls_added_node(env):
     assert sleep.call_count == 3
     original.__exit__.assert_called_once()
     promoted.__exit__.assert_called_once()
+
+
+def down_state_fixture():
+    victim = Mock()
+    survivors = [Mock(), Mock()]
+    env = Mock()
+    env.envRunner.shards = [survivors[0], victim, survivors[1]]
+    return env, victim, [shard.getConnection.return_value for shard in survivors]
+
+
+def test_down_state_retries_clusterdown_and_requires_all_views(env):
+    from test_topology_events import CLUSTERDOWN_ERROR, redis, wait_for_down_state_view_agreement
+    cluster_env, victim, conns = down_state_fixture()
+    current = {"node": ("127.0.0.1", 6379)}
+    stale = {"old": ("127.0.0.1", 6380)}
+    # Fail the second survivor's read, then disagree, then finally agree.
+    with patch("test_topology_events.redis_master_addrs", return_value=current):
+        with patch("test_topology_events.ts_master_addrs", side_effect=[
+                current, redis.exceptions.ResponseError(CLUSTERDOWN_ERROR),
+                current, stale, current, current]) as read:
+            with patch("test_topology_events.time.sleep") as sleep:
+                wait_for_down_state_view_agreement(cluster_env, victim)
+    assert [call.args[0] for call in read.call_args_list] == conns * 3
+    assert sleep.call_count == 2
+    victim.getConnection.assert_not_called()
+
+
+def test_down_state_persistent_clusterdown_times_out(env):
+    from test_topology_events import CLUSTERDOWN_ERROR, redis, wait_for_down_state_view_agreement
+    cluster_env, victim, _ = down_state_fixture()
+    error = redis.exceptions.ResponseError(CLUSTERDOWN_ERROR)
+    with (
+        patch("test_topology_events.redis_master_addrs", return_value={}),
+        patch("test_topology_events.ts_master_addrs", side_effect=error),
+        patch("test_topology_events.time.time", side_effect=[0, 0, 11]),
+        patch("test_topology_events.get_timeout", return_value=10),
+        patch("test_topology_events.time.sleep") as sleep,
+        patch("test_topology_events.dump_node_cluster_nodes"),
+        patch("test_topology_events.dump_node_infocluster") as dump_ts,
+        pytest.raises(AssertionError, match="did not agree"),
+    ):
+        wait_for_down_state_view_agreement(cluster_env, victim)
+    sleep.assert_called_once_with(0.2)
+    dump_ts.assert_not_called()
