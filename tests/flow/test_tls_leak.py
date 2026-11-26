@@ -9,7 +9,9 @@ from test_clusterset_noop import _long_form_clusterset
 
 def test_tls_initialization_failure():
     """Run with --tls -V: Valgrind detects the SSL object lost on REDIS_ERR."""
-    env = Env(noLog=False, moduleArgs="ts-topology-events no")
+    # RLTest's reuse comparison ignores noLog. A matching environment from a
+    # previous test may still redirect logs to /dev/null, so start a fresh one.
+    env = Env(noLog=False, freshEnv=True, moduleArgs="ts-topology-events no")
     if not env.useTLS or not isinstance(env.debugger, Valgrind):
         env.skip()
 
