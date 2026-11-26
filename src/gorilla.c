@@ -94,6 +94,8 @@
 
 #include "gorilla.h"
 
+#include "consts.h"
+
 #include <assert.h>
 #include <math.h>
 
@@ -252,13 +254,12 @@ static inline binary_t readBits(const binary_t *bins,
                                 const uint8_t dataLen) {
     const localbit_t lbit = localbit(start_pos);
     const localbit_t available = BINW - lbit;
-    if (available >= dataLen) {
-        return LSB(bins[start_pos / BINW] >> lbit, dataLen);
-    } else {
+    if (unlikely(available < dataLen)) {
         binary_t bin = LSB(bins[start_pos / BINW] >> lbit, available);
         bin |= LSB(bins[(start_pos / BINW) + 1], dataLen - available) << available;
         return bin;
     }
+    return LSB(bins[start_pos / BINW] >> lbit, dataLen);
 }
 
 static inline bool isSpaceAvailable(CompressedChunk *chunk, uint8_t size) {
