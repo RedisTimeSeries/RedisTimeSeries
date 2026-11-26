@@ -33,21 +33,21 @@ def test_incrby():
     with Env().getClusterConnectionIfNeeded() as r:
         r.execute_command('ts.create', 'tester')
 
-        start_incr_time = int(time.time() * 1000)
+        # Use the timestamps the server returns, not time.time(): the test host
+        # and the server can run on different machines with different clocks.
+        timestamps = []
         for i in range(20):
-            r.execute_command('ts.incrby', 'tester', '5')
+            timestamps.append(r.execute_command('ts.incrby', 'tester', '5'))
             time.sleep(0.001)
 
-        start_decr_time = int(time.time() * 1000)
         for i in range(20):
-            r.execute_command('ts.decrby', 'tester', '1.5')
+            timestamps.append(r.execute_command('ts.decrby', 'tester', '1.5'))
             time.sleep(0.001)
 
-        now = int(time.time() * 1000)
-        result = r.execute_command('TS.RANGE', 'tester', 0, now)
+        result = r.execute_command('TS.RANGE', 'tester', '-', '+')
         assert result[-1][1] == b'70'
-        assert result[-1][0] <= now
-        assert result[0][0] >= start_incr_time
+        assert result[-1][0] == timestamps[-1]
+        assert result[0][0] == timestamps[0]
         assert len(result) <= 40
 
 
