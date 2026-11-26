@@ -41,6 +41,13 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
+    if (unlikely(curChunk->num_samples <= 1)) {
+        DEBUG_ASSERT(false && "Cannot split a chunk with fewer than two samples");
+        RedisModule_Log(mr_staticCtx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Cannot split a chunk with fewer than two samples");
+        return NULL;
+    }
     size_t split = curChunk->num_samples / 2;
     size_t curNumSamples = curChunk->num_samples - split;
 
@@ -384,3 +391,4 @@ int Uncompressed_MRDeserialize(Chunk_t **chunk, ReaderSerializationCtx *sctx) {
     *chunk = (Chunk_t *)uncompchunk;
     return TSDB_OK;
 }
+

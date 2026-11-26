@@ -118,6 +118,13 @@ static void trimChunk(CompressedChunk *chunk) {
 
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *curChunk = chunk;
+    if (unlikely(curChunk->count <= 1)) {
+        DEBUG_ASSERT(false && "Cannot split a chunk with fewer than two samples");
+        RedisModule_Log(mr_staticCtx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Cannot split a chunk with fewer than two samples");
+        return NULL;
+    }
     size_t split = curChunk->count / 2;
     size_t curNumSamples = curChunk->count - split;
 
@@ -168,8 +175,9 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
         }
         ensureAddSample(newChunk, &iterSample);
     }
+    bool iterSampleSet = numSamples > 0;
 
-    if (ts == iterSample.timestamp) {
+    if (iterSampleSet && ts == iterSample.timestamp) {
         ChunkResult cr = handleDuplicateSample(duplicatePolicy, iterSample, &uCtx->sample);
         if (cr != CR_OK) {
             Compressed_FreeChunkIterator(iter);
@@ -183,7 +191,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
     ensureAddSample(newChunk, &uCtx->sample);
     *size += 1;
 
-    if (i < numSamples) {
+    if (iterSampleSet && i < numSamples) {
         while (nextRes == CR_OK) {
             ensureAddSample(newChunk, &iterSample);
             nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);

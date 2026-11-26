@@ -609,8 +609,9 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
 
     if (destSeries->totalSamples == 0) {
         SeriesAddSample(destSeries, start, val);
-    } else {
-        SeriesUpsertSample(destSeries, start, val, DP_LAST);
+    } else if (SeriesUpsertSample(destSeries, start, val, DP_LAST) != CR_OK) {
+        RedisModule_CloseKey(key);
+        return false;
     }
     // Wake any TS.READ waiters parked on the destination key, so a
     // compaction-rule bucket landing here triggers them just like a direct
@@ -714,8 +715,9 @@ int SeriesUpsertSample(Series *series,
         chunkFirstTS = funcs->GetFirstTimestamp(chunk);
     }
 
-    // Split chunks
-    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * SPLIT_FACTOR) {
+    if (funcs->GetChunkSize(chunk, false) > series->chunkSizeBytes * SPLIT_FACTOR &&
+        funcs->GetNumOfSample(chunk) > 1) {
+        // Split chunks
         Chunk_t *newChunk = funcs->SplitChunk(chunk);
         if (newChunk == NULL) {
             return REDISMODULE_ERR;

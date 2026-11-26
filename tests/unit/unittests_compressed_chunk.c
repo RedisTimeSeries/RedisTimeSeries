@@ -45,6 +45,25 @@ MU_TEST(test_compressed_upsert) {
     }
 }
 
+MU_TEST(test_compressed_upsert_into_empty_chunk_reports_insert) {
+    CompressedChunk *chunk = Compressed_NewChunk(64);
+    mu_assert(chunk != NULL, "create compressed chunk");
+
+    UpsertCtx uCtx = {
+        .inChunk = chunk,
+        .sample = { .timestamp = 1, .value = 1.0 },
+    };
+    int size = 0;
+
+    ChunkResult rv = Compressed_UpsertSample(&uCtx, &size, DP_LAST);
+
+    mu_assert(rv == CR_OK, "upsert into empty chunk");
+    mu_assert_int_eq(1, size);
+    mu_assert_int_eq(1, Compressed_ChunkNumOfSample(chunk));
+    mu_assert_int_eq(1, Compressed_GetFirstTimestamp(chunk));
+    Compressed_FreeChunk(chunk);
+}
+
 MU_TEST(test_compressed_fail_appendInteger) {
     // either Compressed_UpsertSample or Compressed_SplitChunk
     // ensureAddSample -> Compressed_AddSample -> Compressed_Append -> appendInteger
@@ -105,19 +124,29 @@ MU_TEST(test_compressed_fail_appendInteger) {
     Compressed_FreeChunk(chunk2);
 }
 
-MU_TEST(test_Compressed_SplitChunk_empty) {
-    srand((unsigned int)time(NULL));
-    const size_t chunk_size = 4096; // 4096 bytes (data) chunck
-    CompressedChunk *chunk = Compressed_NewChunk(chunk_size);
-    mu_assert(chunk != NULL, "create compressed chunk");
-
-    CompressedChunk *chunk2 = Compressed_SplitChunk(chunk);
-    mu_assert(chunk2 != NULL, "splitted compressed chunk");
-    mu_assert_int_eq(0, Compressed_ChunkNumOfSample(chunk));
-    mu_assert_int_eq(0, Compressed_ChunkNumOfSample(chunk2));
-
+MU_TEST(test_Compressed_SplitChunk_too_few_samples) {
+    CompressedChunk *chunk = Compressed_NewChunk(48);
+    for (size_t count = 0; count <= 1; ++count) {
+        if (count) {
+            Sample sample = { .timestamp = 4, .value = 5 };
+            mu_assert(Compressed_AddSample(chunk, &sample) == CR_OK, "add singleton");
+        }
+        CompressedChunk before;
+        memcpy(&before, chunk, sizeof(before));
+        unsigned char data[48 + GORILLA_DATA_READAHEAD_BYTES];
+        memcpy(data, chunk->data, sizeof(data));
+        bool saved_suppression = _dontAssertOnFailiure;
+        void (*saved_log)(RedisModuleCtx *, const char *, const char *, ...) = RedisModule_Log;
+        _dontAssertOnFailiure = true;
+        RedisModule_Log = unittests_ignore_log;
+        Chunk_t *result = Compressed_SplitChunk(chunk);
+        RedisModule_Log = saved_log;
+        _dontAssertOnFailiure = saved_suppression;
+        mu_assert(result == NULL, "reject invalid split");
+        mu_assert(memcmp(&before, chunk, sizeof(before)) == 0, "chunk metadata unchanged");
+        mu_assert(memcmp(data, chunk->data, sizeof(data)) == 0, "chunk data unchanged");
+    }
     Compressed_FreeChunk(chunk);
-    Compressed_FreeChunk(chunk2);
 }
 
 MU_TEST(test_Compressed_SplitChunk_odd) {
@@ -313,8 +342,9 @@ MU_TEST(test_compressed_decode_is_bounded_by_size) {
 
 MU_TEST_SUITE(compressed_chunk_test_suite) {
     MU_RUN_TEST(test_compressed_upsert);
+    MU_RUN_TEST(test_compressed_upsert_into_empty_chunk_reports_insert);
     MU_RUN_TEST(test_compressed_fail_appendInteger);
-    MU_RUN_TEST(test_Compressed_SplitChunk_empty);
+    MU_RUN_TEST(test_Compressed_SplitChunk_too_few_samples);
     MU_RUN_TEST(test_Compressed_SplitChunk_odd);
     MU_RUN_TEST(test_Compressed_SplitChunk_force_realloc);
     MU_RUN_TEST(test_nan_mixed_compression);

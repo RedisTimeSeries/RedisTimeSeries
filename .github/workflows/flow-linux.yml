@@ -255,6 +255,7 @@ jobs:
           bash .github/scripts/tracebit-docker.sh run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
+            -e DEBUG_ASSERTIONS=${{ (inputs.run_sanitizer || inputs.run_valgrind) && '1' || '' }} \
             -e SAN=${{ inputs.run_sanitizer && 'address' || '' }} \
             "${DOCKER_IMAGE}" \
             make build
@@ -284,6 +285,7 @@ jobs:
             -w /workspace \
             --cap-add=SYS_PTRACE \
             --security-opt seccomp=unconfined \
+            -e DEBUG_ASSERTIONS=${{ (inputs.run_sanitizer || inputs.run_valgrind) && '1' || '' }} \
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
             "${DOCKER_IMAGE}" \
             bash -c "make test \
