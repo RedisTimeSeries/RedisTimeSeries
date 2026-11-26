@@ -1109,10 +1109,11 @@ static ARR(Series *) ParseSeriesAllAggs(const redisReply *reply, size_t minNumAg
             argv[2 + 2 * i] = lvalue;
         }
         int r = parseLabelsFromArgs(argv, argc, &cCtx.labelsCount, &cCtx.labels, true);
-        RedisModule_Assert(r == REDISMODULE_OK);
         for (size_t i = 1; i < argc; i++)
             if (argv[i] != NULL)
                 RedisModule_FreeString(rts_staticCtx, argv[i]);
+        if (r != REDISMODULE_OK)
+            return NULL;
     }
 
     const redisReply *samplesElement = reply->element[2];
@@ -1198,6 +1199,10 @@ static Record *SeriesListReplyParser(const redisReply *reply) {
     ARR(Series *) seriesList = array_new(Series *, reply->elements * numAgg);
     for (size_t i = 0; i < reply->elements; i++) {
         ARR(Series *) group = ParseSeriesAllAggs(reply->element[i], numAgg);
+        if (group == NULL) {
+            array_free_ex(seriesList, FreeSeries(*(Series **)ptr));
+            return MR_ErrorRecordCreate("TSDB: Couldn't parse shard reply LABELS");
+        }
         for (size_t a = 0; a < array_len(group); a++)
             seriesList = array_append(seriesList, group[a]);
         array_free(group); // free wrapper only; Series pointers are now in seriesList
