@@ -1,0 +1,6 @@
+name: Checkpoint macOS runner diagnostics
+description: Publish resource samples while the diagnostic VM is still reachable
+runs:
+  using: node24
+  main: start.cjs
+  post: stop.cjs
