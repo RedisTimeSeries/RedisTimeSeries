@@ -227,7 +227,37 @@ MU_TEST(test_reverseEnrichedChunk_single_value_per_sample) {
     FreeEnrichedChunk(ec);
 }
 
+MU_TEST(test_Uncompressed_SplitChunk_too_few_samples) {
+    Chunk *chunk = Uncompressed_NewChunk(48);
+    // Initialize spare capacity too so the byte comparison reads defined bytes.
+    memset(chunk->samples, 0, chunk->size);
+    for (size_t count = 0; count <= 1; ++count) {
+        if (count) {
+            Sample sample = { .timestamp = 4, .value = 5 };
+            mu_assert(Uncompressed_AddSample(chunk, &sample) == CR_OK, "add singleton");
+        }
+        Chunk before = *chunk;
+        unsigned char data[48];
+        memcpy(data, chunk->samples, sizeof(data));
+        bool saved_suppression = _dontAssertOnFailiure;
+        void (*saved_log)(RedisModuleCtx *, const char *, const char *, ...) = RedisModule_Log;
+        _dontAssertOnFailiure = true;
+        RedisModule_Log = unittests_ignore_log;
+        Chunk_t *result = Uncompressed_SplitChunk(chunk);
+        RedisModule_Log = saved_log;
+        _dontAssertOnFailiure = saved_suppression;
+        mu_assert(result == NULL, "reject invalid split");
+        mu_assert(before.base_timestamp == chunk->base_timestamp &&
+                      before.num_samples == chunk->num_samples && before.size == chunk->size &&
+                      before.samples == chunk->samples,
+                  "chunk metadata unchanged");
+        mu_assert(memcmp(data, chunk->samples, sizeof(data)) == 0, "chunk data unchanged");
+    }
+    Uncompressed_FreeChunk(chunk);
+}
+
 MU_TEST_SUITE(uncompressed_chunk_test_suite) {
+    MU_RUN_TEST(test_Uncompressed_SplitChunk_too_few_samples);
     MU_RUN_TEST(test_Uncompressed_NewChunk);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_AddSample);
     MU_RUN_TEST(test_Uncompressed_Uncompressed_UpsertSample);
@@ -236,3 +266,4 @@ MU_TEST_SUITE(uncompressed_chunk_test_suite) {
     MU_RUN_TEST(test_reverseEnrichedChunk_multi_values_per_sample);
     MU_RUN_TEST(test_reverseEnrichedChunk_single_value_per_sample);
 }
+

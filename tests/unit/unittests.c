@@ -13,6 +13,13 @@
 
 #include "parse_policies.h"
 #include "tsdb.h"
+// Invalid-split tests exercise the nonfatal guard without a Redis server logger.
+static void unittests_ignore_log(RedisModuleCtx *ctx, const char *level, const char *fmt, ...) {
+    (void)ctx;
+    (void)level;
+    (void)fmt;
+}
+
 #include "unittests_compressed_chunk.c"
 #include "unittests_platform_helpers.c"
 #include "unittests_parse_duplicate_policy.c"
@@ -53,3 +60,4 @@ int main(int argc, char *argv[]) {
     MU_REPORT();
     return minunit_fail;
 }
+

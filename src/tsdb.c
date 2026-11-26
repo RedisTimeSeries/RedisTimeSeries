@@ -609,8 +609,9 @@ static bool RuleSeriesUpsertSample(RedisModuleCtx *ctx,
 
     if (destSeries->totalSamples == 0) {
         SeriesAddSample(destSeries, start, val);
-    } else {
-        SeriesUpsertSample(destSeries, start, val, DP_LAST);
+    } else if (SeriesUpsertSample(destSeries, start, val, DP_LAST) != CR_OK) {
+        RedisModule_CloseKey(key);
+        return false;
     }
     // Wake any TS.READ waiters parked on the destination key, so a
     // compaction-rule bucket landing here triggers them just like a direct
