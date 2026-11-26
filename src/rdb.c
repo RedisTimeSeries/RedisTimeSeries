@@ -75,7 +75,8 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         return NULL;
     }
     if (unlikely(cCtx.labelsCount > 0 && cCtx.labelsCount > (SIZE_MAX / sizeof(*cCtx.labels)))) {
-        RedisModule_LogIOError(io, REDISMODULE_LOGLEVEL_WARNING, "labelsCount overflows allocation");
+        RedisModule_LogIOError(
+            io, REDISMODULE_LOGLEVEL_WARNING, "labelsCount overflows allocation");
         err = true;
         return NULL;
     }
