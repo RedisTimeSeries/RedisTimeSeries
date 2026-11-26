@@ -120,7 +120,9 @@ Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *curChunk = chunk;
     if (unlikely(curChunk->count <= 1)) {
         DEBUG_ASSERT(curChunk->count > 1);
-        _log_if(true, "Cannot split a chunk with fewer than two samples");
+        RedisModule_Log(mr_staticCtx,
+                        REDISMODULE_LOGLEVEL_WARNING,
+                        "Cannot split a chunk with fewer than two samples");
         return NULL;
     }
     size_t split = curChunk->count / 2;
