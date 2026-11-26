@@ -42,7 +42,7 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
     if (unlikely(curChunk->num_samples <= 1)) {
-        DEBUG_ASSERT(curChunk->num_samples > 1);
+        DEBUG_ASSERT(false && "Cannot split a chunk with fewer than two samples");
         RedisModule_Log(mr_staticCtx,
                         REDISMODULE_LOGLEVEL_WARNING,
                         "Cannot split a chunk with fewer than two samples");
