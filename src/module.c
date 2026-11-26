@@ -1166,6 +1166,8 @@ int TSDB_madd(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 int TSDB_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
 
+    RedisModule_Log(ctx, "warning", "TS.ADD command received");
+
     if (argc < 4) {
         return RedisModule_WrongArity(ctx);
     }
@@ -2130,6 +2132,8 @@ static RedisModuleBlockedClient *TSDB_read_block(RedisModuleCtx *ctx, const Read
  */
 int TSDB_read(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
+
+    RedisModule_Log(ctx, "warning", "TS.READ command received");
 
     ReadCtx args = { 0 };
     if (parse_read_args(ctx, argv, argc, &args) != REDISMODULE_OK) {
