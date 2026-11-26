@@ -48,7 +48,7 @@ typedef struct AggregationIterator
     void *aggregationContexts[TS_AGG_TYPES_MAX];
     int64_t aggregationTimeDelta;
     timestamp_t timestampAlignment;
-    timestamp_t aggregationLastTimestamp;
+    int64_t aggregationLastTimestamp;
     bool hasUnFinalizedContext;
     bool reverse;
     bool initialized;

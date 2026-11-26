@@ -86,16 +86,16 @@ static inline int64_t modulo(int64_t x, int64_t N) {
 }
 
 // Calculate the begining of aggregation bucket
-static inline timestamp_t CalcBucketStart(timestamp_t ts,
-                                          timestamp_t bucketDuration,
-                                          timestamp_t timestampAlignment) {
-    const int64_t timestamp_diff = ts - timestampAlignment;
-    return ts - modulo(timestamp_diff, bucketDuration);
+static inline int64_t CalcBucketStart(timestamp_t ts,
+                                      timestamp_t bucketDuration,
+                                      timestamp_t timestampAlignment) {
+    const int64_t timestamp_diff = (int64_t)ts - (int64_t)timestampAlignment;
+    return (int64_t)ts - modulo(timestamp_diff, bucketDuration);
 }
 
 // If bucketTS is negative converts it to 0
-static inline timestamp_t BucketStartNormalize(timestamp_t bucketTS) {
-    return max(0, (int64_t)bucketTS);
+static inline timestamp_t BucketStartNormalize(int64_t bucketTS) {
+    return max(0, bucketTS);
 }
 
 Series *NewSeries(RedisModuleString *keyName, const CreateCtx *cCtx);
