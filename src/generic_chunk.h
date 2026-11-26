@@ -22,11 +22,6 @@
 #include <string.h> // memcpy, memmove
 #include <stdint.h>
 
-static inline bool ChunkHasEnoughSamplesToSplit(uint64_t count) {
-    _log_if(count <= 1, "Cannot split a chunk with fewer than two samples");
-    return count > 1;
-}
-
 struct RedisModuleIO;
 
 typedef struct Sample

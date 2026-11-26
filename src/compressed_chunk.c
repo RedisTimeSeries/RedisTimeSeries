@@ -118,7 +118,8 @@ static void trimChunk(CompressedChunk *chunk) {
 
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk) {
     CompressedChunk *curChunk = chunk;
-    if (!ChunkHasEnoughSamplesToSplit(curChunk->count)) {
+    _log_if(curChunk->count <= 1, "Cannot split a chunk with fewer than two samples");
+    if (curChunk->count <= 1) {
         return NULL;
     }
     size_t split = curChunk->count / 2;
