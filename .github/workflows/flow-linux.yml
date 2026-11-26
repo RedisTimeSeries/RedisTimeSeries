@@ -313,7 +313,7 @@ jobs:
         if: ${{ always() && !inputs.build_only }}
         uses: ./.github/actions/capture-test-results
         with:
-          os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
+          os-name: ${{ inputs.debug && 'debug-' || '' }}${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
 
       - name: Upload test artifacts
         if: ${{ failure() && !inputs.build_only }}
