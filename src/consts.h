@@ -193,10 +193,22 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
 extern bool _dontAssertOnFailiure;
 
 #if defined(DEBUG) || defined(DEBUG_ASSERTIONS)
-#define DEBUG_ASSERT(condition) RedisModule_Assert(_dontAssertOnFailiure || (condition))
+enum { RTS_DEBUG_ASSERTIONS_ENABLED = 1 };
 #else
-#define DEBUG_ASSERT(condition) ((void)0)
+enum { RTS_DEBUG_ASSERTIONS_ENABLED = 0 };
 #endif
+
+#define DEBUG_ASSERT_OR_RETURN_NULL(condition, message) \
+    do { \
+        if (unlikely(!(condition))) { \
+            if (RTS_DEBUG_ASSERTIONS_ENABLED && !_dontAssertOnFailiure) { \
+                RedisModule_Assert(0 && #condition && (message)); \
+            } \
+            extern RedisModuleCtx *rts_staticCtx; \
+            RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, "%s", (message)); \
+            return NULL; \
+        } \
+    } while (0)
 
 #ifdef DEBUG
 #define _log_if(cond, ...)                                                                         \

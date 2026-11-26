@@ -41,12 +41,7 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
-    const bool canSplit = curChunk->num_samples > 1;
-    DEBUG_ASSERT(canSplit);
-    if (unlikely(!canSplit)) {
-        _log_if(true, "Cannot split a chunk with fewer than two samples");
-        return NULL;
-    }
+    DEBUG_ASSERT_OR_RETURN_NULL(curChunk->num_samples > 1, "Cannot split a chunk with fewer than two samples");
     size_t split = curChunk->num_samples / 2;
     size_t curNumSamples = curChunk->num_samples - split;
 
