@@ -192,11 +192,11 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
 
 extern bool _dontAssertOnFailiure;
 
-#ifdef DEBUG
+#if defined(DEBUG) || defined(DEBUG_ASSERTIONS)
 #define _log_if(cond, ...)                                                                         \
     do {                                                                                           \
         if (!_dontAssertOnFailiure) {                                                              \
-            assert(!(cond));                                                                       \
+            RedisModule_Assert(!(cond));                                                           \
         } else {                                                                                   \
             extern RedisModuleCtx *rts_staticCtx;                                                  \
             if (unlikely(cond)) {                                                                  \
