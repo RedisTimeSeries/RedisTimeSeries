@@ -6,6 +6,9 @@
  * (RSALv2); or (b) the Server Side Public License v1 (SSPLv1); or (c) the
  * GNU Affero General Public License v3 (AGPLv3).
  */
+// Keep POSIX.1-2008 declarations (including strdup) visible before minunit includes libc.
+#define _POSIX_C_SOURCE 200809L
+
 #define REDISMODULE_MAIN
 #define REDISMODULE_SDK_RLEC 1
 
