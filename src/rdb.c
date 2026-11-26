@@ -15,6 +15,7 @@
 #include "module.h"
 
 #include <inttypes.h>
+#include <limits.h>
 #include <string.h>
 #include <rmutil/alloc.h>
 
@@ -68,6 +69,17 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         Load_IOError_OrDefault(io, err, NULL, encver >= TS_CREATE_IGNORE_VER, 0.0);
 
     cCtx.labelsCount = LoadUnsigned_IOError(io, err, NULL);
+    if (unlikely(cCtx.labelsCount > TS_MAX_LABELS_COUNT)) {
+        RedisModule_LogIOError(io, REDISMODULE_LOGLEVEL_WARNING, "labelsCount is too large");
+        err = true;
+        return NULL;
+    }
+    if (unlikely(cCtx.labelsCount > 0 && cCtx.labelsCount > (SIZE_MAX / sizeof(*cCtx.labels)))) {
+        RedisModule_LogIOError(
+            io, REDISMODULE_LOGLEVEL_WARNING, "labelsCount overflows allocation");
+        err = true;
+        return NULL;
+    }
     cCtx.labels = rts_try_calloc(cCtx.labelsCount, sizeof *cCtx.labels);
     errdefer(err, if (!series && cCtx.labels) FreeLabels(cCtx.labels, cCtx.labelsCount));
     if (unlikely(cCtx.labelsCount > 0 && cCtx.labels == NULL)) {
@@ -75,7 +87,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
         err = true;
         return NULL;
     }
-    for (int i = 0; i < cCtx.labelsCount; i++) {
+    for (size_t i = 0; i < cCtx.labelsCount; i++) {
         cCtx.labels[i].key = LoadString_IOError(io, err, NULL);
         cCtx.labels[i].value = LoadString_IOError(io, err, NULL);
     }
@@ -86,7 +98,7 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
     errdefer(err, FreeSeries(series));
 
     const uint64_t rulesCount = LoadUnsigned_IOError(io, err, NULL);
-    for (int i = 0; i < rulesCount; i++) {
+    for (uint64_t i = 0; i < rulesCount; i++) {
         RedisModuleString *destKey = LoadString_IOError(io, err, NULL);
         // clean if there is a key name which been alloced but not added to series yet
         errdefer(err, if (destKey) RedisModule_FreeString(NULL, destKey));
