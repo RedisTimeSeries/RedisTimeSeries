@@ -45,6 +45,25 @@ MU_TEST(test_compressed_upsert) {
     }
 }
 
+MU_TEST(test_compressed_upsert_into_empty_chunk_reports_insert) {
+    CompressedChunk *chunk = Compressed_NewChunk(64);
+    mu_assert(chunk != NULL, "create compressed chunk");
+
+    UpsertCtx uCtx = {
+        .inChunk = chunk,
+        .sample = { .timestamp = 1, .value = 1.0 },
+    };
+    int size = 0;
+
+    ChunkResult rv = Compressed_UpsertSample(&uCtx, &size, DP_LAST);
+
+    mu_assert(rv == CR_OK, "upsert into empty chunk");
+    mu_assert_int_eq(1, size);
+    mu_assert_int_eq(1, Compressed_ChunkNumOfSample(chunk));
+    mu_assert_int_eq(1, Compressed_GetFirstTimestamp(chunk));
+    Compressed_FreeChunk(chunk);
+}
+
 MU_TEST(test_compressed_fail_appendInteger) {
     // either Compressed_UpsertSample or Compressed_SplitChunk
     // ensureAddSample -> Compressed_AddSample -> Compressed_Append -> appendInteger
@@ -313,6 +332,7 @@ MU_TEST(test_compressed_decode_is_bounded_by_size) {
 
 MU_TEST_SUITE(compressed_chunk_test_suite) {
     MU_RUN_TEST(test_compressed_upsert);
+    MU_RUN_TEST(test_compressed_upsert_into_empty_chunk_reports_insert);
     MU_RUN_TEST(test_compressed_fail_appendInteger);
     MU_RUN_TEST(test_Compressed_SplitChunk_empty);
     MU_RUN_TEST(test_Compressed_SplitChunk_odd);

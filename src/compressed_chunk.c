@@ -168,8 +168,9 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
         }
         ensureAddSample(newChunk, &iterSample);
     }
+    bool iterSampleSet = numSamples > 0;
 
-    if (ts == iterSample.timestamp) {
+    if (iterSampleSet && ts == iterSample.timestamp) {
         ChunkResult cr = handleDuplicateSample(duplicatePolicy, iterSample, &uCtx->sample);
         if (cr != CR_OK) {
             Compressed_FreeChunkIterator(iter);
@@ -183,7 +184,7 @@ ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size, DuplicatePolicy 
     ensureAddSample(newChunk, &uCtx->sample);
     *size += 1;
 
-    if (i < numSamples) {
+    if (iterSampleSet && i < numSamples) {
         while (nextRes == CR_OK) {
             ensureAddSample(newChunk, &iterSample);
             nextRes = Compressed_ChunkIteratorGetNext(iter, &iterSample);
