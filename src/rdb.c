@@ -99,7 +99,9 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
     const uint64_t rulesCount = LoadUnsigned_IOError(io, err, NULL);
     for (uint64_t i = 0; i < rulesCount; i++) {
-        RedisModuleString *destKey = LoadString_IOError(io, err, NULL);
+        // __blocked: on clang the errdefer block must see `destKey = NULL` below, or it frees
+        // the key a second time after the rule (and FreeSeries) took ownership of it.
+        __blocked RedisModuleString *destKey = LoadString_IOError(io, err, NULL);
         // clean if there is a key name which been alloced but not added to series yet
         errdefer(err, if (destKey) RedisModule_FreeString(NULL, destKey));
 
@@ -120,11 +122,12 @@ void *series_rdb_load(RedisModuleIO *io, int encver) {
 
         rule->startCurrentTimeBucket = startCurrentTimeBucket;
 
-        rule->validSamplesInBucket =
-            Load_IOError_OrDefault(io, err, NULL, encver >= TS_NAN_SUPPORT_VER, true);
-
+        // Link the rule before any further read, so FreeSeries frees it if that read fails.
         rule->nextRule = series->rules;
         series->rules = rule;
+
+        rule->validSamplesInBucket =
+            Load_IOError_OrDefault(io, err, NULL, encver >= TS_NAN_SUPPORT_VER, true);
 
         if (rule->aggClass->readContext(rule->aggContext, io, encver)) {
             err = true;

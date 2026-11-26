@@ -929,6 +929,193 @@ def test_broken_rdb_compressed_chunk_read_side_over_read_is_bounded(env):
         env.assertEqual(int(ts), 1000)
 
 
+# ---------------------------------------------------------------------------
+# Field-level corruption of DUMP payloads (series_rdb_load and chunk loaders).
+# A DUMP payload is: [object type][module id][module fields...][EOF opcode]
+# [2-byte RDB version][8-byte CRC64]. Each module field is one opcode + value.
+# ---------------------------------------------------------------------------
+
+def _uint(v):
+    return bytes([2]) + _rdb_encode_len(v)  # RDB_MODULE_OPCODE_UINT
+
+
+def _double(v):
+    return bytes([4]) + struct.pack('<d', v)  # RDB_MODULE_OPCODE_DOUBLE
+
+
+def _string(s):
+    return bytes([5]) + _rdb_encode_len(len(s)) + s  # RDB_MODULE_OPCODE_STRING
+
+
+def _split_dump(dump):
+    """Split a DUMP payload into (header, fields, rdb_version); fields keep their raw bytes."""
+    idx = 1  # object type byte
+    _, _, idx = _rdb_load_len(dump, idx)  # module id
+    header, fields = dump[:idx], []
+    while True:
+        start = idx
+        op, _, idx = _rdb_load_len(dump, idx)
+        if op == 0:  # RDB_MODULE_OPCODE_EOF
+            break
+        if op == 2:
+            _, _, idx = _rdb_load_len(dump, idx)
+        elif op == 4:
+            idx += 8
+        elif op == 5:
+            idx = _rdb_skip_string(dump, idx)
+        else:
+            raise AssertionError('unexpected module opcode %d' % op)
+        fields.append(dump[start:idx])
+    return header, fields, dump[-10:-8]
+
+
+def _join_dump(header, fields, version):
+    b = bytearray(header + b''.join(fields) + b'\x00' + version + bytes(8))
+    _patch_dump_crc(b)
+    return bytes(b)
+
+
+def _with_encver(header, encver):
+    # The module id is a 64-bit length (0x81 + 8 big-endian bytes); its low 10 bits are encver.
+    assert header[1] == 0x81
+    module_id = (int.from_bytes(header[2:10], 'big') & ~1023) | encver
+    return header[:2] + module_id.to_bytes(8, 'big') + header[10:]
+
+
+# Field positions of a series with one label pair and no rules (rdb.c series_rdb_save).
+CHUNK_SIZE_BYTES = 2
+LABELS_COUNT = 11
+RULES_COUNT = 14
+NUM_CHUNKS = 15
+CHUNK = 16  # first chunk field
+# Compressed chunk fields, relative to CHUNK (compressed_chunk.c Compressed_Serialize).
+COMPRESSED_IDX = 2
+COMPRESSED_DATA = 10
+
+SUM_RULE = [_string(b'{c}dest'), _uint(1000), _uint(0), _uint(3),  # dest, bucket, alignment, SUM
+            _uint(0), _uint(1)]                                     # bucket start, valid samples
+
+
+class testCorruptPayloads:
+    """RESTORE of DUMP payloads with one field corrupted.
+
+    Each corruption must be rejected with an error, leave no key or label-index
+    entry behind, and leave the server serving. The sanitizer CI jobs check that
+    every rejection path frees what it allocated.
+    """
+
+    def __init__(self):
+        self.env = Env()
+        conn = self.env.getClusterConnectionIfNeeded()
+        self.dumps, self.samples = {}, {}
+        for enc in ('COMPRESSED', 'UNCOMPRESSED'):
+            key = '{c}' + enc
+            conn.execute_command('TS.CREATE', key, enc, 'LABELS', 'name', 'corrupt')
+            conn.execute_command('TS.MADD', *[a for t in range(1, 6) for a in (key, t, t * 1.5)])
+            self.samples[enc] = conn.execute_command('TS.RANGE', key, '-', '+')
+            dump = conn.execute_command('DUMP', key)
+            self.dumps[enc] = _split_dump(dump)
+            # The splitter is lossless, so the corrupted payloads differ only where a test edits them.
+            assert _join_dump(*self.dumps[enc]) == dump
+        self.env.flush()
+
+    def setUp(self):
+        self.env.flush()
+
+    def _payload(self, enc, edit=None, encver=None):
+        header, fields, version = self.dumps[enc]
+        fields = list(fields)
+        if edit:
+            edit(fields)
+        if encver is not None:
+            header = _with_encver(header, encver)
+        return _join_dump(header, fields, version)
+
+    def _assert_rejected(self, enc, payload):
+        conn = self.env.getClusterConnectionIfNeeded()
+        key = '{c}' + enc
+        with self.env.assertResponseError(contained='Bad data format'):
+            conn.execute_command('RESTORE', key, 0, payload)
+        self.env.assertEqual(conn.execute_command('EXISTS', key), 0)
+        self.env.assertEqual(
+            self.env.getConnection().execute_command('TS.QUERYINDEX', 'name=corrupt'), [])
+
+    def test_round_trip(self):
+        # Control: the payload plus a well-formed SUM rule restores with its samples and labels,
+        # so the corrupt cases below fail only because of their one edit. (The rule itself is
+        # dropped on first read: its destination does not name this series as its source.)
+        conn = self.env.getClusterConnectionIfNeeded()
+        for enc in self.dumps:
+            key = '{c}' + enc
+
+            def add_rule(f):
+                f[RULES_COUNT:RULES_COUNT + 1] = [_uint(1)] + SUM_RULE + [_double(0)]
+
+            conn.execute_command('RESTORE', key, 0, self._payload(enc, add_rule))
+            self.env.assertEqual(conn.execute_command('TS.RANGE', key, '-', '+'), self.samples[enc])
+            info = conn.execute_command('TS.INFO', key)
+            self.env.assertEqual(dict(zip(info[::2], info[1::2]))[b'labels'],
+                                 [[b'name', b'corrupt']])
+        self.env.assertEqual(
+            sorted(self.env.getConnection().execute_command('TS.QUERYINDEX', 'name=corrupt')),
+            [b'{c}COMPRESSED', b'{c}UNCOMPRESSED'])
+
+    def test_invalid_encoding_version(self):
+        # TS_LATEST_ENCVER is 10; Redis passes any 10-bit encver through to series_rdb_load.
+        for encver in (11, 1023):
+            self._assert_rejected('COMPRESSED', self._payload('COMPRESSED', encver=encver))
+
+    def test_invalid_chunk_size(self):
+        for size in (0, 4, 12):
+            def edit(f):
+                f[CHUNK_SIZE_BYTES] = _uint(size)
+            self._assert_rejected('COMPRESSED', self._payload('COMPRESSED', edit))
+
+    def test_invalid_labels_count(self):
+        # Counts above TS_MAX_LABELS_COUNT are rejected before allocating: 2**59 labels would need
+        # 2**63 bytes, and 2**60 labels would wrap count * sizeof(Label) to a 0-byte array.
+        # 2 labels with only one stored: the partly loaded labels are freed.
+        for count in (2 ** 59, 2 ** 60, 2):
+            def edit(f):
+                f[LABELS_COUNT] = _uint(count)
+            self._assert_rejected('COMPRESSED', self._payload('COMPRESSED', edit))
+
+    def test_rule_cut_short(self):
+        # Cut before validSamplesInBucket (read after NewRule), then before the SUM context
+        # (one double), so the rule's readContext fails. Both must free the half-loaded rule.
+        for rule in (SUM_RULE[:-1], SUM_RULE):
+            def edit(f):
+                f[RULES_COUNT:RULES_COUNT + 1] = [_uint(1)] + rule
+            self._assert_rejected('COMPRESSED', self._payload('COMPRESSED', edit))
+
+    def test_no_chunks(self):
+        for enc in self.dumps:
+            def edit(f):
+                f[NUM_CHUNKS:] = [_uint(0)]
+            self._assert_rejected(enc, self._payload(enc, edit))
+
+    def test_invalid_compressed_chunk(self):
+        _, fields, _ = self.dumps['COMPRESSED']
+        size_bits = 8 * _rdb_load_len(fields[CHUNK], 1)[0]
+
+        def empty_data(f):
+            f[CHUNK + COMPRESSED_DATA] = _string(b'')
+
+        def idx_past_data(f):
+            f[CHUNK + COMPRESSED_IDX] = _uint(size_bits + 1)
+
+        for edit in (empty_data, idx_past_data):
+            self._assert_rejected('COMPRESSED', self._payload('COMPRESSED', edit))
+
+    def test_truncated(self):
+        # Cut the series after every field, including inside a rule and inside the chunk.
+        for enc in self.dumps:
+            header, fields, version = self.dumps[enc]
+            fields = fields[:RULES_COUNT] + [_uint(1)] + SUM_RULE + [_double(0)] + fields[NUM_CHUNKS:]
+            for cut in range(len(fields)):
+                self._assert_rejected(enc, _join_dump(header, fields[:cut], version))
+
+
 def test_rdb_restore_rejects_large_labelscount(env):
     """
     Regression test for MOD-13408: crafted DUMP payload with huge labelsCount must be rejected quickly.
