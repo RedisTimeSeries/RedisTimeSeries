@@ -2,7 +2,6 @@
 
 #include "LibMR/src/utils/arr.h"
 #include "LibMR/src/mr.h"
-#include "LibMR/src/record.h"
 #include "LibMR/src/cluster.h"
 #include "consts.h"
 #include "libmr_integration.h"
@@ -118,10 +117,6 @@ static void *collect_node_results(ExecutionCtx *eCtx, RedisModuleCtx *ctx) {
 
     for (size_t i = 0; i < len; i++) {
         Record *r = MR_ExecutionCtxGetResult(eCtx, i);
-        if (MR_IsError(r)) {
-            RedisModule_ReplyWithError(ctx, MR_ErrorRecordGetError(r));
-            goto __error;
-        }
         if (r->recordType == GetSlotRangesRecordType()) {
             RedisModuleSlotRangeArray *sra = ((SlotRangesRecord *)r)->slotRanges;
             for (size_t j = 0; j < sra->num_ranges; j++)
