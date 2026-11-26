@@ -401,13 +401,14 @@ cleanup:
 }
 
 void *CopySeries(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value) {
-    Series *src = (Series *)value;
+    const Series *src = value;
     Series *dst = (Series *)calloc(1, sizeof(Series));
     memcpy(dst, src, sizeof(Series));
     RedisModule_RetainString(NULL, tokey);
     dst->keyName = tokey;
 
-    // Copy labels
+    // A zero-length label allocation can still be owned by the source.
+    dst->labels = NULL;
     if (src->labelsCount > 0) {
         dst->labels = calloc(src->labelsCount, sizeof(Label));
         for (size_t i = 0; i < dst->labelsCount; i++) {

@@ -169,6 +169,22 @@ class testSeriesLifecycle:
         env.assertEqual(r.execute_command('TS.RANGE', kept, '-', '+'), [[0, b'6'], [20, b'1']])
 
 
+    def test_copy_restored_zero_label_series(self):
+        env = self.env
+        r = env.getClusterConnectionIfNeeded()
+        src, dst = '{copy}source', '{copy}destination'
+
+        r.execute_command('TS.CREATE', src)
+        r.execute_command('TS.ADD', src, 1, 1)
+        payload = r.execute_command('DUMP', src)
+        r.execute_command('DEL', src)
+        r.execute_command('RESTORE', src, 0, payload)
+
+        env.assertEqual(r.execute_command('COPY', src, dst), 1)
+        r.execute_command('DEL', src)
+        r.execute_command('DEL', dst)
+
+
 def test_policy_skips_destination_in_other_slot():
     # Needs cluster mode in every lane; a 1-shard cluster is enough for the slot check.
     # Non-cluster lanes don't pass tests.sh's cluster-bus flag, so set it here.
