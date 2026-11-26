@@ -51,7 +51,12 @@ def test_automatic_timestamp():
         assert r.execute_command('TS.CREATE', 'tester')
         response_timestamp = r.execute_command('TS.ADD', 'tester', '*', 1)
         curr_time = int(time.time() * 1000)
-        result = r.execute_command('TS.RANGE', 'tester', 0, curr_time)
+        # The server can be a few milliseconds ahead of the test host. Do not
+        # exclude its sample before checking the allowed timestamp difference.
+        result = r.execute_command('TS.RANGE', 'tester', '-', '+')
+        assert len(result) == 1
+        assert result[0][0] == response_timestamp
+        assert float(result[0][1]) == 1
         # test time difference is not more than 5 milliseconds
         assert result[0][0] - curr_time <= 5
         assert response_timestamp - curr_time <= 5
