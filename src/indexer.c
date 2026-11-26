@@ -564,19 +564,74 @@ RedisModuleDict *QueryIndex(RedisModuleCtx *ctx,
     return res;
 }
 
-RedisModuleDict *GetAllIndexedSeriesKeys(RedisModuleCtx *ctx) {
-    RedisModuleDict *res = RedisModule_CreateDict(ctx);
-    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(tsLabelIndex, "^", NULL, 0);
-    char *currentKey;
-    size_t currentKeyLen;
-    while ((currentKey = RedisModule_DictNextC(iter, &currentKeyLen, NULL)) != NULL) {
-        RedisModule_DictSetC(res, currentKey, currentKeyLen, (void *)1);
+// Select the smallest live index leaf when possible. A union needs QueryIndex's
+// independent result dictionary for deduplication; the caller owns that dictionary.
+static RedisModuleDict *SelectQueryIndexSource(RedisModuleCtx *ctx,
+                                               QueryPredicateList *queries,
+                                               RedisModuleDict **result) {
+    RedisModuleDict *source = tsLabelIndex;
+    RedisModuleDict **dicts = NULL;
+    size_t count = 0;
+    if (queries) {
+        if (!queries->count)
+            return NULL;
+        PromoteSmallestPredicateToFront(ctx, queries->list, queries->count);
+        if (!IS_INCLUSION(queries->list[0].type))
+            return NULL;
+        GetPredicateKeysDicts(ctx, queries->list, &dicts, &count);
+        if (count == 1) {
+            source = dicts[0];
+        } else {
+            *result = QueryIndex(ctx, queries->list, queries->count, NULL);
+            source = *result;
+        }
+        free(dicts);
     }
-    RedisModule_DictIteratorStop(iter);
+    return source;
+}
 
-    TrimUnownedKeysDuringReshard(res);
-
-    return res;
+// NOEFFECTS leaves the index unchanged while checking logical visibility.
+size_t VisitQueryIndex(RedisModuleCtx *ctx,
+                       QueryPredicateList *queries,
+                       void (*visit)(RedisModuleCtx *, const char *, size_t, void *),
+                       void *data) {
+    RedisModuleDict *result = NULL;
+    RedisModuleDict *source = SelectQueryIndexSource(ctx, queries, &result);
+    size_t visible = 0;
+    RedisModuleDictIter *iter =
+        source ? RedisModule_DictIteratorStartC(source, "^", NULL, 0) : NULL;
+    size_t len;
+    while (iter) {
+        const char *name = RedisModule_DictNextC(iter, &len, NULL);
+        if (!name)
+            break;
+        if (!result && queries &&
+            !_isKeySatisfyAllPredicates(ctx, name, len, queries->list, queries->count))
+            continue;
+        // The callback only reads the index or emits results; it must not modify it.
+        RedisModuleString *key = RedisModule_CreateString(NULL, name, len);
+        bool owned = !(isReshardTrimming || isAsmTrimming || isAsmImporting) ||
+                     (isReshardTrimming ? &OwnKeyDuringSharding : &OwnKeyDuringASM)(key);
+        int mode = REDISMODULE_READ | REDISMODULE_OPEN_KEY_NOEFFECTS;
+        // Enterprise metadata-only lookup avoids loading series values from flash.
+        if (RedisModule_GetOpenKeyModesAll)
+            mode |= RedisModule_GetOpenKeyModesAll() & (1 << 25);
+        RedisModuleKey *handle = owned ? RedisModule_OpenKey(ctx, key, mode) : NULL;
+        bool exists = handle != NULL;
+        if (handle)
+            RedisModule_CloseKey(handle);
+        if (owned && exists) {
+            name = RedisModule_StringPtrLen(key, &len);
+            visit(ctx, name, len, data);
+            ++visible;
+        }
+        RedisModule_FreeString(NULL, key);
+    }
+    if (iter)
+        RedisModule_DictIteratorStop(iter);
+    if (result)
+        RedisModule_FreeDict(ctx, result);
+    return visible;
 }
 
 RedisModuleString *QueryLabelsBuildPrefix(QueryLabelsSubtype subtype,
@@ -587,8 +642,7 @@ RedisModuleString *QueryLabelsBuildPrefix(QueryLabelsSubtype subtype,
                      NULL, KV_PREFIX, RedisModule_StringPtrLen(labelFilter, NULL), "");
 }
 
-// Label keys can no longer contain '=' (parseLabelsFromArgs rejects it at creation), but
-// series indexed before that existed. For such a series, a KV entry's "key=value" content
+// Label keys can contain '='. For such a series, a KV entry's "key=value" content
 // is ambiguous: e.g. key "a=b" value "c" and key "a" value "b=c" both flatten differently,
 // but a VALUES(a) lookup can't tell "a=b=c" (real key "a=b") from a genuine key "a" without
 // cross-checking. A real key always has an exact "__key_index_"-prefixed leaf entry, so if
