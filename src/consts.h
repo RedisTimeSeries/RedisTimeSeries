@@ -212,4 +212,7 @@ extern bool _dontAssertOnFailiure;
         rts_logged_warning;                                                                        \
     })
 
+// Return whether the invariant holds so the caller can recover after a warning.
+#define DEBUG_ASSERT(condition, ...) (!_log_if(!(condition), __VA_ARGS__))
+
 #endif
