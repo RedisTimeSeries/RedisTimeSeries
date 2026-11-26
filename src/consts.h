@@ -193,25 +193,23 @@ static inline int RMStringStrCmpUpper(RedisModuleString *rm_str, const char *str
 extern bool _dontAssertOnFailiure;
 
 #if defined(DEBUG) || defined(DEBUG_ASSERTIONS)
-#define _log_if(cond, ...)                                                                         \
-    do {                                                                                           \
-        if (!_dontAssertOnFailiure) {                                                              \
-            RedisModule_Assert(!(cond));                                                           \
-        } else {                                                                                   \
-            extern RedisModuleCtx *rts_staticCtx;                                                  \
-            if (unlikely(cond)) {                                                                  \
-                RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, ##__VA_ARGS__);       \
-            }                                                                                      \
-        }                                                                                          \
-    } while (0)
+#define RTS_ASSERT_ON_LOG_FAILURE (!_dontAssertOnFailiure)
 #else
-#define _log_if(cond, ...)                                                                         \
-    do {                                                                                           \
-        extern RedisModuleCtx *rts_staticCtx;                                                      \
-        if (unlikely(cond)) {                                                                      \
-            RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, ##__VA_ARGS__);           \
-        }                                                                                          \
-    } while (0)
+#define RTS_ASSERT_ON_LOG_FAILURE false
 #endif
+
+// Evaluate cond once. Return true after logging so callers can handle the failure.
+#define _log_if(cond, ...)                                                                         \
+    __extension__ ({                                                                               \
+        bool rts_logged_warning = false;                                                           \
+        if (RTS_ASSERT_ON_LOG_FAILURE) {                                                           \
+            RedisModule_Assert(!(cond));                                                           \
+        } else if (unlikely(cond)) {                                                               \
+            extern RedisModuleCtx *rts_staticCtx;                                                  \
+            RedisModule_Log(rts_staticCtx, REDISMODULE_LOGLEVEL_WARNING, __VA_ARGS__);             \
+            rts_logged_warning = true;                                                             \
+        }                                                                                          \
+        rts_logged_warning;                                                                        \
+    })
 
 #endif

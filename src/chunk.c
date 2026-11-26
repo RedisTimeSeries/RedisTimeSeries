@@ -41,8 +41,7 @@ void Uncompressed_FreeChunk(Chunk_t *chunk) {
  */
 Chunk_t *Uncompressed_SplitChunk(Chunk_t *chunk) {
     Chunk *curChunk = (Chunk *)chunk;
-    _log_if(curChunk->num_samples <= 1, "Cannot split a chunk with fewer than two samples");
-    if (curChunk->num_samples <= 1) {
+    if (_log_if(curChunk->num_samples <= 1, "Cannot split a chunk with fewer than two samples")) {
         return NULL;
     }
     size_t split = curChunk->num_samples / 2;
