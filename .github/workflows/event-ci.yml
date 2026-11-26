@@ -93,17 +93,6 @@ jobs:
       use_prebuilt_images: ${{ !contains(github.event.pull_request.labels.*.name, 'docker-image-changes') }}
       shard_topologies: true
     secrets: inherit
-  build-linux-debug:
-    uses: ./.github/workflows/flow-linux.yml
-    needs: [prepare-values]
-    with:
-      arch: x64
-      os: jammy
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      debug: true
-      quick: true
-      use_prebuilt_images: ${{ !contains(github.event.pull_request.labels.*.name, 'docker-image-changes') }}
-    secrets: inherit
   build-linux-arm64-full:
     uses: ./.github/workflows/flow-linux.yml
     needs: [prepare-values]

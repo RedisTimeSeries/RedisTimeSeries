@@ -17,10 +17,6 @@ on:
         type: string
         required: false
         default: ''
-      debug:
-        description: 'Build and test with DEBUG assertions enabled'
-        type: boolean
-        default: false
       run_valgrind:
         description: 'Run valgrind on the tests'
         type: boolean
@@ -65,10 +61,6 @@ on:
         type: string
         required: false
         default: ''
-      debug:
-        description: 'Build and test with DEBUG assertions enabled'
-        type: boolean
-        default: false
       run_valgrind:
         description: 'Run valgrind on the tests'
         type: boolean
@@ -263,7 +255,7 @@ jobs:
           bash .github/scripts/tracebit-docker.sh run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
-            -e DEBUG=${{ inputs.debug && '1' || '' }} \
+            -e DEBUG_ASSERTIONS=${{ (inputs.run_sanitizer || inputs.run_valgrind) && '1' || '' }} \
             -e SAN=${{ inputs.run_sanitizer && 'address' || '' }} \
             "${DOCKER_IMAGE}" \
             make build
@@ -293,7 +285,7 @@ jobs:
             -w /workspace \
             --cap-add=SYS_PTRACE \
             --security-opt seccomp=unconfined \
-            -e DEBUG=${{ inputs.debug && '1' || '' }} \
+            -e DEBUG_ASSERTIONS=${{ (inputs.run_sanitizer || inputs.run_valgrind) && '1' || '' }} \
             -e SAN=${{ inputs.run_sanitizer && 'addr' || '' }} \
             "${DOCKER_IMAGE}" \
             bash -c "make test \
@@ -313,18 +305,18 @@ jobs:
         if: ${{ always() && !inputs.build_only }}
         uses: ./.github/actions/capture-test-results
         with:
-          os-name: ${{ inputs.debug && 'debug-' || '' }}${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
+          os-name: ${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}
 
       - name: Upload test artifacts
         if: ${{ failure() && !inputs.build_only }}
         uses: actions/upload-artifact@v6
         with:
-          name: test-artifacts-${{ inputs.debug && 'debug-' || '' }}${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
+          name: test-artifacts-${{ inputs.arch }}-${{ matrix.platform.os }}${{ matrix.platform.topo && format('-{0}', matrix.platform.topo) || '' }}${{ inputs.run_valgrind && '-valgrind' || '' }}${{ inputs.run_sanitizer && '-sanitizer' || '' }}
           path: |
             tests/**/*.log
 
       - name: Pack module
-        if: ${{ !inputs.debug && !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
         run: |
           bash .github/scripts/tracebit-docker.sh run --rm \
             -v ${{ github.workspace }}:/workspace \
@@ -336,7 +328,7 @@ jobs:
             make pack SHOW=1
 
       - name: Upload artifacts to S3
-        if: ${{ !inputs.debug && !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
+        if: ${{ !inputs.run_valgrind && !inputs.run_sanitizer && !inputs.build_only && (!matrix.platform.topo || matrix.platform.topo == 'gen') }}
         uses: ./.github/actions/upload-artifacts-to-s3-without-make
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

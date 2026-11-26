@@ -139,7 +139,7 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/workspace" \
             -w /workspace \
             "${DOCKER_IMAGE}" \
-            make build
+            make build DEBUG_ASSERTIONS=1
 
       - name: Run Random Traffic
         run: |
@@ -152,10 +152,12 @@ jobs:
               MODULE=$(find bin -name "redistimeseries.so" | head -1)
               echo "Loading module: $MODULE"
               redis-server --loadmodule ./$MODULE --port 6379 &
+              redis_pid=$!
               sleep 2
               python3 -m redis_command_generator.TimeSeriesGen --hosts localhost:6379 --verbose --max_cmd_cnt 250000 > random_traffic.txt
               tail -n 100 random_traffic.txt
-              pkill -f redis-server || true
+              kill -TERM "$redis_pid"
+              wait "$redis_pid"
             '
 
       - name: Upload random traffic

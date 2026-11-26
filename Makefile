@@ -84,6 +84,7 @@ include $(ROOT)/build/cpu_features/Makefile.defs
 define HELPTEXT
 make build
   DEBUG=1          # build debug variant
+  DEBUG_ASSERTIONS=1 # enable module assertions in a test build
   VARIANT=name     # use a build variant 'name'
   PROFILE=1        # enable profiling compile flags (and debug symbols) for release type
                    # You can consider this as build type release with debug symbols and -fno-omit-frame-pointer
@@ -283,6 +284,10 @@ endif
 all: gen-compile-commands bindirs $(TARGET)
 
 include $(MK)/rules
+
+ifeq ($(DEBUG_ASSERTIONS),1)
+CC_FLAGS += -DDEBUG_ASSERTIONS
+endif
 
 ifeq ($(OS),macos)
 CC_FLAGS += -fblocks

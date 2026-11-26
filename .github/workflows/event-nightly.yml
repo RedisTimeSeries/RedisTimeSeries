@@ -147,21 +147,6 @@ jobs:
       beta-version: ${{needs.prepare-values.outputs.beta-version}}
       quick: false
     secrets: inherit
-  build-linux-debug:
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
-    uses: ./.github/workflows/flow-linux.yml
-    needs: [prepare-values]
-    with:
-      arch: ${{ matrix.arch }}
-      os: jammy
-      redis-ref: ${{needs.prepare-values.outputs.redis-ref}}
-      debug: true
-      quick: false
-      shard_topologies: true
-    secrets: inherit
   macos:
     uses: ./.github/workflows/flow-macos.yml
     needs: [prepare-values]
@@ -216,7 +201,7 @@ jobs:
   notify-results:
     name: Aggregate Results & Notify
     runs-on: ubuntu-latest
-    needs: [benchmark-comparison, random-traffic, prepare-values, linter, build-linux-x64, build-linux-arm64, build-linux-debug, macos, linux-valgrind, linux-sanitizer, coverage]
+    needs: [benchmark-comparison, random-traffic, prepare-values, linter, build-linux-x64, build-linux-arm64, macos, linux-valgrind, linux-sanitizer, coverage]
     if: always() && (github.event_name == 'schedule' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
     permissions:
       actions: read
@@ -244,7 +229,6 @@ jobs:
             "linter": "${{ needs.linter.result }}",
             "build-linux-x64": "${{ needs.build-linux-x64.result }}",
             "build-linux-arm64": "${{ needs.build-linux-arm64.result }}",
-            "build-linux-debug": "${{ needs.build-linux-debug.result }}",
             "macos": "${{ needs.macos.result }}",
             "linux-valgrind": "${{ needs.linux-valgrind.result }}",
             "linux-sanitizer": "${{ needs.linux-sanitizer.result }}",
